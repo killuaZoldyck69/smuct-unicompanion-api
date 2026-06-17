@@ -1,134 +1,49 @@
 import { Request, Response } from "express";
-import { prisma } from "../../lib/prisma";
-import {
-  getStudentProfileByUserId,
-  updateStudentProfileData,
-} from "./student.service";
-import { BloodGroup } from "../../../generated/prisma/enums";
+import * as studentService from "./student.service";
+import { catchAsync } from "../../utils/catchAsync";
+import { AppError } from "../../utils/AppError";
 
-export const onboardStudent = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const userId = req.user.id; // Extracted securely from the middleware
-    const { studentId, department, batch, currentSemester, section } = req.body;
-
-    // 1. Validate required fields
-    if (!studentId || !department || !batch || !currentSemester) {
-      res.status(400).json({ error: "Missing required academic information." });
-      return;
-    }
-
-    // 2. Check if the user already has a profile to prevent duplicates
-    const existingProfile = await prisma.studentProfile.findUnique({
-      where: { userId },
-    });
-
-    if (existingProfile) {
-      res
-        .status(409)
-        .json({ error: "A student profile already exists for this user." });
-      return;
-    }
-
-    // 3. Execute a Prisma Transaction
-    // We update the Better Auth user role AND create the profile simultaneously
-    const result = await prisma.$transaction(async (tx) => {
-      // Update core user role
-      await tx.user.update({
-        where: { id: userId },
-        data: { role: "STUDENT" },
-      });
-
-      // Create the delegated profile
-      const newProfile = await tx.studentProfile.create({
-        data: {
-          userId,
-          studentId,
-          department,
-          batch,
-          currentSemester: Number(currentSemester),
-          section: section || null,
-          isCR: false, // Default flags assigned by Admin later if needed
-          isTA: false,
-        },
-      });
-
-      return newProfile;
-    });
+export const onboardStudent = catchAsync(
+  async (req: Request, res: Response) => {
+    const userId = req.user.id;
+    const result = await studentService.onboardStudentService(userId, req.body);
 
     res.status(201).json({
+      success: true,
       message: "Student profile created successfully.",
-      profile: result,
+      data: result,
     });
-  } catch (error: any) {
-    // Handle unique constraint violations (e.g., studentId already in use)
-    if (error.code === "P2002" && error.meta?.target?.includes("studentId")) {
-      res.status(409).json({
-        error: "This Student ID is already registered in the system.",
-      });
-      return;
-    }
+  },
+);
 
-    console.error("Student Onboarding Error:", error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while creating the student profile." });
-  }
-};
-
-export const updateProfileImage = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
+export const updateProfileImage = catchAsync(
+  async (req: Request, res: Response) => {
     const userId = req.user.id;
     const { imageUrl } = req.body;
 
-    if (!imageUrl) {
-      res.status(400).json({ error: "Image URL string is required." });
-      return;
-    }
-
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: { image: imageUrl },
-      select: {
-        id: true,
-        name: true,
-        image: true,
-      },
-    });
+    const updatedUser = await studentService.updateProfileImageService(
+      userId,
+      imageUrl,
+    );
 
     res.status(200).json({
+      success: true,
       message: "Profile image updated successfully.",
-      user: updatedUser,
+      data: updatedUser,
     });
-  } catch (error) {
-    console.error("Error saving profile image URL:", error);
-    res
-      .status(500)
-      .json({ error: "Failed to sync profile image to database." });
-  }
-};
+  },
+);
 
-export const getStudentProfile = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const userId = req.user.id; // Extracted securely from the requireAuth middleware
+export const getStudentProfile = catchAsync(
+  async (req: Request, res: Response) => {
+    const userId = req.user.id;
+    const userProfile = await studentService.getStudentProfileByUserId(userId);
 
-    const userProfile = await getStudentProfileByUserId(userId);
-
-    // Ensure the user actually has a linked student profile
     if (!userProfile || !userProfile.studentProfile) {
-      res.status(404).json({ error: "Student profile not found." });
-      return;
+      throw new AppError("Student profile not found.", 404);
     }
 
-    // Flatten the response slightly to make it easier for the mobile app to consume
+    // Flatten response for mobile client consumption
     const formattedProfile = {
       id: userProfile.id,
       name: userProfile.name,
@@ -137,52 +52,42 @@ export const getStudentProfile = async (
       phoneNumber: userProfile.phoneNumber,
       bloodGroup: userProfile.bloodGroup,
       role: userProfile.role,
-      ...userProfile.studentProfile, // Spreads academic details (studentId, batch, etc.)
+      ...userProfile.studentProfile,
     };
 
     res.status(200).json({
+      success: true,
       message: "Profile retrieved successfully.",
-      profile: formattedProfile,
+      data: formattedProfile,
     });
-  } catch (error) {
-    console.error("Error fetching student profile:", error);
-    res.status(500).json({ error: "Failed to retrieve student profile." });
+  },
+);
+
+export const updateProfile = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user.id;
+  const updatedProfile = await studentService.updateStudentProfileData(
+    userId,
+    req.body,
+  );
+
+  if (!updatedProfile) {
+    throw new AppError("Failed to retrieve updated profile.", 500);
   }
-};
 
-export const updateProfile = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const userId = req.user.id;
-    // Extract batch alongside the other fields
-    const { name, phoneNumber, bloodGroup, batch, currentSemester, section } =
-      req.body;
+  const formattedProfile = {
+    id: updatedProfile.id,
+    name: updatedProfile.name,
+    email: updatedProfile.email,
+    image: updatedProfile.image,
+    phoneNumber: updatedProfile.phoneNumber,
+    bloodGroup: updatedProfile.bloodGroup,
+    role: updatedProfile.role,
+    ...updatedProfile.studentProfile,
+  };
 
-    const updatedProfile = await updateStudentProfileData(userId, {
-      name,
-      phoneNumber,
-      bloodGroup: bloodGroup as BloodGroup, // Cast to the enum type
-      batch,
-      currentSemester,
-      section,
-    });
-
-    const formattedProfile = {
-      id: updatedProfile?.id,
-      name: updatedProfile?.name,
-      phoneNumber: updatedProfile?.phoneNumber,
-      bloodGroup: updatedProfile?.bloodGroup,
-      ...updatedProfile?.studentProfile,
-    };
-
-    res.status(200).json({
-      message: "Profile updated successfully.",
-      profile: formattedProfile,
-    });
-  } catch (error) {
-    console.error("Error updating student profile:", error);
-    res.status(500).json({ error: "Failed to update profile data." });
-  }
-};
+  res.status(200).json({
+    success: true,
+    message: "Profile updated successfully.",
+    data: formattedProfile,
+  });
+});

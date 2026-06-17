@@ -1,5 +1,67 @@
-import { BloodGroup } from "../../../generated/prisma/enums";
 import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+
+type OnboardPayload = {
+  studentId: string;
+  department: string;
+  batch: string;
+  currentSemester: number;
+  section?: string;
+};
+
+type UpdateProfilePayload = {
+  name?: string;
+  phoneNumber?: string;
+  bloodGroup?: any;
+  batch?: string;
+  currentSemester?: number;
+  section?: string;
+};
+
+export const onboardStudentService = async (
+  userId: string,
+  data: OnboardPayload,
+) => {
+  // Check for existing profile to prevent manual duplication outside of unique constraints
+  const existingProfile = await prisma.studentProfile.findUnique({
+    where: { userId },
+  });
+
+  if (existingProfile) {
+    throw new AppError("A student profile already exists for this user.", 409);
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: userId },
+      data: { role: "STUDENT" },
+    });
+
+    return await tx.studentProfile.create({
+      data: {
+        userId,
+        studentId: data.studentId,
+        department: data.department,
+        batch: data.batch,
+        currentSemester: data.currentSemester,
+        section: data.section || null,
+        isCR: false,
+        isTA: false,
+      },
+    });
+  });
+};
+
+export const updateProfileImageService = async (
+  userId: string,
+  imageUrl: string,
+) => {
+  return await prisma.user.update({
+    where: { id: userId },
+    data: { image: imageUrl },
+    select: { id: true, name: true, image: true },
+  });
+};
 
 export const getStudentProfileByUserId = async (userId: string) => {
   return await prisma.user.findUnique({
@@ -12,7 +74,6 @@ export const getStudentProfileByUserId = async (userId: string) => {
       phoneNumber: true,
       bloodGroup: true,
       role: true,
-      // Fetch the associated 1-to-1 academic profile
       studentProfile: {
         select: {
           studentId: true,
@@ -30,14 +91,7 @@ export const getStudentProfileByUserId = async (userId: string) => {
 
 export const updateStudentProfileData = async (
   userId: string,
-  data: {
-    name?: string;
-    phoneNumber?: string;
-    bloodGroup?: BloodGroup; // 👈 Strongly typed
-    batch?: string; // 👈 Added batch
-    currentSemester?: number;
-    section?: string;
-  },
+  data: UpdateProfilePayload,
 ) => {
   return await prisma.$transaction(async (tx) => {
     // 1. User table updates
@@ -57,9 +111,9 @@ export const updateStudentProfileData = async (
 
     // 2. StudentProfile table updates
     const profileUpdateData: any = {};
-    if (data.batch) profileUpdateData.batch = data.batch; // 👈 Add batch logic
+    if (data.batch) profileUpdateData.batch = data.batch;
     if (data.currentSemester)
-      profileUpdateData.currentSemester = Number(data.currentSemester);
+      profileUpdateData.currentSemester = data.currentSemester;
     if (data.section !== undefined) profileUpdateData.section = data.section;
 
     if (Object.keys(profileUpdateData).length > 0) {
@@ -69,21 +123,7 @@ export const updateStudentProfileData = async (
       });
     }
 
-    return await tx.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        phoneNumber: true,
-        bloodGroup: true, // Will now return the strict Enum string
-        studentProfile: {
-          select: {
-            batch: true,
-            currentSemester: true,
-            section: true,
-          },
-        },
-      },
-    });
+    // Return merged updated data
+    return await getStudentProfileByUserId(userId);
   });
 };
