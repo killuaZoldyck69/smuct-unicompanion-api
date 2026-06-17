@@ -44,12 +44,12 @@ enum SubmissionType {
 // ==============================
 
 model User {
-  id            String     @id @default(uuid())
-  email         String     @unique
-  emailVerified Boolean    @default(false)
+  id            String      @id @default(uuid())
+  email         String      @unique
+  emailVerified Boolean     @default(false)
   name          String
   image         String?
-  role          SystemRole
+  role          SystemRole?
   phoneNumber   String?
   bloodGroup    String?
 

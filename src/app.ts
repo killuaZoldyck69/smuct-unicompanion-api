@@ -2,12 +2,13 @@ import express, { Application, Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth";
+import { studentRoutes } from "./modules/student/student.routes";
 
 const app: Application = express();
 
 app.use(
   cors({
-    origin: "*",
+    origin: ["*", "http://192.168.0.102:8081", "http://192.168.0.100"],
     credentials: true,
   }),
 );
@@ -24,6 +25,8 @@ app.get("/health", (req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+app.use("/api/students", studentRoutes);
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   console.error("🔥 Error:", err.stack);
