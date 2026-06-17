@@ -39,6 +39,17 @@ enum SubmissionType {
   HAND
 }
 
+enum BloodGroup {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+}
+
 // ==============================
 // BETTER AUTH CORE SCHEMAS
 // ==============================
@@ -51,7 +62,7 @@ model User {
   image         String?
   role          SystemRole?
   phoneNumber   String?
-  bloodGroup    String?
+  bloodGroup    BloodGroup?
 
   // Better Auth Relations
   sessions Session[]
@@ -274,16 +285,16 @@ model HelpResponse {
 }
 
 model BloodPost {
-  id           String   @id @default(uuid())
+  id           String     @id @default(uuid())
   authorId     String
   patientName  String
-  bloodGroup   String
+  bloodGroup   BloodGroup
   location     String
   urgency      String
   contactPhone String
-  isFulfilled  Boolean  @default(false)
-  author       User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  createdAt    DateTime @default(now())
+  isFulfilled  Boolean    @default(false)
+  author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
 }
 
 // ==============================

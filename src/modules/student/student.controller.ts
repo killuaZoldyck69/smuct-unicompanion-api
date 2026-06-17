@@ -1,5 +1,10 @@
 import { Request, Response } from "express";
 import { prisma } from "../../lib/prisma";
+import {
+  getStudentProfileByUserId,
+  updateStudentProfileData,
+} from "./student.service";
+import { BloodGroup } from "../../../generated/prisma/enums";
 
 export const onboardStudent = async (
   req: Request,
@@ -105,5 +110,79 @@ export const updateProfileImage = async (
     res
       .status(500)
       .json({ error: "Failed to sync profile image to database." });
+  }
+};
+
+export const getStudentProfile = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = req.user.id; // Extracted securely from the requireAuth middleware
+
+    const userProfile = await getStudentProfileByUserId(userId);
+
+    // Ensure the user actually has a linked student profile
+    if (!userProfile || !userProfile.studentProfile) {
+      res.status(404).json({ error: "Student profile not found." });
+      return;
+    }
+
+    // Flatten the response slightly to make it easier for the mobile app to consume
+    const formattedProfile = {
+      id: userProfile.id,
+      name: userProfile.name,
+      email: userProfile.email,
+      image: userProfile.image,
+      phoneNumber: userProfile.phoneNumber,
+      bloodGroup: userProfile.bloodGroup,
+      role: userProfile.role,
+      ...userProfile.studentProfile, // Spreads academic details (studentId, batch, etc.)
+    };
+
+    res.status(200).json({
+      message: "Profile retrieved successfully.",
+      profile: formattedProfile,
+    });
+  } catch (error) {
+    console.error("Error fetching student profile:", error);
+    res.status(500).json({ error: "Failed to retrieve student profile." });
+  }
+};
+
+export const updateProfile = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = req.user.id;
+    // Extract batch alongside the other fields
+    const { name, phoneNumber, bloodGroup, batch, currentSemester, section } =
+      req.body;
+
+    const updatedProfile = await updateStudentProfileData(userId, {
+      name,
+      phoneNumber,
+      bloodGroup: bloodGroup as BloodGroup, // Cast to the enum type
+      batch,
+      currentSemester,
+      section,
+    });
+
+    const formattedProfile = {
+      id: updatedProfile?.id,
+      name: updatedProfile?.name,
+      phoneNumber: updatedProfile?.phoneNumber,
+      bloodGroup: updatedProfile?.bloodGroup,
+      ...updatedProfile?.studentProfile,
+    };
+
+    res.status(200).json({
+      message: "Profile updated successfully.",
+      profile: formattedProfile,
+    });
+  } catch (error) {
+    console.error("Error updating student profile:", error);
+    res.status(500).json({ error: "Failed to update profile data." });
   }
 };

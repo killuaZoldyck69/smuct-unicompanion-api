@@ -15,7 +15,6 @@ export const requireAuth = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    // FIX: Convert Express headers to standard Web Headers
     const session = await auth.api.getSession({
       headers: new Headers(req.headers as Record<string, string>),
     });
@@ -28,10 +27,8 @@ export const requireAuth = async (
     req.user = session.user;
     next();
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        error: "Internal server error during authentication validation.",
-      });
+    res.status(500).json({
+      error: "Internal server error during authentication validation.",
+    });
   }
 };
