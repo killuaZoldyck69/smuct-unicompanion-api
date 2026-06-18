@@ -154,14 +154,24 @@ model StudentProfile {
 }
 
 model TeacherProfile {
-  id                String  @id @default(uuid())
-  userId            String  @unique
-  designation       String
-  department        String
+  id        String @id @default(uuid())
+  userId    String @unique
+  teacherId String @unique
+
+  designation String
+  department  String
+  faculty     String?
+
   officeRoom        String?
   consultationHours String?
-  specialization    String?
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expertiseFields        String[]
+  academicQualifications Json?
+
+  linkedInUrl        String?
+  personalWebsiteUrl String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ==============================
@@ -197,7 +207,7 @@ model HubMember {
   userId   String
   hubId    String
   role     HubRole
-  isActive Boolean @default(true) // Soft Archive
+  isActive Boolean @default(true)
 
   user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   hub  CourseHub @relation(fields: [hubId], references: [id], onDelete: Cascade)
