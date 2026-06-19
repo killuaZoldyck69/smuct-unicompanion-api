@@ -377,12 +377,15 @@ model CalendarEvent {
 // ==============================
 
 model Notice {
-  id          String  @id @default(uuid())
-  title       String
-  description String?
-  driveUrl    String? // Optional link to an official PDF notice on Google Drive
-  category    String // e.g., "Academic", "Exam", "Admission", "Holiday"
+  id                String   @id @default(uuid())
+  referenceNo       String?
+  title             String
+  body              String
+  issuerName        String
+  issuerDesignation String
+  copyTo            String[]
 
+  issueDate DateTime @default(now())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
