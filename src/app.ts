@@ -8,6 +8,8 @@ import { teacherRoutes } from "./modules/teacher/teacher.routes";
 import { calendarRoutes } from "./modules/calendar/calendar.routes";
 import { busRoutes } from "./modules/bus/bus.routes";
 import { noticeRoutes } from "./modules/notice/notice.routes";
+import { eventRoutes } from "./modules/event/event.routes";
+import { userRoutes } from "./modules/user/user.routes";
 
 const app: Application = express();
 
@@ -36,6 +38,7 @@ app.use("/api/teachers", teacherRoutes);
 app.use("/api/calendars", calendarRoutes);
 app.use("/api/buses", busRoutes);
 app.use("/api/notices", noticeRoutes);
+app.use("/api/users", userRoutes);
 
 app.use(globalErrorHandler);
 
