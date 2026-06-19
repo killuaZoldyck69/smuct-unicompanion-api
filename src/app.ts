@@ -6,6 +6,7 @@ import { studentRoutes } from "./modules/student/student.routes";
 import { globalErrorHandler } from "./middleware/globalErrorHandler";
 import { teacherRoutes } from "./modules/teacher/teacher.routes";
 import { calendarRoutes } from "./modules/calendar/calendar.routes";
+import { busRoutes } from "./modules/bus/bus.routes";
 
 const app: Application = express();
 
@@ -32,6 +33,7 @@ app.get("/health", (req: Request, res: Response) => {
 app.use("/api/students", studentRoutes);
 app.use("/api/teachers", teacherRoutes);
 app.use("/api/calendars", calendarRoutes);
+app.use("/api/buses", busRoutes);
 
 app.use(globalErrorHandler);
 
