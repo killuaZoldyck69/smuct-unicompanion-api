@@ -141,16 +141,25 @@ model Verification {
 // ==============================
 
 model StudentProfile {
-  id              String  @id @default(uuid())
-  userId          String  @unique
-  studentId       String  @unique
+  id        String @id @default(uuid())
+  userId    String @unique
+  studentId String @unique
+
+  faculty         String
   department      String
+  program         String
   batch           String
   currentSemester Int
-  section         String?
-  isCR            Boolean @default(false)
-  isTA            Boolean @default(false)
-  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  section         String
+
+  isCR Boolean @default(false)
+  isTA Boolean @default(false)
+
+  skills             String[]
+  linkedInUrl        String?
+  personalWebsiteUrl String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model TeacherProfile {
@@ -160,7 +169,7 @@ model TeacherProfile {
 
   designation String
   department  String
-  faculty     String?
+  faculty     String
 
   officeRoom        String?
   consultationHours String?
@@ -335,12 +344,32 @@ model BusSchedule {
   createdAt     DateTime @default(now())
 }
 
+// ==============================
+// ACADEMIC CALENDAR MODULE
+// ==============================
+
 model AcademicCalendar {
-  id              String   @id @default(uuid())
-  title           String
-  facultyOrSchool String
-  driveUrl        String
-  createdAt       DateTime @default(now())
+  id                String          @id @default(uuid())
+  title             String
+  semester          String
+  isActive          Boolean         @default(true)
+  isGlobal          Boolean         @default(false)
+  targetFaculties   String[]
+  targetDepartments String[]
+  events            CalendarEvent[] // 👈 This connects the events
+  createdAt         DateTime        @default(now())
+}
+
+model CalendarEvent {
+  id          String           @id @default(uuid())
+  calendarId  String
+  calendar    AcademicCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime?
+  isHoliday   Boolean          @default(false)
+  createdAt   DateTime         @default(now())
 }
 
 // ==============================

@@ -1,12 +1,14 @@
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 
-type OnboardPayload = {
+export type OnboardPayload = {
   studentId: string;
+  faculty: string;
   department: string;
+  program: string;
   batch: string;
   currentSemester: number;
-  section?: string;
+  section: string;
 };
 
 type UpdateProfilePayload = {
@@ -16,13 +18,15 @@ type UpdateProfilePayload = {
   batch?: string;
   currentSemester?: number;
   section?: string;
+  skills?: string;
+  linkedInUrl?: string;
+  personalWebsiteUrl?: string;
 };
 
 export const onboardStudentService = async (
   userId: string,
   data: OnboardPayload,
 ) => {
-  // Check for existing profile to prevent manual duplication outside of unique constraints
   const existingProfile = await prisma.studentProfile.findUnique({
     where: { userId },
   });
@@ -41,10 +45,12 @@ export const onboardStudentService = async (
       data: {
         userId,
         studentId: data.studentId,
+        faculty: data.faculty,
         department: data.department,
+        program: data.program,
         batch: data.batch,
         currentSemester: data.currentSemester,
-        section: data.section || null,
+        section: data.section,
         isCR: false,
         isTA: false,
       },
@@ -77,12 +83,17 @@ export const getStudentProfileByUserId = async (userId: string) => {
       studentProfile: {
         select: {
           studentId: true,
+          faculty: true,
           department: true,
+          program: true,
           batch: true,
           currentSemester: true,
           section: true,
           isCR: true,
           isTA: true,
+          skills: true,
+          linkedInUrl: true,
+          personalWebsiteUrl: true,
         },
       },
     },
@@ -115,6 +126,11 @@ export const updateStudentProfileData = async (
     if (data.currentSemester)
       profileUpdateData.currentSemester = data.currentSemester;
     if (data.section !== undefined) profileUpdateData.section = data.section;
+    if (data.skills !== undefined) profileUpdateData.skills = data.skills;
+    if (data.linkedInUrl !== undefined)
+      profileUpdateData.linkedInUrl = data.linkedInUrl;
+    if (data.personalWebsiteUrl !== undefined)
+      profileUpdateData.personalWebsiteUrl = data.personalWebsiteUrl;
 
     if (Object.keys(profileUpdateData).length > 0) {
       await tx.studentProfile.update({

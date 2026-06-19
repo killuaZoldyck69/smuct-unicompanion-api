@@ -3,13 +3,15 @@ import { z } from "zod";
 export const onboardStudentSchema = z.object({
   body: z.object({
     studentId: z.string().min(1, "Student ID is required"),
+    faculty: z.string().min(1, "Faculty is required"),
     department: z.string().min(1, "Department is required"),
+    program: z.string().min(1, "Program is required"),
     batch: z.string().min(1, "Batch is required"),
     currentSemester: z
       .number()
       .min(1)
       .max(12, "Semester must be between 1 and 12"),
-    section: z.string().optional(),
+    section: z.string().min(1, "Section is required"),
   }),
 });
 
@@ -37,6 +39,20 @@ export const updateProfileSchema = z.object({
         "O_POSITIVE",
         "O_NEGATIVE",
       ])
+      .optional(),
+
+    faculty: z.string().optional(),
+    program: z.string().optional(),
+    skills: z.array(z.string()).optional(),
+    linkedInUrl: z
+      .string()
+      .url({ message: "Must be a valid URL" })
+      .or(z.literal(""))
+      .optional(),
+    personalWebsiteUrl: z
+      .string()
+      .url({ message: "Must be a valid URL" })
+      .or(z.literal(""))
       .optional(),
   }),
 });
