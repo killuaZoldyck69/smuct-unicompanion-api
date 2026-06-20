@@ -12,6 +12,10 @@ import { eventRoutes } from "./modules/event/event.routes";
 import { userRoutes } from "./modules/user/user.routes";
 import { forumRoutes } from "./modules/forum/forum.routes";
 import { bloodRoutes } from "./modules/blood/blood.routes";
+import { directoryRoutes } from "./modules/directory/directory.routes";
+import { complaintRoutes } from "./modules/complaint/complaint.routes";
+import { alumniRoutes } from "./modules/alumni/alumni.routes";
+import { fieldRoutes } from "./modules/field/field.routes";
 
 const app: Application = express();
 
@@ -44,6 +48,10 @@ app.use("/api/users", userRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/forum", forumRoutes);
 app.use("/api/blood", bloodRoutes);
+app.use("/api/directory", directoryRoutes);
+app.use("/api/complaints", complaintRoutes);
+app.use("/api/alumni", alumniRoutes);
+app.use("/api/field", fieldRoutes);
 
 app.use(globalErrorHandler);
 

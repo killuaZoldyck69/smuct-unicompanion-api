@@ -123,7 +123,6 @@ export const resolveBloodPostService = async (
     throw new AppError("Blood request not found.", 404);
   }
 
-  // Admin Override
   if (post.authorId !== userId && role !== "ADMIN") {
     throw new AppError(
       "You do not have permission to mark this request as fulfilled.",
@@ -150,7 +149,6 @@ export const deleteBloodPostService = async (
     throw new AppError("Blood request not found.", 404);
   }
 
-  // Admin Override
   if (post.authorId !== userId && role !== "ADMIN") {
     throw new AppError(
       "You do not have permission to delete this request.",
