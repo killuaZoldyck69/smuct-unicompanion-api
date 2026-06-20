@@ -26,7 +26,14 @@ export const getAllPostsService = async () => {
     },
     include: {
       author: {
-        select: { id: true, name: true, image: true },
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          role: true,
+          studentProfile: true,
+          teacherProfile: true,
+        },
       },
       _count: {
         select: { responses: true },
@@ -40,13 +47,27 @@ export const getSinglePostService = async (id: string) => {
     where: { id },
     include: {
       author: {
-        select: { id: true, name: true, image: true },
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          role: true,
+          studentProfile: true,
+          teacherProfile: true,
+        },
       },
       responses: {
         orderBy: { createdAt: "asc" },
         include: {
           responder: {
-            select: { id: true, name: true, image: true },
+            select: {
+              id: true,
+              name: true,
+              image: true,
+              role: true,
+              studentProfile: true,
+              teacherProfile: true,
+            },
           },
         },
       },
@@ -82,7 +103,11 @@ export const createResponseService = async (
   });
 };
 
-export const resolvePostService = async (postId: string, userId: string) => {
+export const resolvePostService = async (
+  postId: string,
+  userId: string,
+  role: string,
+) => {
   const post = await prisma.helpPost.findUnique({
     where: { id: postId },
   });
@@ -91,8 +116,12 @@ export const resolvePostService = async (postId: string, userId: string) => {
     throw new AppError("Forum post not found.", 404);
   }
 
-  if (post.authorId !== userId) {
-    throw new AppError("You do not have permission to resolve this post.", 403);
+  // Admin Override applied here
+  if (post.authorId !== userId && role !== "ADMIN") {
+    throw new AppError(
+      "You do not have permission to perform this action.",
+      403,
+    );
   }
 
   return await prisma.helpPost.update({
@@ -101,7 +130,7 @@ export const resolvePostService = async (postId: string, userId: string) => {
   });
 };
 
-// NEW: Update Post Service
+// Update Post Service
 export const updatePostService = async (
   postId: string,
   userId: string,
@@ -115,6 +144,7 @@ export const updatePostService = async (
     throw new AppError("Forum post not found.", 404);
   }
 
+  // Edit action is strictly for the original author (No Admin override requested here)
   if (post.authorId !== userId) {
     throw new AppError("You do not have permission to edit this post.", 403);
   }
@@ -125,8 +155,12 @@ export const updatePostService = async (
   });
 };
 
-// NEW: Delete Post Service
-export const deletePostService = async (postId: string, userId: string) => {
+// Delete Post Service
+export const deletePostService = async (
+  postId: string,
+  userId: string,
+  role: string,
+) => {
   const post = await prisma.helpPost.findUnique({
     where: { id: postId },
   });
@@ -135,8 +169,12 @@ export const deletePostService = async (postId: string, userId: string) => {
     throw new AppError("Forum post not found.", 404);
   }
 
-  if (post.authorId !== userId) {
-    throw new AppError("You do not have permission to delete this post.", 403);
+  // Admin Override applied here
+  if (post.authorId !== userId && role !== "ADMIN") {
+    throw new AppError(
+      "You do not have permission to perform this action.",
+      403,
+    );
   }
 
   return await prisma.helpPost.delete({

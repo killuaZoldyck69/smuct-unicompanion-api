@@ -83,8 +83,9 @@ model User {
   bloodPosts    BloodPost[]
   reviews       CourseReview[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  bloodResponses BloodResponse[]
 
   @@map("user")
 }
@@ -304,16 +305,29 @@ model HelpResponse {
 }
 
 model BloodPost {
-  id           String     @id @default(uuid())
-  authorId     String
-  patientName  String
-  bloodGroup   BloodGroup
-  location     String
-  urgency      String
-  contactPhone String
-  isFulfilled  Boolean    @default(false)
-  author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  createdAt    DateTime   @default(now())
+  id               String          @id @default(uuid())
+  authorId         String
+  patientName      String
+  patientCondition String
+  bloodGroup       BloodGroup
+  location         String
+  urgency          String
+  contactPhone     String
+  isFulfilled      Boolean         @default(false)
+  author           User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  responses        BloodResponse[]
+  createdAt        DateTime        @default(now())
+}
+
+model BloodResponse {
+  id          String  @id @default(uuid())
+  postId      String
+  responderId String
+  message     String? // Optional short message like "I am nearby and can come now"
+
+  post      BloodPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  responder User      @relation(fields: [responderId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
 }
 
 // ==============================

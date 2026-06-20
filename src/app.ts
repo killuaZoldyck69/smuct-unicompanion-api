@@ -11,6 +11,7 @@ import { noticeRoutes } from "./modules/notice/notice.routes";
 import { eventRoutes } from "./modules/event/event.routes";
 import { userRoutes } from "./modules/user/user.routes";
 import { forumRoutes } from "./modules/forum/forum.routes";
+import { bloodRoutes } from "./modules/blood/blood.routes";
 
 const app: Application = express();
 
@@ -42,6 +43,7 @@ app.use("/api/notices", noticeRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/forum", forumRoutes);
+app.use("/api/blood", bloodRoutes);
 
 app.use(globalErrorHandler);
 
