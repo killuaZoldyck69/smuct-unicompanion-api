@@ -16,6 +16,10 @@ import { directoryRoutes } from "./modules/directory/directory.routes";
 import { complaintRoutes } from "./modules/complaint/complaint.routes";
 import { alumniRoutes } from "./modules/alumni/alumni.routes";
 import { fieldRoutes } from "./modules/field/field.routes";
+import { hubRoutes } from "./modules/hub/hub.routes";
+import { contentRoutes } from "./modules/hub/content/content.routes";
+import { assessmentRoutes } from "./modules/hub/assessments/assessments.routes";
+import { reviewRoutes } from "./modules/hub/reviews/reviews.routes";
 
 const app: Application = express();
 
@@ -53,6 +57,13 @@ app.use("/api/complaints", complaintRoutes);
 app.use("/api/alumni", alumniRoutes);
 app.use("/api/field", fieldRoutes);
 
+// 2. MOUNT THE HUB ROUTES
+app.use("/api/hubs", hubRoutes); // Mounts base hub routes to /api/hubs
+app.use("/api", contentRoutes); // Mounts nested routes like /api/hubs/:id/discussions
+app.use("/api", assessmentRoutes);
+app.use("/api", reviewRoutes);
+
+// Global Error Handler
 app.use(globalErrorHandler);
 
 export default app;

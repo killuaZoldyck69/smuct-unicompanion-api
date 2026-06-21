@@ -32,6 +32,7 @@ enum HubRole {
 enum AssessmentType {
   ASSIGNMENT
   QUIZ
+  PRESENTATION
 }
 
 enum SubmissionType {
@@ -83,11 +84,15 @@ model User {
   bloodPosts    BloodPost[]
   reviews       CourseReview[]
 
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  bloodResponses BloodResponse[]
-  complaints     Complaint[]
-  fieldBookings  FieldBooking[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  bloodResponses       BloodResponse[]
+  complaints           Complaint[]
+  fieldBookings        FieldBooking[]
+  hubAnnouncements     HubAnnouncement[]
+  hubDiscussions       HubDiscussion[]
+  hubDiscussionReplies HubDiscussionReply[]
+  announcementComments AnnouncementComment[]
 
   @@map("user")
 }
@@ -191,25 +196,28 @@ model TeacherProfile {
 // ==============================
 
 model CourseHub {
-  id                  String    @id @default(uuid())
+  id                  String  @id @default(uuid())
   courseCode          String
   courseName          String
   credit              Float
   termOffer           String
-  weeklyClassSchedule String
-  classroomNumber     String?
-  midtermExamDate     DateTime?
-  finalExamDate       DateTime?
-  joinCode            String    @unique
-  isArchived          Boolean   @default(false)
+  weeklyClassSchedule Json
+  termExams           Json? // 👈 NEW: Consolidated exam data
+  joinCode            String  @unique
+  isArchived          Boolean @default(false)
   department          String
   batch               String
   semesterNumber      Int
 
-  members     HubMember[]
-  resources   Resource[]
-  assessments Assessment[]
-  reviews     CourseReview[]
+  isReviewOpen    Boolean @default(false)
+  reviewQuestions Json?
+
+  members       HubMember[]
+  resources     Resource[]
+  assessments   Assessment[]
+  reviews       CourseReview[]
+  announcements HubAnnouncement[]
+  discussions   HubDiscussion[]
 
   createdAt DateTime @default(now())
 }
@@ -228,6 +236,59 @@ model HubMember {
 }
 
 // ==============================
+// HUB ANNOUNCEMENTS & DISCUSSIONS
+// ==============================
+
+model HubAnnouncement {
+  id                String   @id @default(uuid())
+  hubId             String
+  creatorId         String
+  content           String
+  attachedLinkUrl   String? // 👈 NEW
+  attachedLinkTitle String? // 👈 NEW
+  createdAt         DateTime @default(now())
+
+  hub      CourseHub             @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  creator  User                  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  comments AnnouncementComment[] // 👈 NEW
+}
+
+model AnnouncementComment {
+  id             String   @id @default(uuid())
+  content        String
+  announcementId String
+  authorId       String
+  createdAt      DateTime @default(now())
+
+  announcement HubAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  author       User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model HubDiscussion {
+  id        String   @id @default(uuid())
+  hubId     String
+  authorId  String
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+
+  hub     CourseHub            @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  author  User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  replies HubDiscussionReply[]
+}
+
+model HubDiscussionReply {
+  id           String   @id @default(uuid())
+  discussionId String
+  authorId     String
+  content      String
+  createdAt    DateTime @default(now())
+
+  discussion HubDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  author     User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+// ==============================
 // ASSESSMENTS & GRADING
 // ==============================
 
@@ -240,6 +301,7 @@ model Assessment {
   type           AssessmentType
   submissionType SubmissionType?
   deadline       DateTime
+  totalMarks     Float
 
   hub         CourseHub    @relation(fields: [hubId], references: [id], onDelete: Cascade)
   creator     User         @relation("CreatedAssessments", fields: [creatorId], references: [id])
@@ -343,6 +405,7 @@ model CourseReview {
   rating      Int
   comment     String?
   isAnonymous Boolean @default(true)
+  answers     Json?
 
   hub       CourseHub @relation(fields: [hubId], references: [id], onDelete: Cascade)
   student   User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
