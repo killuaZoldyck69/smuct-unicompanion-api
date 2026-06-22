@@ -73,10 +73,7 @@ export const createHubService = async (
         courseName: data.courseName,
         credit: data.credit,
         termOffer: data.termOffer,
-
-        // Use 'as any' safely here if TS is still caching the old String type
         weeklyClassSchedule: data.weeklyClassSchedule as any,
-
         department: data.department,
         batch: data.batch,
         semesterNumber: data.semesterNumber,
@@ -140,7 +137,18 @@ export const getHubDetailsService = async (hubId: string) => {
     include: {
       members: {
         include: {
-          user: { select: { id: true, name: true, image: true, role: true } },
+          // 👈 UPDATED: Added email and profile IDs
+          user: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+              role: true,
+              email: true,
+              studentProfile: { select: { studentId: true } },
+              teacherProfile: { select: { teacherId: true } },
+            },
+          },
         },
       },
     },
@@ -155,23 +163,91 @@ export const updateMemberRoleService = async (
   memberId: string,
   newRole: any,
 ) => {
-  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
+  const requesterMember = await verifyHubRole(userId, hubId, [
+    "TEACHER",
+    "CR",
+    "TA",
+  ]);
+
+  const targetMember = await prisma.hubMember.findUnique({
+    where: { id: memberId },
+  });
+
+  if (!targetMember) throw new AppError("Member not found.", 404);
+
+  // 👇 FIX: Prevent both CRs AND TAs from modifying Teacher roles
+  if (
+    (requesterMember.role === "CR" || requesterMember.role === "TA") &&
+    targetMember.role === "TEACHER"
+  ) {
+    throw new AppError(
+      "Class Representatives and TAs cannot modify Teacher roles.",
+      403,
+    );
+  }
+
+  if (
+    (requesterMember.role === "CR" || requesterMember.role === "TA") &&
+    newRole === "TEACHER"
+  ) {
+    throw new AppError(
+      "Class Representatives and TAs cannot assign Teacher roles.",
+      403,
+    );
+  }
+
   return await prisma.hubMember.update({
     where: { id: memberId },
     data: { role: newRole },
   });
 };
 
-// Update Hub Service
+export const removeMemberService = async (
+  userId: string,
+  hubId: string,
+  memberId: string,
+) => {
+  const targetMember = await prisma.hubMember.findUnique({
+    where: { id: memberId },
+  });
+
+  if (!targetMember) throw new AppError("Member not found.", 404);
+
+  // Allow users to remove themselves ("Leave Hub")
+  if (targetMember.userId === userId) {
+    return await prisma.hubMember.delete({ where: { id: memberId } });
+  }
+
+  // 👇 FIX: Allow TAs to kick students, but verify their role first
+  const requesterMember = await verifyHubRole(userId, hubId, [
+    "TEACHER",
+    "CR",
+    "TA",
+  ]);
+
+  // 👇 FIX: Security Check - CR and TA cannot kick a TEACHER
+  if (
+    (requesterMember.role === "CR" || requesterMember.role === "TA") &&
+    targetMember.role === "TEACHER"
+  ) {
+    throw new AppError(
+      "Class Representatives and TAs cannot remove Teachers from the hub.",
+      403,
+    );
+  }
+
+  return await prisma.hubMember.delete({
+    where: { id: memberId },
+  });
+};
+
 export const updateHubService = async (
   userId: string,
   hubId: string,
-  data: UpdateHubPayload, // Ensure this type is imported from hub.schema.ts
+  data: UpdateHubPayload,
 ) => {
-  // Only Teachers and CRs can edit the hub details
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
 
-  // Prisma natively handles the JSON arrays (like weeklyClassSchedule and termExams)
   return await prisma.courseHub.update({
     where: { id: hubId },
     data,
@@ -187,5 +263,14 @@ export const archiveHubService = async (
   return await prisma.courseHub.update({
     where: { id: hubId },
     data: { isArchived },
+  });
+};
+
+export const deleteHubService = async (userId: string, hubId: string) => {
+  // 👈 Only Teachers and CRs can delete a hub
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
+
+  return await prisma.courseHub.delete({
+    where: { id: hubId },
   });
 };

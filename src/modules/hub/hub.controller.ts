@@ -50,6 +50,20 @@ export const updateMemberRole = catchAsync(
   },
 );
 
+// 👈 NEW: Controller for Leave/Remove
+export const removeMember = catchAsync(async (req: Request, res: Response) => {
+  await hubService.removeMemberService(
+    req.user.id,
+    req.params.id as string,
+    req.params.memberId as string,
+  );
+
+  res.status(200).json({
+    success: true,
+    message: "Member removed from the hub successfully.",
+  });
+});
+
 export const updateHub = catchAsync(async (req: Request, res: Response) => {
   const hubId = req.params.id as string;
   const userId = req.user.id;
@@ -72,4 +86,13 @@ export const archiveHub = catchAsync(async (req: Request, res: Response) => {
   res
     .status(200)
     .json({ success: true, message: "Hub archive status updated", data: hub });
+});
+
+export const deleteHub = catchAsync(async (req: Request, res: Response) => {
+  await hubService.deleteHubService(req.user.id, req.params.id as string);
+
+  res.status(200).json({
+    success: true,
+    message: "Course Hub and all associated data deleted successfully.",
+  });
 });

@@ -43,10 +43,11 @@ export const updateHubSchema = z.object({
     department: z.string().optional(),
     batch: z.string().optional(),
     termOffer: z.string().optional(),
-    classroomNumber: z.string().optional(),
+
     weeklyClassSchedule: z.any().optional(),
 
-    // 👈 NEW: Validating the JSON array of exams
+    isReviewOpen: z.boolean().optional(),
+
     termExams: z
       .array(
         z.object({

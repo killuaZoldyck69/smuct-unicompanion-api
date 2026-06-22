@@ -14,14 +14,16 @@ import {
   getMyHubs,
   getHubDetails,
   updateMemberRole,
+  removeMember, // 👈 Import new controller
   archiveHub,
   getAvailableTeachers,
   updateHub,
+  deleteHub,
 } from "./hub.controller";
 
-// 👇 1. Import the sub-routes (Check these paths match your folder structure!)
 import { resourceRoutes } from "../hub/resources/resources.routes";
 import { contentRoutes } from "../hub/content/content.routes";
+import { assessmentRoutes } from "./assessments/assessments.routes";
 
 const router = Router();
 
@@ -39,6 +41,11 @@ router.patch(
   validateRequest(updateMemberRoleSchema),
   updateMemberRole,
 );
+
+// 👈 NEW: Add DELETE route for members
+router.delete("/:id/members/:memberId", requireAuth, removeMember);
+router.delete("/:id", requireAuth, deleteHub);
+
 router.patch(
   "/:id/archive",
   requireAuth,
@@ -46,9 +53,9 @@ router.patch(
   archiveHub,
 );
 
-// 👇 2. Mount the Sub-Routes directly onto the Hub Router
-// This ensures /api/hubs/:id/resources perfectly triggers the resource routes!
+// Mount the Sub-Routes directly onto the Hub Router
 router.use("/", resourceRoutes);
 router.use("/", contentRoutes);
+router.use("/", assessmentRoutes);
 
 export const hubRoutes = router;

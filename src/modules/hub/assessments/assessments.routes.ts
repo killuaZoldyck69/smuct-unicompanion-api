@@ -17,29 +17,30 @@ import {
 
 const router = Router({ mergeParams: true });
 
+// 👇 FIX: Removed the "/hubs" prefix because it's already mounted inside hub.routes.ts
 router.post(
-  "/hubs/:id/assessments",
+  "/:id/assessments",
   requireAuth,
   validateRequest(createAssessmentSchema),
   createAssessment,
 );
-router.get("/hubs/:id/assessments", requireAuth, getAssessments);
+router.get("/:id/assessments", requireAuth, getAssessments);
 
 // Submissions & Grading
 router.post(
-  "/assessments/:assessmentId/submit",
+  "/:id/assessments/:assessmentId/submit",
   requireAuth,
   validateRequest(submitAssessmentSchema),
   submitAssessment,
 );
 router.patch(
-  "/submissions/:submissionId/grade",
+  "/:id/submissions/:submissionId/grade",
   requireAuth,
   validateRequest(gradeSubmissionSchema),
   gradeSubmission,
 );
 router.post(
-  "/assessments/:assessmentId/bulk-grade",
+  "/:id/assessments/:assessmentId/bulk-grade",
   requireAuth,
   validateRequest(bulkGradeSchema),
   bulkGrade,

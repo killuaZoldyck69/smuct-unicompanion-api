@@ -31,7 +31,8 @@ export const submitAssessment = async (
   });
   if (!assessment) throw new AppError("Assessment not found", 404);
 
-  await verifyHubRole(userId, assessment.hubId, ["STUDENT", "CR"]);
+  // 👈 FIX: Added "TA" and ensured "CR" are allowed to submit
+  await verifyHubRole(userId, assessment.hubId, ["STUDENT", "CR", "TA"]);
 
   return await prisma.submission.upsert({
     where: { assessmentId_studentId: { assessmentId, studentId: userId } },

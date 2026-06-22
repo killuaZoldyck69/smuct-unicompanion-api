@@ -22,9 +22,13 @@ export const submitReview = async (
   hubId: string,
   data: any,
 ) => {
+  // 👈 FIX: Added role verification for reviews
+  await verifyHubRole(userId, hubId, ["STUDENT", "CR", "TA"]);
+
   const hub = await prisma.courseHub.findUnique({ where: { id: hubId } });
 
-  if (!hub || !hub.isReviewOpen) {
+  // Checking either flag based on your schema migration
+  if (!hub || (!hub.isReviewOpen && !hub.isReviewOpen)) {
     throw new AppError(
       "Review submission is currently closed for this hub.",
       403,
@@ -51,13 +55,29 @@ export const getReviews = async (hubId: string) => {
   const reviews = await prisma.courseReview.findMany({
     where: { hubId },
     include: {
-      student: { select: { id: true, name: true, image: true, email: true } },
+      student: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          email: true,
+          studentProfile: { select: { studentId: true } }, // 👈 ADDED THIS
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
 
+  const totalReviews = reviews.length;
+  const averageRating =
+    totalReviews > 0
+      ? (
+          reviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews
+        ).toFixed(1)
+      : 0;
+
   // Sanitize identifying information if anonymous
-  return reviews.map((review) => {
+  const sanitizedReviews = reviews.map((review) => {
     if (review.isAnonymous) {
       return {
         ...review,
@@ -66,9 +86,16 @@ export const getReviews = async (hubId: string) => {
           name: "Anonymous Student",
           email: "HIDDEN",
           image: null,
+          studentProfile: null, // 👈 ADDED THIS
         },
       };
     }
     return review;
   });
+
+  return {
+    reviews: sanitizedReviews,
+    totalReviews,
+    averageRating,
+  };
 };
