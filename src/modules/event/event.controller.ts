@@ -13,17 +13,18 @@ export const createEvent = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getEvents = catchAsync(async (req: Request, res: Response) => {
-  const events = await eventService.getUpcomingEventsService();
+  // 👇 Call the renamed service
+  const events = await eventService.getAllEventsService();
 
   res.status(200).json({
     success: true,
-    message: "Upcoming campus events retrieved successfully.",
+    message: "Campus events retrieved successfully.",
     data: events,
   });
 });
 
 export const deleteEvent = catchAsync(async (req: Request, res: Response) => {
-  const id = req.params.id as string; // Assert as string to prevent type errors
+  const id = req.params.id as string;
 
   await eventService.deleteEventService(id);
 

@@ -13,15 +13,11 @@ export const createEventService = async (data: CreateEventPayload) => {
   });
 };
 
-export const getUpcomingEventsService = async () => {
+// 👇 Renamed to accurately reflect that it returns ALL events
+export const getAllEventsService = async () => {
   return await prisma.campusEvent.findMany({
-    where: {
-      eventDate: {
-        gte: new Date(), // Automatically filters out any events prior to the current moment
-      },
-    },
     orderBy: {
-      eventDate: "asc", // Closest upcoming events appear first
+      eventDate: "asc",
     },
   });
 };
