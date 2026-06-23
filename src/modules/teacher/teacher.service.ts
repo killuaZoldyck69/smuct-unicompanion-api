@@ -1,4 +1,5 @@
 import { auth } from "../../lib/auth";
+import { sendEmail } from "../../lib/email";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import { RegisterTeacherPayload, UpdateTeacherPayload } from "./teacher.schema";
@@ -65,6 +66,25 @@ export const registerTeacherService = async (data: RegisterTeacherPayload) => {
         department: data.department,
         faculty: data.faculty,
       },
+    });
+
+    // 👇 NEW: Auto-verify the Teacher so they don't have to click a verification link
+    await prisma.user.update({
+      where: { id: userId },
+      data: { emailVerified: true },
+    });
+
+    // 👇 NEW: Send the Teacher their login credentials
+    await sendEmail({
+      to: data.email,
+      subject: "Your Teacher Account - SMUCT UniCompanion",
+      html: `
+        <h2>Welcome to SMUCT UniCompanion, ${data.name}!</h2>
+        <p>An administrator has created a teacher account for you.</p>
+        <p><strong>Login Email:</strong> ${data.email}</p>
+        <p><strong>Temporary Password:</strong> ${data.password}</p>
+        <p>Please log into the mobile app and change your password immediately.</p>
+      `,
     });
 
     return { user: authResponse.user, profile };

@@ -1,0 +1,6076 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.gitignore
+package.json
+prisma.config.ts
+prisma/migrations/20260615114145_init/migration.sql
+prisma/migrations/20260616192019_init_supabase/migration.sql
+prisma/migrations/20260616205854_make_role_optional/migration.sql
+prisma/migrations/20260617104941_add_bloodgroup_enum/migration.sql
+prisma/migrations/20260617211327_update_teacher_profile/migration.sql
+prisma/migrations/20260618214326_add_academic_calendar_system/migration.sql
+prisma/migrations/20260619084908_update_student_profile/migration.sql
+prisma/migrations/20260619120704_update_noticeboard_schema/migration.sql
+prisma/migrations/20260620051511_update_bloodpost_schema/migration.sql
+prisma/migrations/20260620190256_add_alumni_complaint_field_booking_field_setting_table/migration.sql
+prisma/migrations/migration_lock.toml
+prisma/schema.prisma
+src/app.ts
+src/config/env.ts
+src/lib/auth.ts
+src/lib/prisma.ts
+src/middleware/admin.middleware.ts
+src/middleware/auth.middleware.ts
+src/middleware/globalErrorHandler.ts
+src/middleware/teacher.middleware.ts
+src/middleware/validateRequest.ts
+src/modules/alumni/alumni.controller.ts
+src/modules/alumni/alumni.routes.ts
+src/modules/alumni/alumni.schema.ts
+src/modules/alumni/alumni.service.ts
+src/modules/blood/blood.controller.ts
+src/modules/blood/blood.routes.ts
+src/modules/blood/blood.schema.ts
+src/modules/blood/blood.service.ts
+src/modules/bus/bus.controller.ts
+src/modules/bus/bus.routes.ts
+src/modules/bus/bus.schema.ts
+src/modules/bus/bus.service.ts
+src/modules/calendar/calendar.controller.ts
+src/modules/calendar/calendar.routes.ts
+src/modules/calendar/calendar.schema.ts
+src/modules/calendar/calendar.service.ts
+src/modules/complaint/complaint.controller.ts
+src/modules/complaint/complaint.routes.ts
+src/modules/complaint/complaint.schema.ts
+src/modules/complaint/complaint.service.ts
+src/modules/directory/directory.controller.ts
+src/modules/directory/directory.routes.ts
+src/modules/directory/directory.service.ts
+src/modules/event/event.controller.ts
+src/modules/event/event.routes.ts
+src/modules/event/event.schema.ts
+src/modules/event/event.service.ts
+src/modules/field/field.controller.ts
+src/modules/field/field.routes.ts
+src/modules/field/field.schema.ts
+src/modules/field/field.service.ts
+src/modules/forum/forum.controller.ts
+src/modules/forum/forum.routes.ts
+src/modules/forum/forum.schema.ts
+src/modules/forum/forum.service.ts
+src/modules/hub/assessments/assessments.controller.ts
+src/modules/hub/assessments/assessments.routes.ts
+src/modules/hub/assessments/assessments.schema.ts
+src/modules/hub/assessments/assessments.service.ts
+src/modules/hub/content/content.controller.ts
+src/modules/hub/content/content.routes.ts
+src/modules/hub/content/content.schema.ts
+src/modules/hub/content/content.service.ts
+src/modules/hub/hub.controller.ts
+src/modules/hub/hub.routes.ts
+src/modules/hub/hub.schema.ts
+src/modules/hub/hub.service.ts
+src/modules/hub/resources/resources.controller.ts
+src/modules/hub/resources/resources.routes.ts
+src/modules/hub/resources/resources.schema.ts
+src/modules/hub/resources/resources.service.ts
+src/modules/hub/reviews/reviews.controller.ts
+src/modules/hub/reviews/reviews.routes.ts
+src/modules/hub/reviews/reviews.schema.ts
+src/modules/hub/reviews/reviews.service.ts
+src/modules/notice/notice.controller.ts
+src/modules/notice/notice.routes.ts
+src/modules/notice/notice.schema.ts
+src/modules/notice/notice.service.ts
+src/modules/student/student.controller.ts
+src/modules/student/student.routes.ts
+src/modules/student/student.schema.ts
+src/modules/student/student.service.ts
+src/modules/teacher/teacher.controller.ts
+src/modules/teacher/teacher.routes.ts
+src/modules/teacher/teacher.schema.ts
+src/modules/teacher/teacher.service.ts
+src/modules/user/user.controller.ts
+src/modules/user/user.routes.ts
+src/modules/user/user.schema.ts
+src/modules/user/user.service.ts
+src/server.ts
+src/utils/AppError.ts
+src/utils/catchAsync.ts
+tsconfig.json
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="prisma/migrations/20260615114145_init/migration.sql">
+-- CreateTable
+CREATE TABLE "user" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "emailVerified" BOOLEAN NOT NULL DEFAULT false,
+    "image" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "user_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "session" (
+    "id" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "token" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
+    "userId" TEXT NOT NULL,
+
+    CONSTRAINT "session_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "account" (
+    "id" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
+    "providerId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "accessToken" TEXT,
+    "refreshToken" TEXT,
+    "idToken" TEXT,
+    "accessTokenExpiresAt" TIMESTAMP(3),
+    "refreshTokenExpiresAt" TIMESTAMP(3),
+    "scope" TEXT,
+    "password" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "account_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "verification" (
+    "id" TEXT NOT NULL,
+    "identifier" TEXT NOT NULL,
+    "value" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "verification_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "user_email_key" ON "user"("email");
+
+-- CreateIndex
+CREATE INDEX "session_userId_idx" ON "session"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "session_token_key" ON "session"("token");
+
+-- CreateIndex
+CREATE INDEX "account_userId_idx" ON "account"("userId");
+
+-- CreateIndex
+CREATE INDEX "verification_identifier_idx" ON "verification"("identifier");
+
+-- AddForeignKey
+ALTER TABLE "session" ADD CONSTRAINT "session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "account" ADD CONSTRAINT "account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+</file>
+
+<file path="prisma/migrations/20260616192019_init_supabase/migration.sql">
+/*
+  Warnings:
+
+  - You are about to drop the column `deletedAt` on the `user` table. All the data in the column will be lost.
+  - Added the required column `role` to the `user` table without a default value. This is not possible if the table is not empty.
+
+*/
+-- CreateEnum
+CREATE TYPE "SystemRole" AS ENUM ('ADMIN', 'STUDENT', 'TEACHER');
+
+-- CreateEnum
+CREATE TYPE "HubRole" AS ENUM ('TEACHER', 'CR', 'TA', 'STUDENT');
+
+-- CreateEnum
+CREATE TYPE "AssessmentType" AS ENUM ('ASSIGNMENT', 'QUIZ');
+
+-- CreateEnum
+CREATE TYPE "SubmissionType" AS ENUM ('ONLINE', 'HAND');
+
+-- AlterTable
+ALTER TABLE "user" DROP COLUMN "deletedAt",
+ADD COLUMN     "bloodGroup" TEXT,
+ADD COLUMN     "phoneNumber" TEXT,
+ADD COLUMN     "role" "SystemRole" NOT NULL;
+
+-- CreateTable
+CREATE TABLE "StudentProfile" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "studentId" TEXT NOT NULL,
+    "department" TEXT NOT NULL,
+    "batch" TEXT NOT NULL,
+    "currentSemester" INTEGER NOT NULL,
+    "section" TEXT,
+    "isCR" BOOLEAN NOT NULL DEFAULT false,
+    "isTA" BOOLEAN NOT NULL DEFAULT false,
+
+    CONSTRAINT "StudentProfile_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "TeacherProfile" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "designation" TEXT NOT NULL,
+    "department" TEXT NOT NULL,
+    "officeRoom" TEXT,
+    "consultationHours" TEXT,
+    "specialization" TEXT,
+
+    CONSTRAINT "TeacherProfile_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CourseHub" (
+    "id" TEXT NOT NULL,
+    "courseCode" TEXT NOT NULL,
+    "courseName" TEXT NOT NULL,
+    "credit" DOUBLE PRECISION NOT NULL,
+    "termOffer" TEXT NOT NULL,
+    "weeklyClassSchedule" TEXT NOT NULL,
+    "classroomNumber" TEXT,
+    "midtermExamDate" TIMESTAMP(3),
+    "finalExamDate" TIMESTAMP(3),
+    "joinCode" TEXT NOT NULL,
+    "isArchived" BOOLEAN NOT NULL DEFAULT false,
+    "department" TEXT NOT NULL,
+    "batch" TEXT NOT NULL,
+    "semesterNumber" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CourseHub_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HubMember" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "hubId" TEXT NOT NULL,
+    "role" "HubRole" NOT NULL,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "HubMember_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Assessment" (
+    "id" TEXT NOT NULL,
+    "hubId" TEXT NOT NULL,
+    "creatorId" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "type" "AssessmentType" NOT NULL,
+    "submissionType" "SubmissionType",
+    "deadline" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Assessment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Submission" (
+    "id" TEXT NOT NULL,
+    "assessmentId" TEXT NOT NULL,
+    "studentId" TEXT NOT NULL,
+    "submittedUrl" TEXT,
+    "marks" DOUBLE PRECISION,
+    "gradedById" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Submission_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Resource" (
+    "id" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "driveUrl" TEXT NOT NULL,
+    "uploaderId" TEXT NOT NULL,
+    "hubId" TEXT,
+    "isStudentNote" BOOLEAN NOT NULL DEFAULT false,
+    "rating" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Resource_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HelpPost" (
+    "id" TEXT NOT NULL,
+    "authorId" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "isResolved" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "HelpPost_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HelpResponse" (
+    "id" TEXT NOT NULL,
+    "postId" TEXT NOT NULL,
+    "responderId" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "HelpResponse_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BloodPost" (
+    "id" TEXT NOT NULL,
+    "authorId" TEXT NOT NULL,
+    "patientName" TEXT NOT NULL,
+    "bloodGroup" TEXT NOT NULL,
+    "location" TEXT NOT NULL,
+    "urgency" TEXT NOT NULL,
+    "contactPhone" TEXT NOT NULL,
+    "isFulfilled" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BloodPost_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CourseReview" (
+    "id" TEXT NOT NULL,
+    "hubId" TEXT NOT NULL,
+    "studentId" TEXT NOT NULL,
+    "rating" INTEGER NOT NULL,
+    "comment" TEXT,
+    "isAnonymous" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CourseReview_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BusSchedule" (
+    "id" TEXT NOT NULL,
+    "route" TEXT NOT NULL,
+    "busNumber" TEXT NOT NULL,
+    "departureTime" TEXT NOT NULL,
+    "stops" TEXT[],
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BusSchedule_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AcademicCalendar" (
+    "id" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "facultyOrSchool" TEXT NOT NULL,
+    "driveUrl" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AcademicCalendar_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Notice" (
+    "id" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "driveUrl" TEXT,
+    "category" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Notice_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CampusEvent" (
+    "id" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "location" TEXT,
+    "eventDate" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CampusEvent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "StudentProfile_userId_key" ON "StudentProfile"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "StudentProfile_studentId_key" ON "StudentProfile"("studentId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TeacherProfile_userId_key" ON "TeacherProfile"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CourseHub_joinCode_key" ON "CourseHub"("joinCode");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HubMember_userId_hubId_key" ON "HubMember"("userId", "hubId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Submission_assessmentId_studentId_key" ON "Submission"("assessmentId", "studentId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CourseReview_hubId_studentId_key" ON "CourseReview"("hubId", "studentId");
+
+-- AddForeignKey
+ALTER TABLE "StudentProfile" ADD CONSTRAINT "StudentProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TeacherProfile" ADD CONSTRAINT "TeacherProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HubMember" ADD CONSTRAINT "HubMember_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HubMember" ADD CONSTRAINT "HubMember_hubId_fkey" FOREIGN KEY ("hubId") REFERENCES "CourseHub"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Assessment" ADD CONSTRAINT "Assessment_hubId_fkey" FOREIGN KEY ("hubId") REFERENCES "CourseHub"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Assessment" ADD CONSTRAINT "Assessment_creatorId_fkey" FOREIGN KEY ("creatorId") REFERENCES "user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Submission" ADD CONSTRAINT "Submission_assessmentId_fkey" FOREIGN KEY ("assessmentId") REFERENCES "Assessment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Submission" ADD CONSTRAINT "Submission_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Submission" ADD CONSTRAINT "Submission_gradedById_fkey" FOREIGN KEY ("gradedById") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Resource" ADD CONSTRAINT "Resource_uploaderId_fkey" FOREIGN KEY ("uploaderId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Resource" ADD CONSTRAINT "Resource_hubId_fkey" FOREIGN KEY ("hubId") REFERENCES "CourseHub"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HelpPost" ADD CONSTRAINT "HelpPost_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HelpResponse" ADD CONSTRAINT "HelpResponse_postId_fkey" FOREIGN KEY ("postId") REFERENCES "HelpPost"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HelpResponse" ADD CONSTRAINT "HelpResponse_responderId_fkey" FOREIGN KEY ("responderId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BloodPost" ADD CONSTRAINT "BloodPost_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CourseReview" ADD CONSTRAINT "CourseReview_hubId_fkey" FOREIGN KEY ("hubId") REFERENCES "CourseHub"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CourseReview" ADD CONSTRAINT "CourseReview_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+</file>
+
+<file path="prisma/migrations/20260616205854_make_role_optional/migration.sql">
+-- AlterTable
+ALTER TABLE "user" ALTER COLUMN "role" DROP NOT NULL;
+</file>
+
+<file path="prisma/migrations/20260617104941_add_bloodgroup_enum/migration.sql">
+/*
+  Warnings:
+
+  - The `bloodGroup` column on the `user` table would be dropped and recreated. This will lead to data loss if there is data in the column.
+  - Changed the type of `bloodGroup` on the `BloodPost` table. No cast exists, the column would be dropped and recreated, which cannot be done if there is data, since the column is required.
+
+*/
+-- CreateEnum
+CREATE TYPE "BloodGroup" AS ENUM ('A_POSITIVE', 'A_NEGATIVE', 'B_POSITIVE', 'B_NEGATIVE', 'AB_POSITIVE', 'AB_NEGATIVE', 'O_POSITIVE', 'O_NEGATIVE');
+
+-- AlterTable
+ALTER TABLE "BloodPost" DROP COLUMN "bloodGroup",
+ADD COLUMN     "bloodGroup" "BloodGroup" NOT NULL;
+
+-- AlterTable
+ALTER TABLE "user" DROP COLUMN "bloodGroup",
+ADD COLUMN     "bloodGroup" "BloodGroup";
+</file>
+
+<file path="prisma/migrations/20260617211327_update_teacher_profile/migration.sql">
+/*
+  Warnings:
+
+  - You are about to drop the column `specialization` on the `TeacherProfile` table. All the data in the column will be lost.
+
+*/
+-- AlterTable
+ALTER TABLE "TeacherProfile" DROP COLUMN "specialization",
+ADD COLUMN     "academicQualifications" JSONB,
+ADD COLUMN     "expertiseFields" TEXT[],
+ADD COLUMN     "faculty" TEXT,
+ADD COLUMN     "linkedInUrl" TEXT,
+ADD COLUMN     "personalWebsiteUrl" TEXT;
+</file>
+
+<file path="prisma/migrations/20260618214326_add_academic_calendar_system/migration.sql">
+/*
+  Warnings:
+
+  - You are about to drop the column `driveUrl` on the `AcademicCalendar` table. All the data in the column will be lost.
+  - You are about to drop the column `facultyOrSchool` on the `AcademicCalendar` table. All the data in the column will be lost.
+  - A unique constraint covering the columns `[teacherId]` on the table `TeacherProfile` will be added. If there are existing duplicate values, this will fail.
+  - Added the required column `semester` to the `AcademicCalendar` table without a default value. This is not possible if the table is not empty.
+  - Added the required column `teacherId` to the `TeacherProfile` table without a default value. This is not possible if the table is not empty.
+
+*/
+-- AlterTable
+ALTER TABLE "AcademicCalendar" DROP COLUMN "driveUrl",
+DROP COLUMN "facultyOrSchool",
+ADD COLUMN     "isActive" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "isGlobal" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "semester" TEXT NOT NULL,
+ADD COLUMN     "targetDepartments" TEXT[],
+ADD COLUMN     "targetFaculties" TEXT[];
+
+-- AlterTable
+ALTER TABLE "TeacherProfile" ADD COLUMN     "teacherId" TEXT NOT NULL;
+
+-- CreateTable
+CREATE TABLE "CalendarEvent" (
+    "id" TEXT NOT NULL,
+    "calendarId" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "startDate" TIMESTAMP(3) NOT NULL,
+    "endDate" TIMESTAMP(3),
+    "isHoliday" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CalendarEvent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TeacherProfile_teacherId_key" ON "TeacherProfile"("teacherId");
+
+-- AddForeignKey
+ALTER TABLE "CalendarEvent" ADD CONSTRAINT "CalendarEvent_calendarId_fkey" FOREIGN KEY ("calendarId") REFERENCES "AcademicCalendar"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+</file>
+
+<file path="prisma/migrations/20260619084908_update_student_profile/migration.sql">
+/*
+  Warnings:
+
+  - Added the required column `faculty` to the `StudentProfile` table without a default value. This is not possible if the table is not empty.
+  - Added the required column `program` to the `StudentProfile` table without a default value. This is not possible if the table is not empty.
+  - Made the column `section` on table `StudentProfile` required. This step will fail if there are existing NULL values in that column.
+  - Made the column `faculty` on table `TeacherProfile` required. This step will fail if there are existing NULL values in that column.
+
+*/
+-- AlterTable
+ALTER TABLE "StudentProfile" ADD COLUMN     "faculty" TEXT NOT NULL,
+ADD COLUMN     "linkedInUrl" TEXT,
+ADD COLUMN     "personalWebsiteUrl" TEXT,
+ADD COLUMN     "program" TEXT NOT NULL,
+ADD COLUMN     "skills" TEXT[],
+ALTER COLUMN "section" SET NOT NULL;
+
+-- AlterTable
+ALTER TABLE "TeacherProfile" ALTER COLUMN "faculty" SET NOT NULL;
+</file>
+
+<file path="prisma/migrations/20260619120704_update_noticeboard_schema/migration.sql">
+/*
+  Warnings:
+
+  - You are about to drop the column `category` on the `Notice` table. All the data in the column will be lost.
+  - You are about to drop the column `description` on the `Notice` table. All the data in the column will be lost.
+  - You are about to drop the column `driveUrl` on the `Notice` table. All the data in the column will be lost.
+  - Added the required column `body` to the `Notice` table without a default value. This is not possible if the table is not empty.
+  - Added the required column `issuerDesignation` to the `Notice` table without a default value. This is not possible if the table is not empty.
+  - Added the required column `issuerName` to the `Notice` table without a default value. This is not possible if the table is not empty.
+
+*/
+-- AlterTable
+ALTER TABLE "Notice" DROP COLUMN "category",
+DROP COLUMN "description",
+DROP COLUMN "driveUrl",
+ADD COLUMN     "body" TEXT NOT NULL,
+ADD COLUMN     "copyTo" TEXT[],
+ADD COLUMN     "issueDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "issuerDesignation" TEXT NOT NULL,
+ADD COLUMN     "issuerName" TEXT NOT NULL,
+ADD COLUMN     "referenceNo" TEXT;
+</file>
+
+<file path="prisma/migrations/20260620051511_update_bloodpost_schema/migration.sql">
+/*
+  Warnings:
+
+  - Added the required column `patientCondition` to the `BloodPost` table without a default value. This is not possible if the table is not empty.
+
+*/
+-- AlterTable
+ALTER TABLE "BloodPost" ADD COLUMN     "patientCondition" TEXT NOT NULL;
+
+-- CreateTable
+CREATE TABLE "BloodResponse" (
+    "id" TEXT NOT NULL,
+    "postId" TEXT NOT NULL,
+    "responderId" TEXT NOT NULL,
+    "message" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BloodResponse_pkey" PRIMARY KEY ("id")
+);
+
+-- AddForeignKey
+ALTER TABLE "BloodResponse" ADD CONSTRAINT "BloodResponse_postId_fkey" FOREIGN KEY ("postId") REFERENCES "BloodPost"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BloodResponse" ADD CONSTRAINT "BloodResponse_responderId_fkey" FOREIGN KEY ("responderId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+</file>
+
+<file path="prisma/migrations/20260620190256_add_alumni_complaint_field_booking_field_setting_table/migration.sql">
+-- CreateEnum
+CREATE TYPE "ComplaintStatus" AS ENUM ('PENDING', 'RESOLVED', 'REJECTED');
+
+-- CreateEnum
+CREATE TYPE "BookingStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+
+-- CreateTable
+CREATE TABLE "Complaint" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "category" TEXT NOT NULL,
+    "status" "ComplaintStatus" NOT NULL DEFAULT 'PENDING',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Complaint_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Alumni" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "email" TEXT,
+    "batch" TEXT NOT NULL,
+    "graduationYear" INTEGER NOT NULL,
+    "department" TEXT NOT NULL,
+    "degree" TEXT,
+    "currentCompany" TEXT,
+    "currentPosition" TEXT,
+    "skills" TEXT[],
+    "linkedInUrl" TEXT,
+    "personalWebsiteUrl" TEXT,
+    "image" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Alumni_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FieldBooking" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "purpose" TEXT NOT NULL,
+    "bookingDate" TIMESTAMP(3) NOT NULL,
+    "startTime" TIMESTAMP(3) NOT NULL,
+    "endTime" TIMESTAMP(3) NOT NULL,
+    "status" "BookingStatus" NOT NULL DEFAULT 'PENDING',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FieldBooking_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FieldSetting" (
+    "id" TEXT NOT NULL,
+    "isBookingOpen" BOOLEAN NOT NULL DEFAULT true,
+    "closedNotice" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FieldSetting_pkey" PRIMARY KEY ("id")
+);
+
+-- AddForeignKey
+ALTER TABLE "Complaint" ADD CONSTRAINT "Complaint_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FieldBooking" ADD CONSTRAINT "FieldBooking_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+</file>
+
+<file path="prisma/migrations/migration_lock.toml">
+# Please do not edit this file manually
+# It should be added in your version-control system (e.g., Git)
+provider = "postgresql"
+</file>
+
+<file path="src/config/env.ts">
+import dotenv from "dotenv";
+import { z } from "zod";
+
+dotenv.config();
+
+const urlValidator = z.string().refine(
+  (url) => {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  { message: "Invalid URL format" },
+);
+
+const envSchema = z.object({
+  DATABASE_URL: urlValidator.describe("Transaction pooler URL for app queries"),
+  DIRECT_URL: urlValidator.describe(
+    "Direct connection URL for Prisma migrations",
+  ),
+
+  BETTER_AUTH_SECRET: z
+    .string()
+    .min(
+      32,
+      "Better Auth Secret must be at least 32 characters long for security",
+    ),
+  BETTER_AUTH_URL: urlValidator,
+  TRUSTED_ORIGINS: z.string().optional(),
+
+  PORT: z.coerce.number().default(5000),
+  NODE_ENV: z
+    .enum(["development", "production", "test"])
+    .default("development"),
+});
+
+export type EnvConfig = z.infer<typeof envSchema>;
+
+let parsedEnv: EnvConfig;
+
+try {
+  parsedEnv = envSchema.parse(process.env);
+} catch (error) {
+  if (error instanceof z.ZodError) {
+    console.error("❌ Invalid Environment Variables:");
+    error.issues.forEach((issue) => {
+      console.error(`   - ${issue.path.join(".")}: ${issue.message}`);
+    });
+  } else {
+    console.error("❌ Environment validation failed:", error);
+  }
+  process.exit(1);
+}
+
+export const envConfig = parsedEnv;
+</file>
+
+<file path="src/lib/prisma.ts">
+import "dotenv/config";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../../generated/prisma/client";
+
+const connectionString = `${process.env.DATABASE_URL}`;
+
+const adapter = new PrismaPg({ connectionString });
+const prisma = new PrismaClient({ adapter });
+
+export { prisma };
+</file>
+
+<file path="src/middleware/admin.middleware.ts">
+import { Request, Response, NextFunction } from "express";
+import { AppError } from "../utils/AppError";
+
+export const requireAdmin = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void => {
+  // We assume requireAuth has already run and populated req.user
+  if (!req.user || req.user.role !== "ADMIN") {
+    return next(new AppError("Forbidden. Administrator access required.", 403));
+  }
+
+  next();
+};
+</file>
+
+<file path="src/middleware/globalErrorHandler.ts">
+import { Request, Response, NextFunction } from "express";
+import { ZodError } from "zod";
+import { Prisma } from "../../generated/prisma/client";
+import { AppError } from "../utils/AppError";
+
+export const globalErrorHandler = (
+  err: any,
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void => {
+  let statusCode = err.statusCode || 500;
+  let message = err.message || "Internal Server Error";
+  let errorSources: any[] = [];
+
+  // Handle Zod Validation Errors
+  if (err instanceof ZodError) {
+    statusCode = 400;
+    message = "Validation Error";
+    errorSources = err.issues.map((issue) => ({
+      path: issue.path[issue.path.length - 1],
+      message: issue.message,
+    }));
+  }
+  // Handle Prisma Unique Constraint Errors (e.g., Duplicate Student ID)
+  else if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === "P2002") {
+      statusCode = 409;
+      message = "Duplicate Record Entry";
+      errorSources = [
+        { path: err.meta?.target, message: "This value is already in use." },
+      ];
+    }
+  }
+  // Handle Custom AppErrors
+  else if (err instanceof AppError) {
+    statusCode = err.statusCode;
+    message = err.message;
+  }
+
+  // Send uniform response
+  res.status(statusCode).json({
+    success: false,
+    message,
+    errorSources,
+    stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
+  });
+};
+</file>
+
+<file path="src/middleware/teacher.middleware.ts">
+import { Request, Response, NextFunction } from "express";
+import { AppError } from "../utils/AppError";
+
+export const requireTeacher = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void => {
+  if (!req.user || req.user.role !== "TEACHER") {
+    return next(new AppError("Forbidden. Teacher access required.", 403));
+  }
+  next();
+};
+</file>
+
+<file path="src/middleware/validateRequest.ts">
+import { Request, Response, NextFunction } from "express";
+
+interface ValidationSchema {
+  parseAsync(data: unknown): Promise<unknown>;
+}
+
+export const validateRequest = (schema: ValidationSchema) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await schema.parseAsync({
+        body: req.body,
+        query: req.query,
+        params: req.params,
+      });
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+};
+</file>
+
+<file path="src/modules/alumni/alumni.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../utils/catchAsync";
+import * as alumniService from "./alumni.service";
+
+export const getAllAlumni = catchAsync(async (req: Request, res: Response) => {
+  const alumni = await alumniService.getAllAlumniService();
+  res.status(200).json({ success: true, data: alumni });
+});
+
+export const createAlumni = catchAsync(async (req: Request, res: Response) => {
+  const alumni = await alumniService.createAlumniService(req.body);
+  res
+    .status(201)
+    .json({ success: true, message: "Alumni created", data: alumni });
+});
+
+export const bulkCreateAlumni = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await alumniService.bulkCreateAlumniService(req.body);
+    res
+      .status(201)
+      .json({ success: true, message: "Bulk insert complete", data: result });
+  },
+);
+
+export const updateAlumni = catchAsync(async (req: Request, res: Response) => {
+  const alumni = await alumniService.updateAlumniService(
+    req.params.id as string,
+    req.body,
+  );
+  res
+    .status(200)
+    .json({ success: true, message: "Alumni updated", data: alumni });
+});
+
+export const deleteAlumni = catchAsync(async (req: Request, res: Response) => {
+  await alumniService.deleteAlumniService(req.params.id as string);
+  res.status(200).json({ success: true, message: "Alumni deleted" });
+});
+</file>
+
+<file path="src/modules/alumni/alumni.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../middleware/auth.middleware";
+import { requireAdmin } from "../../middleware/admin.middleware";
+import { validateRequest } from "../../middleware/validateRequest";
+import {
+  createAlumniSchema,
+  bulkCreateAlumniSchema,
+  updateAlumniSchema,
+} from "./alumni.schema";
+import {
+  getAllAlumni,
+  createAlumni,
+  bulkCreateAlumni,
+  updateAlumni,
+  deleteAlumni,
+} from "./alumni.controller";
+
+const router = Router();
+
+router.get("/", requireAuth, getAllAlumni);
+router.post(
+  "/",
+  requireAuth,
+  requireAdmin,
+  validateRequest(createAlumniSchema),
+  createAlumni,
+);
+router.post(
+  "/bulk",
+  requireAuth,
+  requireAdmin,
+  validateRequest(bulkCreateAlumniSchema),
+  bulkCreateAlumni,
+);
+router.patch(
+  "/:id",
+  requireAuth,
+  requireAdmin,
+  validateRequest(updateAlumniSchema),
+  updateAlumni,
+);
+router.delete("/:id", requireAuth, requireAdmin, deleteAlumni);
+
+export const alumniRoutes = router;
+</file>
+
+<file path="src/modules/alumni/alumni.schema.ts">
+import { z } from "zod";
+
+const alumniCoreSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Invalid email").optional().nullable(),
+  batch: z.string().min(1, "Batch is required"),
+  graduationYear: z.number().int().positive(),
+  department: z.string().min(1, "Department is required"),
+  degree: z.string().optional().nullable(),
+  currentCompany: z.string().optional().nullable(),
+  currentPosition: z.string().optional().nullable(),
+  skills: z.array(z.string()).default([]),
+  linkedInUrl: z
+    .string()
+    .url({ message: "Invalid URL" })
+    .or(z.literal(""))
+    .optional()
+    .nullable(),
+  personalWebsiteUrl: z
+    .string()
+    .url({ message: "Invalid URL" })
+    .or(z.literal(""))
+    .optional()
+    .nullable(),
+  image: z.string().optional().nullable(),
+});
+
+export const createAlumniSchema = z.object({ body: alumniCoreSchema });
+export const bulkCreateAlumniSchema = z.object({
+  body: z.array(alumniCoreSchema).min(1),
+});
+export const updateAlumniSchema = z.object({
+  body: alumniCoreSchema.partial(),
+});
+
+export type CreateAlumniPayload = z.infer<typeof createAlumniSchema>["body"];
+export type UpdateAlumniPayload = z.infer<typeof updateAlumniSchema>["body"];
+</file>
+
+<file path="src/modules/alumni/alumni.service.ts">
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+import { CreateAlumniPayload, UpdateAlumniPayload } from "./alumni.schema";
+
+export const getAllAlumniService = async () => {
+  return await prisma.alumni.findMany({ orderBy: { graduationYear: "desc" } });
+};
+
+export const createAlumniService = async (data: CreateAlumniPayload) => {
+  return await prisma.alumni.create({ data });
+};
+
+export const bulkCreateAlumniService = async (
+  dataArray: CreateAlumniPayload[],
+) => {
+  return await prisma.alumni.createMany({
+    data: dataArray,
+    skipDuplicates: true,
+  });
+};
+
+export const updateAlumniService = async (
+  id: string,
+  data: UpdateAlumniPayload,
+) => {
+  const alumni = await prisma.alumni.findUnique({ where: { id } });
+  if (!alumni) throw new AppError("Alumni not found", 404);
+  return await prisma.alumni.update({ where: { id }, data });
+};
+
+export const deleteAlumniService = async (id: string) => {
+  const alumni = await prisma.alumni.findUnique({ where: { id } });
+  if (!alumni) throw new AppError("Alumni not found", 404);
+  return await prisma.alumni.delete({ where: { id } });
+};
+</file>
+
+<file path="src/modules/blood/blood.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../utils/catchAsync";
+import * as bloodService from "./blood.service";
+
+export const createBloodPost = catchAsync(
+  async (req: Request, res: Response) => {
+    const authorId = req.user.id;
+    const newPost = await bloodService.createBloodPostService(
+      authorId,
+      req.body,
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Blood request created successfully.",
+      data: newPost,
+    });
+  },
+);
+
+export const getBloodFeed = catchAsync(async (req: Request, res: Response) => {
+  const posts = await bloodService.getBloodFeedService();
+
+  res.status(200).json({
+    success: true,
+    message: "Blood feed retrieved successfully.",
+    data: posts,
+  });
+});
+
+export const getBloodPostById = catchAsync(
+  async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const post = await bloodService.getBloodPostByIdService(id);
+
+    res.status(200).json({
+      success: true,
+      message: "Blood request retrieved successfully.",
+      data: post,
+    });
+  },
+);
+
+export const respondToBloodPost = catchAsync(
+  async (req: Request, res: Response) => {
+    const postId = req.params.id as string;
+    const responderId = req.user.id;
+
+    const response = await bloodService.respondToBloodPostService(
+      postId,
+      responderId,
+      req.body,
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Successfully volunteered for this request.",
+      data: response,
+    });
+  },
+);
+
+export const markBloodPostResolved = catchAsync(
+  async (req: Request, res: Response) => {
+    const postId = req.params.id as string;
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    const resolvedPost = await bloodService.resolveBloodPostService(
+      postId,
+      userId,
+      role,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Request marked as fulfilled.",
+      data: resolvedPost,
+    });
+  },
+);
+
+export const deleteBloodPost = catchAsync(
+  async (req: Request, res: Response) => {
+    const postId = req.params.id as string;
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    await bloodService.deleteBloodPostService(postId, userId, role);
+
+    res.status(200).json({
+      success: true,
+      message: "Blood request deleted successfully.",
+    });
+  },
+);
+</file>
+
+<file path="src/modules/blood/blood.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../middleware/auth.middleware";
+import { validateRequest } from "../../middleware/validateRequest";
+import { createBloodPostSchema, respondBloodPostSchema } from "./blood.schema";
+import {
+  createBloodPost,
+  getBloodFeed,
+  getBloodPostById,
+  respondToBloodPost,
+  markBloodPostResolved,
+  deleteBloodPost,
+} from "./blood.controller";
+
+const router = Router();
+
+// POST /api/blood - Create a Blood Request
+router.post(
+  "/",
+  requireAuth,
+  validateRequest(createBloodPostSchema),
+  createBloodPost,
+);
+
+// GET /api/blood - Get All Blood Requests (Feed)
+router.get("/", requireAuth, getBloodFeed);
+
+// GET /api/blood/:id - Get Single Blood Request Details
+router.get("/:id", requireAuth, getBloodPostById);
+
+// POST /api/blood/:id/respond - Volunteer/Respond to a Request
+router.post(
+  "/:id/respond",
+  requireAuth,
+  validateRequest(respondBloodPostSchema),
+  respondToBloodPost,
+);
+
+// PATCH /api/blood/:id/resolve - Mark Request as Fulfilled
+router.patch("/:id/resolve", requireAuth, markBloodPostResolved);
+
+// DELETE /api/blood/:id - Delete Request
+router.delete("/:id", requireAuth, deleteBloodPost);
+
+export const bloodRoutes = router;
+</file>
+
+<file path="src/modules/blood/blood.schema.ts">
+import { z } from "zod";
+
+export const createBloodPostSchema = z.object({
+  body: z.object({
+    patientName: z.string().min(1, "Patient name is required"),
+    patientCondition: z.string().min(1, "Patient condition is required"),
+    bloodGroup: z.enum(
+      [
+        "A_POSITIVE",
+        "A_NEGATIVE",
+        "B_POSITIVE",
+        "B_NEGATIVE",
+        "AB_POSITIVE",
+        "AB_NEGATIVE",
+        "O_POSITIVE",
+        "O_NEGATIVE",
+      ],
+      { message: "Valid blood group is required" },
+    ),
+    location: z.string().min(1, "Location is required"),
+    urgency: z.string().min(1, "Urgency is required"),
+    contactPhone: z.string().min(1, "Contact phone is required"),
+  }),
+});
+
+export const respondBloodPostSchema = z.object({
+  body: z.object({
+    message: z.string().optional(),
+  }),
+});
+
+export type CreateBloodPostPayload = z.infer<
+  typeof createBloodPostSchema
+>["body"];
+export type RespondBloodPostPayload = z.infer<
+  typeof respondBloodPostSchema
+>["body"];
+</file>
+
+<file path="src/modules/bus/bus.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../utils/catchAsync";
+import * as busService from "./bus.service";
+
+export const createBusRoute = catchAsync(
+  async (req: Request, res: Response) => {
+    const newBusRoute = await busService.createBusRouteService(req.body);
+
+    res.status(201).json({
+      success: true,
+      message: "Bus route created successfully.",
+      data: newBusRoute,
+    });
+  },
+);
+
+export const getBusRoutes = catchAsync(async (req: Request, res: Response) => {
+  const busRoutes = await busService.getAllBusRoutesService();
+
+  res.status(200).json({
+    success: true,
+    message: "Bus routes retrieved successfully.",
+    data: busRoutes,
+  });
+});
+
+export const deleteBusRoute = catchAsync(
+  async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+
+    await busService.deleteBusRouteService(id);
+
+    res.status(200).json({
+      success: true,
+      message: "Bus route deleted successfully.",
+    });
+  },
+);
+</file>
+
+<file path="src/modules/bus/bus.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../middleware/auth.middleware";
+import { requireAdmin } from "../../middleware/admin.middleware";
+import { validateRequest } from "../../middleware/validateRequest";
+import { createBusSchema } from "./bus.schema";
+import { createBusRoute, getBusRoutes, deleteBusRoute } from "./bus.controller";
+
+const router = Router();
+
+// POST /api/buses - Create Bus Route (Admin Only)
+router.post(
+  "/",
+  requireAuth,
+  requireAdmin,
+  validateRequest(createBusSchema),
+  createBusRoute,
+);
+
+// GET /api/buses - Get All Bus Routes (All Authenticated Users)
+router.get("/", requireAuth, getBusRoutes);
+
+// DELETE /api/buses/:id - Delete Bus Route (Admin Only)
+router.delete("/:id", requireAuth, requireAdmin, deleteBusRoute);
+
+export const busRoutes = router;
+</file>
+
+<file path="src/modules/bus/bus.schema.ts">
+import { z } from "zod";
+
+export const createBusSchema = z.object({
+  body: z.object({
+    route: z.string().min(1, "Route name is required"),
+    busNumber: z.string().min(1, "Bus number is required"),
+    departureTime: z.string().min(1, "Departure time is required"),
+    stops: z.array(z.string()).min(1, "At least one stop must be provided"),
+  }),
+});
+
+// Export the inferred type for the service layer
+export type CreateBusPayload = z.infer<typeof createBusSchema>["body"];
+</file>
+
+<file path="src/modules/bus/bus.service.ts">
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+import { CreateBusPayload } from "./bus.schema";
+
+export const createBusRouteService = async (data: CreateBusPayload) => {
+  return await prisma.busSchedule.create({
+    data: {
+      route: data.route,
+      busNumber: data.busNumber,
+      departureTime: data.departureTime,
+      stops: data.stops,
+    },
+  });
+};
+
+export const getAllBusRoutesService = async () => {
+  return await prisma.busSchedule.findMany({
+    orderBy: {
+      createdAt: "asc", // Oldest routes appear first as requested
+    },
+  });
+};
+
+export const deleteBusRouteService = async (id: string) => {
+  // Check if the bus schedule exists before attempting to delete
+  const existingBusRoute = await prisma.busSchedule.findUnique({
+    where: { id },
+  });
+
+  if (!existingBusRoute) {
+    throw new AppError("Bus route not found.", 404);
+  }
+
+  return await prisma.busSchedule.delete({
+    where: { id },
+  });
+};
+</file>
+
+<file path="src/modules/calendar/calendar.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../utils/catchAsync";
+import * as calendarService from "./calendar.service";
+
+export const createCalendar = catchAsync(
+  async (req: Request, res: Response) => {
+    const newCalendar = await calendarService.createCalendarService(req.body);
+
+    res.status(201).json({
+      success: true,
+      message: "Academic Calendar and associated events created successfully.",
+      data: newCalendar,
+    });
+  },
+);
+
+export const getCalendars = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user.id;
+
+  const relevantCalendars =
+    await calendarService.getRelevantCalendarsService(userId);
+
+  res.status(200).json({
+    success: true,
+    message: "Relevant academic calendars retrieved successfully.",
+    data: relevantCalendars,
+  });
+});
+</file>
+
+<file path="src/modules/calendar/calendar.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../middleware/auth.middleware";
+import { requireAdmin } from "../../middleware/admin.middleware";
+import { validateRequest } from "../../middleware/validateRequest";
+import { createCalendarSchema } from "./calendar.schema";
+import { createCalendar, getCalendars } from "./calendar.controller";
+
+const router = Router();
+
+// POST /api/calendars - Create Calendar (Admin Only)
+router.post(
+  "/",
+  requireAuth,
+  requireAdmin,
+  validateRequest(createCalendarSchema),
+  createCalendar,
+);
+
+// GET /api/calendars - Fetch Relevant Calendars for the logged-in User
+router.get("/", requireAuth, getCalendars);
+
+export const calendarRoutes = router;
+</file>
+
+<file path="src/modules/calendar/calendar.schema.ts">
+import { z } from "zod";
+
+const calendarEventSchema = z.object({
+  title: z.string().min(1, "Event title is required"),
+  description: z.string().nullable().optional(),
+
+  // Use the "message" property instead of "required_error"
+  startDate: z.preprocess(
+    (val) => {
+      if (!val) return undefined; // Pass undefined so z.date() knows it's missing
+      if (val instanceof Date) return val;
+      return new Date(val as string);
+    },
+    z.date({
+      message: "Start date is required and must be a valid date", // 👈 Fixed here
+    }),
+  ),
+
+  endDate: z.preprocess(
+    (val) => {
+      if (!val) return null;
+      return new Date(val as string);
+    },
+    z.date({ message: "Invalid end date" }).nullable().optional(),
+  ), // Added safety here too
+
+  isHoliday: z.boolean().default(false),
+});
+
+export const createCalendarSchema = z.object({
+  body: z.object({
+    title: z.string().min(1, "Calendar title is required"),
+    semester: z.string().min(1, "Semester identifier is required"),
+    isActive: z.boolean().default(true).optional(),
+    isGlobal: z.boolean().default(false),
+    targetFaculties: z.array(z.string()).default([]),
+    targetDepartments: z.array(z.string()).default([]),
+    events: z
+      .array(calendarEventSchema)
+      .min(1, "At least one event is required"),
+  }),
+});
+
+export type CreateCalendarPayload = z.infer<
+  typeof createCalendarSchema
+>["body"];
+</file>
+
+<file path="src/modules/calendar/calendar.service.ts">
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+import { CreateCalendarPayload } from "./calendar.schema";
+
+export const createCalendarService = async (data: CreateCalendarPayload) => {
+  // Uses a Prisma nested write to ensure the parent calendar and all events
+  // are created successfully in a single, secure database transaction.
+  return await prisma.academicCalendar.create({
+    data: {
+      title: data.title,
+      semester: data.semester,
+      isActive: data.isActive,
+      isGlobal: data.isGlobal,
+      targetFaculties: data.targetFaculties,
+      targetDepartments: data.targetDepartments,
+      events: {
+        create: data.events.map((event) => ({
+          title: event.title,
+          description: event.description,
+          startDate: event.startDate,
+          endDate: event.endDate,
+          isHoliday: event.isHoliday,
+        })),
+      },
+    },
+    include: {
+      events: true, // Return the successfully created nested events
+    },
+  });
+};
+
+export const getRelevantCalendarsService = async (userId: string) => {
+  // 1. Fetch the user's profile
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      studentProfile: true,
+      teacherProfile: true,
+    },
+  });
+
+  if (!user) {
+    throw new AppError("User account not found.", 404);
+  }
+
+  // 2. ADMIN OVERRIDE: Admins see everything automatically
+  if (user.role === "ADMIN") {
+    return await prisma.academicCalendar.findMany({
+      where: { isActive: true },
+      include: {
+        events: {
+          orderBy: { startDate: "asc" },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  // 3. Normal User Filtering
+  let userFaculty: string | null = null;
+  let userDepartment: string | null = null;
+
+  if (user.studentProfile) {
+    userFaculty = user.studentProfile.faculty || null;
+    userDepartment = user.studentProfile.department;
+  } else if (user.teacherProfile) {
+    userFaculty = user.teacherProfile.faculty || null;
+    userDepartment = user.teacherProfile.department;
+  }
+
+  const orConditions: any[] = [{ isGlobal: true }];
+
+  if (userFaculty) {
+    // Check for both the exact casing and UPPERCASE to prevent data mismatches
+    orConditions.push({ targetFaculties: { has: userFaculty } });
+    orConditions.push({ targetFaculties: { has: userFaculty.toUpperCase() } });
+  }
+
+  if (userDepartment) {
+    orConditions.push({ targetDepartments: { has: userDepartment } });
+  }
+
+  // 4. Execute Query
+  return await prisma.academicCalendar.findMany({
+    where: {
+      isActive: true,
+      OR: orConditions,
+    },
+    include: {
+      events: {
+        orderBy: { startDate: "asc" },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+};
+</file>
+
+<file path="src/modules/complaint/complaint.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../utils/catchAsync";
+import * as complaintService from "./complaint.service";
+
+export const createComplaint = catchAsync(
+  async (req: Request, res: Response) => {
+    const newComplaint = await complaintService.createComplaintService(
+      req.user.id,
+      req.body,
+    );
+    res.status(201).json({
+      success: true,
+      message: "Complaint created successfully.",
+      data: newComplaint,
+    });
+  },
+);
+
+export const getMyComplaints = catchAsync(
+  async (req: Request, res: Response) => {
+    const complaints = await complaintService.getMyComplaintsService(
+      req.user.id,
+    );
+    res.status(200).json({
+      success: true,
+      message: "My complaints retrieved.",
+      data: complaints,
+    });
+  },
+);
+
+export const getAllComplaints = catchAsync(
+  async (req: Request, res: Response) => {
+    const complaints = await complaintService.getAllComplaintsService();
+    res.status(200).json({
+      success: true,
+      message: "All complaints retrieved.",
+      data: complaints,
+    });
+  },
+);
+
+export const updateComplaintStatus = catchAsync(
+  async (req: Request, res: Response) => {
+    const updatedComplaint =
+      await complaintService.updateComplaintStatusService(
+        req.params.id as string,
+        req.body.status,
+      );
+    res.status(200).json({
+      success: true,
+      message: "Status updated.",
+      data: updatedComplaint,
+    });
+  },
+);
+
+export const deleteComplaint = catchAsync(
+  async (req: Request, res: Response) => {
+    await complaintService.deleteComplaintService(req.params.id as string);
+    res.status(200).json({ success: true, message: "Complaint deleted." });
+  },
+);
+</file>
+
+<file path="src/modules/complaint/complaint.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../middleware/auth.middleware";
+import { requireAdmin } from "../../middleware/admin.middleware";
+import { validateRequest } from "../../middleware/validateRequest";
+import {
+  createComplaintSchema,
+  updateComplaintStatusSchema,
+} from "./complaint.schema";
+import {
+  createComplaint,
+  getMyComplaints,
+  getAllComplaints,
+  updateComplaintStatus,
+  deleteComplaint,
+} from "./complaint.controller";
+
+const router = Router();
+
+router.post(
+  "/",
+  requireAuth,
+  validateRequest(createComplaintSchema),
+  createComplaint,
+);
+router.get("/my", requireAuth, getMyComplaints);
+router.get("/", requireAuth, requireAdmin, getAllComplaints);
+router.patch(
+  "/:id/status",
+  requireAuth,
+  requireAdmin,
+  validateRequest(updateComplaintStatusSchema),
+  updateComplaintStatus,
+);
+router.delete("/:id", requireAuth, requireAdmin, deleteComplaint);
+
+export const complaintRoutes = router;
+</file>
+
+<file path="src/modules/complaint/complaint.schema.ts">
+import { z } from "zod";
+
+export const createComplaintSchema = z.object({
+  body: z.object({
+    title: z.string().min(1, "Title is required"),
+    description: z.string().min(1, "Description is required"),
+    category: z.string().min(1, "Category is required"),
+  }),
+});
+
+export const updateComplaintStatusSchema = z.object({
+  body: z.object({
+    status: z.enum(["PENDING", "RESOLVED", "REJECTED"], {
+      message: "Status must be PENDING, RESOLVED, or REJECTED",
+    }),
+  }),
+});
+
+export type CreateComplaintPayload = z.infer<
+  typeof createComplaintSchema
+>["body"];
+export type UpdateComplaintStatusPayload = z.infer<
+  typeof updateComplaintStatusSchema
+>["body"];
+</file>
+
+<file path="src/modules/complaint/complaint.service.ts">
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+import {
+  CreateComplaintPayload,
+  UpdateComplaintStatusPayload,
+} from "./complaint.schema";
+
+export const createComplaintService = async (
+  userId: string,
+  data: CreateComplaintPayload,
+) => {
+  return await prisma.complaint.create({
+    data: { ...data, userId },
+  });
+};
+
+export const getMyComplaintsService = async (userId: string) => {
+  return await prisma.complaint.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+  });
+};
+
+export const getAllComplaintsService = async () => {
+  return await prisma.complaint.findMany({
+    orderBy: { createdAt: "desc" },
+    include: {
+      user: { select: { id: true, name: true, email: true, image: true } },
+    },
+  });
+};
+
+export const updateComplaintStatusService = async (
+  id: string,
+  status: UpdateComplaintStatusPayload["status"],
+) => {
+  const complaint = await prisma.complaint.findUnique({ where: { id } });
+  if (!complaint) throw new AppError("Complaint not found", 404);
+
+  return await prisma.complaint.update({
+    where: { id },
+    data: { status },
+  });
+};
+
+export const deleteComplaintService = async (id: string) => {
+  const complaint = await prisma.complaint.findUnique({ where: { id } });
+  if (!complaint) throw new AppError("Complaint not found", 404);
+
+  return await prisma.complaint.delete({ where: { id } });
+};
+</file>
+
+<file path="src/modules/directory/directory.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../utils/catchAsync";
+import * as directoryService from "./directory.service";
+
+export const getAllTeachers = catchAsync(
+  async (req: Request, res: Response) => {
+    const teachers = await directoryService.getAllTeachersService();
+
+    res.status(200).json({
+      success: true,
+      message: "Teachers directory retrieved successfully.",
+      data: teachers,
+    });
+  },
+);
+</file>
+
+<file path="src/modules/directory/directory.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../middleware/auth.middleware";
+import { getAllTeachers } from "./directory.controller";
+
+const router = Router();
+
+// GET /api/directory/teachers - Get All Teachers
+router.get("/teachers", requireAuth, getAllTeachers);
+
+export const directoryRoutes = router;
+</file>
+
+<file path="src/modules/directory/directory.service.ts">
+import { prisma } from "../../lib/prisma";
+
+export const getAllTeachersService = async () => {
+  return await prisma.user.findMany({
+    where: {
+      role: "TEACHER",
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      image: true,
+      phoneNumber: true,
+      teacherProfile: true,
+    },
+    orderBy: {
+      name: "asc",
+    },
+  });
+};
+</file>
+
+<file path="src/modules/event/event.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../middleware/auth.middleware";
+import { requireAdmin } from "../../middleware/admin.middleware";
+import { validateRequest } from "../../middleware/validateRequest";
+import { createEventSchema } from "./event.schema";
+import { createEvent, getEvents, deleteEvent } from "./event.controller";
+
+const router = Router();
+
+// POST /api/events - Create Event (Admin Only)
+router.post(
+  "/",
+  requireAuth,
+  requireAdmin,
+  validateRequest(createEventSchema),
+  createEvent,
+);
+
+// GET /api/events - Get Upcoming Events (All Authenticated Users)
+router.get("/", requireAuth, getEvents);
+
+// DELETE /api/events/:id - Delete Event (Admin Only)
+router.delete("/:id", requireAuth, requireAdmin, deleteEvent);
+
+export const eventRoutes = router;
+</file>
+
+<file path="src/modules/event/event.schema.ts">
+import { z } from "zod";
+
+export const createEventSchema = z.object({
+  body: z.object({
+    title: z.string().min(1, "Event title is required"),
+    description: z.string().optional(),
+    location: z.string().optional(),
+    eventDate: z.preprocess(
+      (val) => {
+        if (!val) return undefined;
+        if (val instanceof Date) return val;
+        return new Date(val as string);
+      },
+      z.date({
+        message: "Event date is required and must be a valid date",
+      }),
+    ),
+  }),
+});
+
+export type CreateEventPayload = z.infer<typeof createEventSchema>["body"];
+</file>
+
+<file path="src/modules/field/field.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../utils/catchAsync";
+import * as fieldService from "./field.service";
+
+export const getFieldSettings = catchAsync(
+  async (req: Request, res: Response) => {
+    const settings = await fieldService.getFieldSettingsService();
+    res.status(200).json({ success: true, data: settings });
+  },
+);
+
+export const updateFieldSettings = catchAsync(
+  async (req: Request, res: Response) => {
+    const settings = await fieldService.updateFieldSettingsService(req.body);
+    res
+      .status(200)
+      .json({ success: true, message: "Settings updated", data: settings });
+  },
+);
+
+export const bookField = catchAsync(async (req: Request, res: Response) => {
+  const booking = await fieldService.bookFieldService(req.user.id, req.body);
+  res
+    .status(201)
+    .json({ success: true, message: "Booking requested", data: booking });
+});
+
+export const getMyBookings = catchAsync(async (req: Request, res: Response) => {
+  const bookings = await fieldService.getMyBookingsService(req.user.id);
+  res.status(200).json({ success: true, data: bookings });
+});
+
+export const getAllBookings = catchAsync(
+  async (req: Request, res: Response) => {
+    const bookings = await fieldService.getAllBookingsService();
+    res.status(200).json({ success: true, data: bookings });
+  },
+);
+
+// NEW: Public Schedule Controller
+export const getApprovedSchedule = catchAsync(
+  async (req: Request, res: Response) => {
+    const schedule = await fieldService.getApprovedScheduleService();
+    res.status(200).json({ success: true, data: schedule });
+  },
+);
+
+// UPDATED: Fixed Type Assertion
+export const updateBookingStatus = catchAsync(
+  async (req: Request, res: Response) => {
+    const id = req.params.id as string; // Fix TS array warning
+    const booking = await fieldService.updateBookingStatusService(
+      id,
+      req.body.status,
+    );
+    res
+      .status(200)
+      .json({
+        success: true,
+        message: "Booking status updated",
+        data: booking,
+      });
+  },
+);
+</file>
+
+<file path="src/modules/field/field.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../middleware/auth.middleware";
+import { requireAdmin } from "../../middleware/admin.middleware";
+import { validateRequest } from "../../middleware/validateRequest";
+import {
+  updateFieldSettingsSchema,
+  bookFieldSchema,
+  updateBookingStatusSchema,
+} from "./field.schema";
+import {
+  getFieldSettings,
+  updateFieldSettings,
+  bookField,
+  getMyBookings,
+  getAllBookings,
+  getApprovedSchedule, // NEW
+  updateBookingStatus,
+} from "./field.controller";
+
+const router = Router();
+
+router.get("/settings", requireAuth, getFieldSettings);
+router.patch(
+  "/settings",
+  requireAuth,
+  requireAdmin,
+  validateRequest(updateFieldSettingsSchema),
+  updateFieldSettings,
+);
+
+// NEW: Public Schedule Route
+router.get("/schedule", requireAuth, getApprovedSchedule);
+
+router.post("/book", requireAuth, validateRequest(bookFieldSchema), bookField);
+router.get("/my-bookings", requireAuth, getMyBookings);
+
+router.get("/bookings", requireAuth, requireAdmin, getAllBookings);
+router.patch(
+  "/bookings/:id/status",
+  requireAuth,
+  requireAdmin,
+  validateRequest(updateBookingStatusSchema),
+  updateBookingStatus,
+);
+
+export const fieldRoutes = router;
+</file>
+
+<file path="src/modules/field/field.schema.ts">
+import { z } from "zod";
+
+const datePreprocess = z.preprocess(
+  (val) => {
+    if (!val) return undefined;
+    if (val instanceof Date) return val;
+    return new Date(val as string);
+  },
+  z.date({ message: "Invalid date format" }),
+);
+
+export const updateFieldSettingsSchema = z.object({
+  body: z.object({
+    isBookingOpen: z.boolean(),
+    closedNotice: z.string().optional().nullable(),
+  }),
+});
+
+export const bookFieldSchema = z.object({
+  body: z.object({
+    purpose: z.string().min(1, "Purpose is required"),
+    bookingDate: datePreprocess,
+    startTime: datePreprocess,
+    endTime: datePreprocess,
+  }),
+});
+
+export const updateBookingStatusSchema = z.object({
+  body: z.object({
+    status: z.enum(["APPROVED", "REJECTED"], {
+      message: "Status must be APPROVED or REJECTED",
+    }),
+  }),
+});
+
+export type UpdateFieldSettingsPayload = z.infer<
+  typeof updateFieldSettingsSchema
+>["body"];
+export type BookFieldPayload = z.infer<typeof bookFieldSchema>["body"];
+</file>
+
+<file path="src/modules/field/field.service.ts">
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+import { UpdateFieldSettingsPayload, BookFieldPayload } from "./field.schema";
+
+export const getFieldSettingsService = async () => {
+  let settings = await prisma.fieldSetting.findFirst();
+  if (!settings) {
+    settings = await prisma.fieldSetting.create({
+      data: { isBookingOpen: true },
+    });
+  }
+  return settings;
+};
+
+export const updateFieldSettingsService = async (
+  data: UpdateFieldSettingsPayload,
+) => {
+  const settings = await getFieldSettingsService();
+  return await prisma.fieldSetting.update({
+    where: { id: settings.id },
+    data,
+  });
+};
+
+export const bookFieldService = async (
+  userId: string,
+  data: BookFieldPayload,
+) => {
+  // 1. Check if global booking is open
+  const settings = await getFieldSettingsService();
+  if (!settings.isBookingOpen) {
+    throw new AppError(
+      settings.closedNotice || "Field bookings are currently closed.",
+      403,
+    );
+  }
+
+  // 2. Prevent booking if the time slot overlaps with an already APPROVED booking
+  const conflictingBooking = await prisma.fieldBooking.findFirst({
+    where: {
+      status: "APPROVED",
+      bookingDate: data.bookingDate,
+      // Overlap math: (newStart < existingEnd) AND (newEnd > existingStart)
+      startTime: { lt: data.endTime },
+      endTime: { gt: data.startTime },
+    },
+  });
+
+  if (conflictingBooking) {
+    throw new AppError(
+      "Cannot request booking. This time slot is already reserved by another event.",
+      400,
+    );
+  }
+
+  // 3. Create the booking request
+  return await prisma.fieldBooking.create({
+    data: { ...data, userId },
+  });
+};
+
+export const getMyBookingsService = async (userId: string) => {
+  return await prisma.fieldBooking.findMany({
+    where: { userId },
+    orderBy: { bookingDate: "desc" },
+  });
+};
+
+export const getAllBookingsService = async () => {
+  return await prisma.fieldBooking.findMany({
+    orderBy: { bookingDate: "desc" },
+    include: {
+      user: { select: { id: true, name: true, email: true, image: true } },
+    },
+  });
+};
+
+export const getApprovedScheduleService = async () => {
+  // Start of the current day to filter out past dates
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return await prisma.fieldBooking.findMany({
+    where: {
+      status: "APPROVED",
+      bookingDate: {
+        gte: today,
+      },
+    },
+    include: {
+      user: { select: { name: true } },
+    },
+    orderBy: [{ bookingDate: "asc" }, { startTime: "asc" }],
+  });
+};
+
+export const updateBookingStatusService = async (
+  id: string,
+  status: "APPROVED" | "REJECTED",
+) => {
+  const booking = await prisma.fieldBooking.findUnique({ where: { id } });
+  if (!booking) throw new AppError("Booking not found", 404);
+
+  // If the admin is trying to approve, double-check for overlaps just in case
+  // two pending requests were made for the same slot before one was approved.
+  if (status === "APPROVED") {
+    const conflictingBooking = await prisma.fieldBooking.findFirst({
+      where: {
+        status: "APPROVED",
+        bookingDate: booking.bookingDate,
+        startTime: { lt: booking.endTime },
+        endTime: { gt: booking.startTime },
+      },
+    });
+
+    if (conflictingBooking) {
+      throw new AppError(
+        "Cannot approve. This time slot overlaps with an already approved booking.",
+        400,
+      );
+    }
+  }
+
+  return await prisma.fieldBooking.update({
+    where: { id },
+    data: { status },
+  });
+};
+</file>
+
+<file path="src/modules/forum/forum.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../middleware/auth.middleware";
+import { validateRequest } from "../../middleware/validateRequest";
+import {
+  createPostSchema,
+  createResponseSchema,
+  updatePostSchema, // NEW
+} from "./forum.schema";
+import {
+  createPost,
+  getFeed,
+  getThread,
+  replyToPost,
+  markResolved,
+  updatePost, // NEW
+  deletePost, // NEW
+} from "./forum.controller";
+
+const router = Router();
+
+// POST /api/forum - Create a Forum Post
+router.post("/", requireAuth, validateRequest(createPostSchema), createPost);
+
+// GET /api/forum - Get All Posts / Feed
+router.get("/", requireAuth, getFeed);
+
+// GET /api/forum/:id - Get Single Thread
+router.get("/:id", requireAuth, getThread);
+
+// POST /api/forum/:id/respond - Reply to a Post
+router.post(
+  "/:id/respond",
+  requireAuth,
+  validateRequest(createResponseSchema),
+  replyToPost,
+);
+
+// PATCH /api/forum/:id/resolve - Mark Post as Resolved
+router.patch("/:id/resolve", requireAuth, markResolved);
+
+// NEW: PATCH /api/forum/:id - Edit Post
+router.patch(
+  "/:id",
+  requireAuth,
+  validateRequest(updatePostSchema),
+  updatePost,
+);
+
+// NEW: DELETE /api/forum/:id - Delete Post
+router.delete("/:id", requireAuth, deletePost);
+
+export const forumRoutes = router;
+</file>
+
+<file path="src/modules/forum/forum.schema.ts">
+import { z } from "zod";
+
+export const createPostSchema = z.object({
+  body: z.object({
+    title: z.string().min(1, "Title is required"),
+    description: z.string().min(1, "Description is required"),
+  }),
+});
+
+export const createResponseSchema = z.object({
+  body: z.object({
+    content: z.string().min(1, "Response content cannot be empty"),
+  }),
+});
+
+// NEW: Schema for editing a post
+export const updatePostSchema = z.object({
+  body: z.object({
+    title: z.string().min(1, "Title cannot be empty").optional(),
+    description: z.string().min(1, "Description cannot be empty").optional(),
+  }),
+});
+
+// Export inferred types for the service layer
+export type CreatePostPayload = z.infer<typeof createPostSchema>["body"];
+export type CreateResponsePayload = z.infer<
+  typeof createResponseSchema
+>["body"];
+export type UpdatePostPayload = z.infer<typeof updatePostSchema>["body"]; // NEW
+</file>
+
+<file path="src/modules/hub/assessments/assessments.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../../utils/catchAsync";
+import * as assessmentService from "./assessments.service";
+
+export const createAssessment = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await assessmentService.createAssessment(
+      req.user.id,
+      req.params.id as string,
+      req.body,
+    );
+    res
+      .status(201)
+      .json({ success: true, message: "Assessment created", data });
+  },
+);
+
+export const getAssessments = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await assessmentService.getAssessments(
+      req.params.id as string,
+    );
+    res.status(200).json({ success: true, data });
+  },
+);
+
+export const submitAssessment = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await assessmentService.submitAssessment(
+      req.user.id,
+      req.params.assessmentId as string,
+      req.body.submittedUrl,
+    );
+    res
+      .status(200)
+      .json({ success: true, message: "Assignment submitted", data });
+  },
+);
+
+export const gradeSubmission = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await assessmentService.gradeSubmission(
+      req.user.id,
+      req.params.submissionId as string,
+      req.body.marks,
+    );
+    res.status(200).json({ success: true, message: "Submission graded", data });
+  },
+);
+
+export const bulkGrade = catchAsync(async (req: Request, res: Response) => {
+  const data = await assessmentService.bulkGrade(
+    req.user.id,
+    req.params.assessmentId as string,
+    req.body,
+  );
+  res
+    .status(200)
+    .json({ success: true, message: "Bulk grading complete", data });
+});
+</file>
+
+<file path="src/modules/hub/assessments/assessments.schema.ts">
+import { z } from "zod";
+
+const datePreprocess = z.preprocess(
+  (val) => {
+    if (!val) return undefined;
+    if (val instanceof Date) return val;
+    return new Date(val as string);
+  },
+  z.date({ message: "Invalid date format" }),
+);
+
+export const createAssessmentSchema = z.object({
+  body: z.object({
+    title: z.string().min(1, "Title is required"),
+    description: z.string().optional(),
+    type: z.enum(["ASSIGNMENT", "QUIZ", "PRESENTATION"]),
+    deadline: datePreprocess,
+    totalMarks: z.number().positive(),
+  }),
+});
+
+export const submitAssessmentSchema = z.object({
+  body: z.object({ submittedUrl: z.string().url("Must provide a valid URL") }),
+});
+
+export const gradeSubmissionSchema = z.object({
+  body: z.object({ marks: z.number().min(0) }),
+});
+
+export const bulkGradeSchema = z.object({
+  body: z
+    .array(
+      z.object({
+        studentId: z.string(),
+        marks: z.number().min(0),
+      }),
+    )
+    .min(1, "Must provide at least one grade"),
+});
+</file>
+
+<file path="src/modules/hub/content/content.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../../utils/catchAsync";
+import * as contentService from "./content.service";
+
+export const createAnnouncementComment = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await contentService.createAnnouncementComment(
+      req.user.id,
+      req.params.id as string,
+      req.params.announcementId as string,
+      req.body.content,
+    );
+    res.status(201).json({ success: true, message: "Comment posted", data });
+  },
+);
+
+export const createAnnouncement = catchAsync(
+  async (req: Request, res: Response) => {
+    // Passes the user ID, Hub ID, and the entire body (content + optional links)
+    const data = await contentService.createAnnouncement(
+      req.user.id,
+      req.params.id as string,
+      req.body,
+    );
+    res
+      .status(201)
+      .json({ success: true, message: "Announcement posted", data });
+  },
+);
+
+export const getAnnouncements = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await contentService.getAnnouncements(req.params.id as string);
+    res.status(200).json({ success: true, data });
+  },
+);
+
+export const createDiscussion = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await contentService.createDiscussion(
+      req.user.id,
+      req.params.id as string,
+      req.body,
+    );
+    res.status(201).json({ success: true, message: "Discussion posted", data });
+  },
+);
+
+export const replyDiscussion = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await contentService.replyToDiscussion(
+      req.user.id,
+      req.params.id as string,
+      req.params.discussionId as string,
+      req.body.content,
+    );
+    res.status(201).json({ success: true, message: "Reply posted", data });
+  },
+);
+
+export const getDiscussions = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await contentService.getDiscussions(req.params.id as string);
+    res.status(200).json({ success: true, data });
+  },
+);
+
+export const commentAnnouncement = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await contentService.commentOnAnnouncement(
+      req.user.id,
+      req.params.id as string,
+      req.params.announcementId as string,
+      req.body.content,
+    );
+    res.status(201).json({ success: true, message: "Comment posted", data });
+  },
+);
+</file>
+
+<file path="src/modules/hub/content/content.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../../middleware/auth.middleware";
+import { validateRequest } from "../../../middleware/validateRequest";
+import {
+  commentAnnouncementSchema,
+  createAnnouncementSchema,
+  createDiscussionSchema,
+  replyDiscussionSchema,
+} from "./content.schema";
+import {
+  createAnnouncement,
+  getAnnouncements,
+  createDiscussion,
+  replyDiscussion,
+  getDiscussions,
+  commentAnnouncement,
+} from "./content.controller";
+
+const router = Router({ mergeParams: true });
+
+// 👇 REMOVED "/hubs" from all paths!
+router.post(
+  "/:id/announcements",
+  requireAuth,
+  validateRequest(createAnnouncementSchema),
+  createAnnouncement,
+);
+router.get("/:id/announcements", requireAuth, getAnnouncements);
+
+router.post(
+  "/:id/discussions",
+  requireAuth,
+  validateRequest(createDiscussionSchema),
+  createDiscussion,
+);
+router.get("/:id/discussions", requireAuth, getDiscussions);
+
+router.post(
+  "/:id/discussions/:discussionId/reply",
+  requireAuth,
+  validateRequest(replyDiscussionSchema),
+  replyDiscussion,
+);
+
+router.post(
+  "/:id/announcements/:announcementId/comments",
+  requireAuth,
+  validateRequest(commentAnnouncementSchema),
+  commentAnnouncement,
+);
+
+export const contentRoutes = router;
+</file>
+
+<file path="src/modules/hub/content/content.schema.ts">
+import { z } from "zod";
+
+export const createAnnouncementSchema = z.object({
+  body: z.object({
+    content: z.string().min(1, "Announcement content cannot be empty"),
+    attachedLinkUrl: z.string().url("Must be a valid URL").optional(),
+    attachedLinkTitle: z.string().optional(),
+  }),
+});
+
+export const createAnnouncementCommentSchema = z.object({
+  body: z.object({
+    content: z.string().min(1, "Comment cannot be empty"),
+  }),
+});
+export const createDiscussionSchema = z.object({
+  body: z.object({
+    title: z.string().min(1, "Title is required"),
+    content: z.string().min(1, "Discussion content cannot be empty"),
+  }),
+});
+
+export const replyDiscussionSchema = z.object({
+  body: z.object({
+    content: z.string().min(1, "Reply content cannot be empty"),
+  }),
+});
+
+export const commentAnnouncementSchema = z.object({
+  body: z.object({
+    content: z.string().min(1, "Comment content cannot be empty"),
+  }),
+});
+</file>
+
+<file path="src/modules/hub/content/content.service.ts">
+import { prisma } from "../../../lib/prisma";
+import { verifyHubRole } from "../hub.service";
+
+// 1. Update createAnnouncement to accept link fields
+export const createAnnouncement = async (
+  userId: string,
+  hubId: string,
+  data: any,
+) => {
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
+  return await prisma.hubAnnouncement.create({
+    data: { hubId, creatorId: userId, ...data }, // Spread includes the links
+  });
+};
+
+export const getAnnouncements = async (hubId: string) => {
+  return await prisma.hubAnnouncement.findMany({
+    where: { hubId },
+    include: {
+      creator: { select: { id: true, name: true, image: true } },
+      comments: {
+        // 👈 Added this to fetch comments!
+        include: { author: { select: { id: true, name: true, image: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+};
+
+// 3. Add the comment creation service
+export const createAnnouncementComment = async (
+  userId: string,
+  hubId: string,
+  announcementId: string,
+  content: string,
+) => {
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
+  return await prisma.announcementComment.create({
+    data: { announcementId, authorId: userId, content },
+  });
+};
+
+export const createDiscussion = async (
+  userId: string,
+  hubId: string,
+  data: any,
+) => {
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
+  return await prisma.hubDiscussion.create({
+    data: { hubId, authorId: userId, ...data },
+  });
+};
+
+export const replyToDiscussion = async (
+  userId: string,
+  hubId: string,
+  discussionId: string,
+  content: string,
+) => {
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
+  return await prisma.hubDiscussionReply.create({
+    data: { discussionId, authorId: userId, content },
+  });
+};
+
+export const getDiscussions = async (hubId: string) => {
+  return await prisma.hubDiscussion.findMany({
+    where: { hubId },
+    include: {
+      replies: {
+        include: { author: { select: { id: true, name: true, image: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+      author: { select: { id: true, name: true, image: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+};
+
+export const commentOnAnnouncement = async (
+  userId: string,
+  hubId: string,
+  announcementId: string,
+  content: string,
+) => {
+  // All hub members can comment on announcements
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
+
+  return await prisma.announcementComment.create({
+    data: { announcementId, authorId: userId, content },
+  });
+};
+</file>
+
+<file path="src/modules/hub/resources/resources.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../../utils/catchAsync";
+import * as resourceService from "./resources.service";
+
+export const createResource = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await resourceService.createResourceService(
+      req.user.id,
+      req.params.id as string,
+      req.body,
+    );
+    res.status(201).json({ success: true, message: "Resource uploaded", data });
+  },
+);
+
+export const getResources = catchAsync(async (req: Request, res: Response) => {
+  const data = await resourceService.getResourcesService(
+    req.params.id as string,
+  );
+  res.status(200).json({ success: true, data });
+});
+</file>
+
+<file path="src/modules/hub/resources/resources.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../../middleware/auth.middleware";
+import { validateRequest } from "../../../middleware/validateRequest";
+import { createResourceSchema } from "./resources.schema";
+import { createResource, getResources } from "./resources.controller";
+
+const router = Router({ mergeParams: true });
+
+// 👇 REMOVED "/hubs" from these paths to prevent the double-routing bug
+router.post(
+  "/:id/resources",
+  requireAuth,
+  validateRequest(createResourceSchema),
+  createResource,
+);
+router.get("/:id/resources", requireAuth, getResources);
+
+export const resourceRoutes = router;
+</file>
+
+<file path="src/modules/hub/resources/resources.schema.ts">
+import { z } from "zod";
+
+export const createResourceSchema = z.object({
+  body: z.object({
+    title: z.string().min(1, "Title is required"),
+    driveUrl: z.string().url("Must be a valid URL"),
+    isStudentNote: z.boolean().default(false),
+  }),
+});
+
+export type CreateResourcePayload = z.infer<
+  typeof createResourceSchema
+>["body"];
+</file>
+
+<file path="src/modules/hub/resources/resources.service.ts">
+import { prisma } from "../../../lib/prisma";
+import { verifyHubRole } from "../hub.service";
+import { CreateResourcePayload } from "./resources.schema";
+
+export const createResourceService = async (
+  userId: string,
+  hubId: string,
+  data: CreateResourcePayload,
+) => {
+  // All members can upload resources (Teachers upload lectures, Students upload notes)
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
+  return await prisma.resource.create({
+    data: {
+      ...data,
+      hubId,
+      uploaderId: userId,
+    },
+  });
+};
+
+export const getResourcesService = async (hubId: string) => {
+  return await prisma.resource.findMany({
+    where: { hubId },
+    include: {
+      uploader: { select: { id: true, name: true, image: true, role: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+};
+</file>
+
+<file path="src/modules/hub/reviews/reviews.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../../utils/catchAsync";
+import * as reviewService from "./reviews.service";
+
+export const updateReviewSettings = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await reviewService.updateReviewSettings(
+      req.user.id,
+      req.params.id as string,
+      req.body,
+    );
+    res
+      .status(200)
+      .json({ success: true, message: "Review settings updated.", data });
+  },
+);
+
+export const submitReview = catchAsync(async (req: Request, res: Response) => {
+  const data = await reviewService.submitReview(
+    req.user.id,
+    req.params.id as string,
+    req.body,
+  );
+  res.status(201).json({ success: true, message: "Review submitted.", data });
+});
+
+export const getReviews = catchAsync(async (req: Request, res: Response) => {
+  const data = await reviewService.getReviews(req.params.id as string);
+  res.status(200).json({ success: true, data });
+});
+</file>
+
+<file path="src/modules/hub/reviews/reviews.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../../middleware/auth.middleware";
+import { validateRequest } from "../../../middleware/validateRequest";
+import {
+  updateReviewSettingsSchema,
+  submitReviewSchema,
+} from "./reviews.schema";
+import {
+  updateReviewSettings,
+  submitReview,
+  getReviews,
+} from "./reviews.controller";
+
+const router = Router({ mergeParams: true });
+
+router.patch(
+  "/hubs/:id/review-settings",
+  requireAuth,
+  validateRequest(updateReviewSettingsSchema),
+  updateReviewSettings,
+);
+router.post(
+  "/hubs/:id/reviews",
+  requireAuth,
+  validateRequest(submitReviewSchema),
+  submitReview,
+);
+router.get("/hubs/:id/reviews", requireAuth, getReviews);
+
+export const reviewRoutes = router;
+</file>
+
+<file path="src/modules/hub/reviews/reviews.schema.ts">
+import { z } from "zod";
+
+export const updateReviewSettingsSchema = z.object({
+  body: z.object({
+    isReviewOpen: z.boolean(),
+    reviewQuestions: z.array(z.string()),
+  }),
+});
+
+export const submitReviewSchema = z.object({
+  body: z.object({
+    rating: z.number().min(1).max(5),
+    comment: z.string().optional(),
+    isAnonymous: z.boolean().default(true),
+    answers: z.any(), // JSON mapping to custom questions
+  }),
+});
+</file>
+
+<file path="src/modules/notice/notice.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../utils/catchAsync";
+import * as noticeService from "./notice.service";
+
+export const createNotice = catchAsync(async (req: Request, res: Response) => {
+  const newNotice = await noticeService.createNoticeService(req.body);
+
+  res.status(201).json({
+    success: true,
+    message: "Notice created successfully.",
+    data: newNotice,
+  });
+});
+
+export const getNotices = catchAsync(async (req: Request, res: Response) => {
+  const notices = await noticeService.getAllNoticesService();
+
+  res.status(200).json({
+    success: true,
+    message: "Notices retrieved successfully.",
+    data: notices,
+  });
+});
+
+export const getNoticeById = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string; // Assert as string to avoid TS array errors
+  const notice = await noticeService.getNoticeByIdService(id);
+
+  res.status(200).json({
+    success: true,
+    message: "Notice retrieved successfully.",
+    data: notice,
+  });
+});
+
+export const deleteNotice = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string; // Assert as string to avoid TS array errors
+
+  await noticeService.deleteNoticeService(id);
+
+  res.status(200).json({
+    success: true,
+    message: "Notice deleted successfully.",
+  });
+});
+</file>
+
+<file path="src/modules/notice/notice.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../middleware/auth.middleware";
+import { requireAdmin } from "../../middleware/admin.middleware";
+import { validateRequest } from "../../middleware/validateRequest";
+import { createNoticeSchema } from "./notice.schema";
+import {
+  createNotice,
+  getNotices,
+  getNoticeById,
+  deleteNotice,
+} from "./notice.controller";
+
+const router = Router();
+
+// POST /api/notices - Create Notice (Admin Only)
+router.post(
+  "/",
+  requireAuth,
+  requireAdmin,
+  validateRequest(createNoticeSchema),
+  createNotice,
+);
+
+// GET /api/notices - Get All Notices (All Authenticated Users)
+router.get("/", requireAuth, getNotices);
+
+// GET /api/notices/:id - Get Notice Details (All Authenticated Users)
+router.get("/:id", requireAuth, getNoticeById);
+
+// DELETE /api/notices/:id - Delete Notice (Admin Only)
+router.delete("/:id", requireAuth, requireAdmin, deleteNotice);
+
+export const noticeRoutes = router;
+</file>
+
+<file path="src/modules/notice/notice.schema.ts">
+import { z } from "zod";
+
+export const createNoticeSchema = z.object({
+  body: z.object({
+    referenceNo: z.string().optional(),
+    title: z.string().min(1, "Title is required"),
+    body: z.string().min(1, "Body is required"),
+    issuerName: z.string().min(1, "Issuer name is required"),
+    issuerDesignation: z.string().min(1, "Issuer designation is required"),
+    copyTo: z.array(z.string()).optional().default([]),
+  }),
+});
+
+// Export the inferred type for the service layer
+export type CreateNoticePayload = z.infer<typeof createNoticeSchema>["body"];
+</file>
+
+<file path="src/modules/notice/notice.service.ts">
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+import { CreateNoticePayload } from "./notice.schema";
+
+export const createNoticeService = async (data: CreateNoticePayload) => {
+  return await prisma.notice.create({
+    data: {
+      referenceNo: data.referenceNo,
+      title: data.title,
+      body: data.body,
+      issuerName: data.issuerName,
+      issuerDesignation: data.issuerDesignation,
+      copyTo: data.copyTo || [],
+    },
+  });
+};
+
+export const getAllNoticesService = async () => {
+  return await prisma.notice.findMany({
+    orderBy: {
+      createdAt: "desc", // Newest notices appear first
+    },
+  });
+};
+
+export const getNoticeByIdService = async (id: string) => {
+  const notice = await prisma.notice.findUnique({
+    where: { id },
+  });
+
+  if (!notice) {
+    throw new AppError("Notice not found.", 404);
+  }
+
+  return notice;
+};
+
+export const deleteNoticeService = async (id: string) => {
+  // Check if the notice exists before attempting to delete
+  const existingNotice = await prisma.notice.findUnique({
+    where: { id },
+  });
+
+  if (!existingNotice) {
+    throw new AppError("Notice not found.", 404);
+  }
+
+  return await prisma.notice.delete({
+    where: { id },
+  });
+};
+</file>
+
+<file path="src/modules/teacher/teacher.controller.ts">
+import { Request, Response } from "express";
+import * as teacherService from "./teacher.service";
+import { catchAsync } from "../../utils/catchAsync";
+import { AppError } from "../../utils/AppError";
+
+export const registerTeacher = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await teacherService.registerTeacherService(req.body);
+
+    const formattedData = {
+      id: result.user.id,
+      teacherId: result.profile.teacherId,
+      name: result.user.name,
+      email: result.user.email,
+      role: result.user.role,
+      designation: result.profile.designation,
+      department: result.profile.department,
+      faculty: result.profile.faculty,
+    };
+
+    res.status(201).json({
+      success: true,
+      message: "Teacher registered successfully by Administrator.",
+      data: formattedData,
+    });
+  },
+);
+
+export const getTeacherProfile = catchAsync(
+  async (req: Request, res: Response) => {
+    const userId = req.user.id;
+    const userProfile = await teacherService.getTeacherProfileByUserId(userId);
+
+    if (!userProfile || !userProfile.teacherProfile) {
+      throw new AppError("Teacher profile not found.", 404);
+    }
+
+    // Flatten the response
+    // The spread operator automatically includes expertiseFields, academicQualifications, etc.
+    const formattedProfile = {
+      id: userProfile.id,
+      name: userProfile.name,
+      email: userProfile.email,
+      image: userProfile.image,
+      phoneNumber: userProfile.phoneNumber,
+      bloodGroup: userProfile.bloodGroup,
+      role: userProfile.role,
+      ...userProfile.teacherProfile,
+    };
+
+    res.status(200).json({
+      success: true,
+      message: "Teacher profile retrieved successfully.",
+      data: formattedProfile,
+    });
+  },
+);
+
+export const updateTeacherProfileImage = catchAsync(
+  async (req: Request, res: Response) => {
+    const userId = req.user.id;
+    const { imageUrl } = req.body;
+
+    const updatedUser = await teacherService.updateTeacherProfileImageService(
+      userId,
+      imageUrl,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Teacher profile image updated successfully.",
+      data: updatedUser,
+    });
+  },
+);
+
+export const updateProfile = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user.id;
+  const updatedProfile = await teacherService.updateTeacherProfileData(
+    userId,
+    req.body,
+  );
+
+  if (!updatedProfile) {
+    throw new AppError("Failed to retrieve updated profile.", 500);
+  }
+
+  // Flatten the response
+  const formattedProfile = {
+    id: updatedProfile.id,
+    name: updatedProfile.name,
+    email: updatedProfile.email,
+    image: updatedProfile.image,
+    phoneNumber: updatedProfile.phoneNumber,
+    bloodGroup: updatedProfile.bloodGroup,
+    role: updatedProfile.role,
+    ...updatedProfile.teacherProfile,
+  };
+
+  res.status(200).json({
+    success: true,
+    message: "Teacher profile updated successfully.",
+    data: formattedProfile,
+  });
+});
+</file>
+
+<file path="src/modules/teacher/teacher.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../middleware/auth.middleware";
+import { requireAdmin } from "../../middleware/admin.middleware";
+import { validateRequest } from "../../middleware/validateRequest";
+import {
+  registerTeacherSchema,
+  updateTeacherImageSchema,
+  updateTeacherProfileSchema,
+} from "./teacher.schema";
+import {
+  getTeacherProfile,
+  registerTeacher,
+  updateProfile,
+  updateTeacherProfileImage,
+} from "./teacher.controller";
+import { requireTeacher } from "../../middleware/teacher.middleware";
+
+const router = Router();
+
+// POST /api/teachers/register
+// Restricted to ADMIN role only
+router.post(
+  "/register",
+  requireAuth,
+  requireAdmin,
+  validateRequest(registerTeacherSchema),
+  registerTeacher,
+);
+
+// GET /api/teachers/profile (TEACHER ONLY)
+router.get("/profile", requireAuth, requireTeacher, getTeacherProfile);
+
+router.patch(
+  "/profile/image",
+  requireAuth,
+  requireTeacher,
+  validateRequest(updateTeacherImageSchema),
+  updateTeacherProfileImage,
+);
+
+// PATCH /api/teachers/profile (TEACHER ONLY)
+router.patch(
+  "/profile",
+  requireAuth,
+  requireTeacher,
+  validateRequest(updateTeacherProfileSchema),
+  updateProfile,
+);
+export const teacherRoutes = router;
+</file>
+
+<file path="src/modules/teacher/teacher.schema.ts">
+import { z } from "zod";
+
+export const registerTeacherSchema = z.object({
+  body: z.object({
+    teacherId: z.string().min(1, "Teacher ID is required"), // 👈 Added
+    name: z.string().min(1, "Name is required"),
+    email: z.string().email("Invalid email format"),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    designation: z
+      .string()
+      .min(1, "Designation is required (e.g., Lecturer, Professor)"),
+    department: z.string().min(1, "Department is required"),
+    faculty: z.string().min(1, "Faculty is required"), // 👈 Added
+  }),
+});
+
+export type RegisterTeacherPayload = z.infer<
+  typeof registerTeacherSchema
+>["body"];
+
+export const updateTeacherProfileSchema = z.object({
+  body: z.object({
+    name: z.string().optional(),
+    phoneNumber: z.string().optional(),
+    bloodGroup: z
+      .enum([
+        "A_POSITIVE",
+        "A_NEGATIVE",
+        "B_POSITIVE",
+        "B_NEGATIVE",
+        "AB_POSITIVE",
+        "AB_NEGATIVE",
+        "O_POSITIVE",
+        "O_NEGATIVE",
+      ])
+      .optional(),
+    designation: z.string().optional(),
+    department: z.string().optional(),
+    faculty: z.string().optional(), // 👈 Added
+    officeRoom: z.string().optional(),
+    consultationHours: z.string().optional(),
+
+    // 👈 Added New Fields
+    expertiseFields: z.array(z.string()).optional(),
+    academicQualifications: z.record(z.string(), z.any()).optional(), // Accepts a JSON object
+    linkedInUrl: z
+      .string()
+      .url("Must be a valid URL")
+      .or(z.literal(""))
+      .optional(),
+    personalWebsiteUrl: z
+      .string()
+      .url("Must be a valid URL")
+      .or(z.literal(""))
+      .optional(),
+  }),
+});
+
+export type UpdateTeacherPayload = z.infer<
+  typeof updateTeacherProfileSchema
+>["body"];
+
+export const updateTeacherImageSchema = z.object({
+  body: z.object({
+    imageUrl: z.string().url("Must be a valid URL"),
+  }),
+});
+</file>
+
+<file path="src/modules/teacher/teacher.service.ts">
+import { auth } from "../../lib/auth";
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+import { RegisterTeacherPayload, UpdateTeacherPayload } from "./teacher.schema";
+
+export const registerTeacherService = async (data: RegisterTeacherPayload) => {
+  // 1. Pre-check: Ensure email is unique
+  const existingEmail = await prisma.user.findUnique({
+    where: { email: data.email },
+  });
+
+  if (existingEmail) {
+    throw new AppError("A user with this email already exists.", 409);
+  }
+
+  // 2. Pre-check: Ensure Teacher ID is unique
+  const existingTeacherId = await prisma.teacherProfile.findUnique({
+    where: { teacherId: data.teacherId },
+  });
+
+  if (existingTeacherId) {
+    throw new AppError(
+      "This Teacher ID is already registered in the system.",
+      409,
+    );
+  }
+
+  let authResponse: any;
+
+  try {
+    // 3. Create core user account via Better Auth
+    authResponse = await auth.api.signUpEmail({
+      body: {
+        email: data.email,
+        password: data.password,
+        name: data.name,
+        role: "TEACHER",
+      },
+    });
+  } catch (error: any) {
+    throw new AppError(
+      error.message || "Failed to create core user account",
+      500,
+    );
+  }
+
+  if (!authResponse?.user) {
+    throw new AppError("Unexpected error during teacher registration.", 500);
+  }
+
+  const userId = authResponse.user.id;
+
+  try {
+    // 4. Revoke the automatic session
+    await prisma.session.deleteMany({
+      where: { userId },
+    });
+
+    // 5. Create the delegated Teacher Profile with the new fields
+    const profile = await prisma.teacherProfile.create({
+      data: {
+        userId: userId,
+        teacherId: data.teacherId,
+        designation: data.designation,
+        department: data.department,
+        faculty: data.faculty,
+      },
+    });
+
+    return { user: authResponse.user, profile };
+  } catch (error) {
+    // 6. Manual Rollback
+    await prisma.user.delete({ where: { id: userId } });
+    console.error("Teacher Profile creation failed, rolled back user:", error);
+
+    throw new AppError(
+      "Failed to create teacher profile. Database rolled back.",
+      500,
+    );
+  }
+};
+
+export const getTeacherProfileByUserId = async (userId: string) => {
+  return await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      image: true,
+      phoneNumber: true,
+      bloodGroup: true,
+      role: true,
+      teacherProfile: {
+        select: {
+          teacherId: true, // 👈 Added
+          designation: true,
+          department: true,
+          faculty: true, // 👈 Added
+          officeRoom: true,
+          consultationHours: true,
+          expertiseFields: true, // 👈 Added (String array)
+          academicQualifications: true, // 👈 Added (JSON object)
+          linkedInUrl: true, // 👈 Added
+          personalWebsiteUrl: true, // 👈 Added
+        },
+      },
+    },
+  });
+};
+
+export const updateTeacherProfileImageService = async (
+  userId: string,
+  imageUrl: string,
+) => {
+  return await prisma.user.update({
+    where: { id: userId },
+    data: { image: imageUrl },
+    select: { id: true, name: true, image: true },
+  });
+};
+
+export const updateTeacherProfileData = async (
+  userId: string,
+  data: UpdateTeacherPayload,
+) => {
+  return await prisma.$transaction(async (tx) => {
+    // 1. Update Core User Data
+    const userUpdateData: any = {};
+    if (data.name) userUpdateData.name = data.name;
+    if (data.phoneNumber !== undefined)
+      userUpdateData.phoneNumber = data.phoneNumber;
+    if (data.bloodGroup !== undefined)
+      userUpdateData.bloodGroup = data.bloodGroup;
+
+    if (Object.keys(userUpdateData).length > 0) {
+      await tx.user.update({
+        where: { id: userId },
+        data: userUpdateData,
+      });
+    }
+
+    // 2. Update Delegated Teacher Profile Data
+    const profileUpdateData: any = {};
+    if (data.designation) profileUpdateData.designation = data.designation;
+    if (data.department) profileUpdateData.department = data.department;
+    if (data.faculty !== undefined) profileUpdateData.faculty = data.faculty; // 👈 Added
+    if (data.officeRoom !== undefined)
+      profileUpdateData.officeRoom = data.officeRoom;
+    if (data.consultationHours !== undefined)
+      profileUpdateData.consultationHours = data.consultationHours;
+
+    // 👈 Added New Fields Mapping
+    if (data.expertiseFields !== undefined)
+      profileUpdateData.expertiseFields = data.expertiseFields;
+    if (data.academicQualifications !== undefined)
+      profileUpdateData.academicQualifications = data.academicQualifications;
+    if (data.linkedInUrl !== undefined)
+      profileUpdateData.linkedInUrl = data.linkedInUrl;
+    if (data.personalWebsiteUrl !== undefined)
+      profileUpdateData.personalWebsiteUrl = data.personalWebsiteUrl;
+
+    if (Object.keys(profileUpdateData).length > 0) {
+      await tx.teacherProfile.update({
+        where: { userId: userId },
+        data: profileUpdateData,
+      });
+    }
+
+    // Return the cleanly merged updated data
+    return await getTeacherProfileByUserId(userId);
+  });
+};
+</file>
+
+<file path="src/modules/user/user.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../utils/catchAsync";
+import * as userService from "./user.service";
+
+export const getAllUsers = catchAsync(async (req: Request, res: Response) => {
+  const users = await userService.getAllUsersService();
+
+  res.status(200).json({
+    success: true,
+    message: "Users retrieved successfully.",
+    data: users,
+  });
+});
+
+export const deleteUser = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string; // Assert type to satisfy TypeScript
+
+  await userService.deleteUserService(id);
+
+  res.status(200).json({
+    success: true,
+    message: "User and associated profiles deleted successfully.",
+  });
+});
+
+export const updateStudentRole = catchAsync(
+  async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const { action } = req.body;
+
+    const updatedProfile = await userService.updateStudentRoleService(
+      id,
+      action,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Student role updated successfully (${action}).`,
+      data: updatedProfile,
+    });
+  },
+);
+</file>
+
+<file path="src/modules/user/user.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../middleware/auth.middleware";
+import { requireAdmin } from "../../middleware/admin.middleware";
+import { validateRequest } from "../../middleware/validateRequest";
+import { updateRoleSchema } from "./user.schema";
+import { getAllUsers, deleteUser, updateStudentRole } from "./user.controller";
+
+const router = Router();
+
+// GET /api/users - Get All Users (Admin Only)
+router.get("/", requireAuth, requireAdmin, getAllUsers);
+
+// DELETE /api/users/:id - Permanently Delete User (Admin Only)
+router.delete("/:id", requireAuth, requireAdmin, deleteUser);
+
+// PATCH /api/users/:id/role - Update Student Special Role (Admin Only)
+router.patch(
+  "/:id/role",
+  requireAuth,
+  requireAdmin,
+  validateRequest(updateRoleSchema),
+  updateStudentRole,
+);
+
+export const userRoutes = router;
+</file>
+
+<file path="src/modules/user/user.schema.ts">
+import { z } from "zod";
+
+export const updateRoleSchema = z.object({
+  body: z.object({
+    action: z.enum(["MAKE_CR", "MAKE_TA", "REMOVE_ROLE"], {
+      message: "Invalid action. Must be MAKE_CR, MAKE_TA, or REMOVE_ROLE",
+    }),
+  }),
+});
+
+export type UpdateRolePayload = z.infer<typeof updateRoleSchema>["body"];
+</file>
+
+<file path="src/modules/user/user.service.ts">
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+import { UpdateRolePayload } from "./user.schema";
+
+export const getAllUsersService = async () => {
+  return await prisma.user.findMany({
+    include: {
+      studentProfile: true,
+      teacherProfile: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+};
+
+export const deleteUserService = async (id: string) => {
+  const existingUser = await prisma.user.findUnique({
+    where: { id },
+  });
+
+  if (!existingUser) {
+    throw new AppError("User not found.", 404);
+  }
+
+  // Cascades automatically to StudentProfile, TeacherProfile, Session, Account, etc.
+  return await prisma.user.delete({
+    where: { id },
+  });
+};
+
+export const updateStudentRoleService = async (
+  id: string,
+  action: UpdateRolePayload["action"],
+) => {
+  // Verify user exists and retrieve their student profile
+  const user = await prisma.user.findUnique({
+    where: { id },
+    include: { studentProfile: true },
+  });
+
+  if (!user) {
+    throw new AppError("User not found.", 404);
+  }
+
+  if (!user.studentProfile) {
+    throw new AppError(
+      "This action can only be performed on student accounts.",
+      400,
+    );
+  }
+
+  // Determine the boolean flags based on the requested action
+  let updateData = {};
+  if (action === "MAKE_CR") {
+    updateData = { isCR: true };
+  } else if (action === "MAKE_TA") {
+    updateData = { isTA: true };
+  } else if (action === "REMOVE_ROLE") {
+    updateData = { isCR: false, isTA: false };
+  }
+
+  // Apply the update to the delegated StudentProfile
+  return await prisma.studentProfile.update({
+    where: { userId: id },
+    data: updateData,
+  });
+};
+</file>
+
+<file path="src/utils/AppError.ts">
+export class AppError extends Error {
+  public statusCode: number;
+  public isOperational: boolean;
+
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.statusCode = statusCode;
+    this.isOperational = true;
+
+    Error.captureStackTrace(this, this.constructor);
+  }
+}
+</file>
+
+<file path="src/utils/catchAsync.ts">
+import { Request, Response, NextFunction, RequestHandler } from "express";
+
+export const catchAsync = (fn: RequestHandler) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve(fn(req, res, next)).catch((err) => next(err));
+  };
+};
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2023",
+    "strict": true,
+    "esModuleInterop": true,
+    "ignoreDeprecations": "6.0"
+  }
+}
+</file>
+
+<file path=".gitignore">
+node_modules
+# Keep environment variables out of version control
+.env
+
+/generated/prisma
+scripts
+</file>
+
+<file path="package.json">
+{
+  "name": "sumct-unicompanion-api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build": "prisma generate && tsup src/server.ts --format esm --clean && cp -r assets dist/assets",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "seed": "tsx src/scripts/admin-seed.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.33.0",
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.9.3",
+    "@types/nodemailer": "^8.0.1",
+    "@types/pg": "^8.20.0",
+    "prisma": "^7.8.0",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
+    "better-auth": "^1.6.18",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "nodemailer": "^9.0.1",
+    "pg": "^8.21.0",
+    "zod": "^4.4.3"
+  }
+}
+</file>
+
+<file path="prisma.config.ts">
+// This file was generated by Prisma, and assumes you have installed the following:
+// npm install --save-dev prisma dotenv
+import "dotenv/config";
+import { defineConfig } from "prisma/config";
+
+export default defineConfig({
+  schema: "prisma/schema.prisma",
+  migrations: {
+    path: "prisma/migrations",
+  },
+  datasource: {
+    url: process.env["DIRECT_URL"],
+  },
+});
+</file>
+
+<file path="src/lib/auth.ts">
+import { betterAuth } from "better-auth";
+import { prismaAdapter } from "better-auth/adapters/prisma";
+import { prisma } from "./prisma";
+import { bearer } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  database: prismaAdapter(prisma, {
+    provider: "postgresql",
+  }),
+
+  user: {
+    additionalFields: {
+      role: {
+        type: "string",
+        required: false,
+      },
+      phoneNumber: {
+        type: "string",
+        required: false,
+      },
+      bloodGroup: {
+        type: "string",
+        required: false,
+      },
+    },
+  },
+
+  trustedOrigins: [
+    "*",
+    "http://localhost:8081",
+    "smuct-unicompanion://",
+    "http://192.168.0.102:8081",
+    "http://192.168.0.100",
+  ],
+
+  emailAndPassword: {
+    enabled: true,
+  },
+  plugins: [bearer()],
+});
+</file>
+
+<file path="src/middleware/auth.middleware.ts">
+import { Request, Response, NextFunction } from "express";
+import { auth } from "../lib/auth";
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: any;
+    }
+  }
+}
+
+export const requireAuth = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const session = await auth.api.getSession({
+      headers: new Headers(req.headers as Record<string, string>),
+    });
+
+    if (!session || !session.user) {
+      res.status(401).json({ error: "Unauthorized. Please log in first." });
+      return;
+    }
+
+    req.user = session.user;
+    next();
+  } catch (error) {
+    res.status(500).json({
+      error: "Internal server error during authentication validation.",
+    });
+  }
+};
+</file>
+
+<file path="src/modules/blood/blood.service.ts">
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+import {
+  CreateBloodPostPayload,
+  RespondBloodPostPayload,
+} from "./blood.schema";
+
+export const createBloodPostService = async (
+  authorId: string,
+  data: CreateBloodPostPayload,
+) => {
+  return await prisma.bloodPost.create({
+    data: {
+      ...data,
+      authorId,
+    },
+  });
+};
+
+export const getBloodFeedService = async () => {
+  return await prisma.bloodPost.findMany({
+    orderBy: {
+      createdAt: "desc",
+    },
+    include: {
+      author: {
+        select: { id: true, name: true, image: true },
+      },
+      _count: {
+        select: { responses: true },
+      },
+    },
+  });
+};
+
+export const getBloodPostByIdService = async (id: string) => {
+  const post = await prisma.bloodPost.findUnique({
+    where: { id },
+    include: {
+      author: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          bloodGroup: true,
+          phoneNumber: true,
+          studentProfile: true,
+          teacherProfile: true,
+        },
+      },
+      responses: {
+        orderBy: { createdAt: "asc" },
+        include: {
+          responder: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+              bloodGroup: true,
+              phoneNumber: true,
+              studentProfile: true,
+              teacherProfile: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!post) {
+    throw new AppError("Blood request not found.", 404);
+  }
+
+  return post;
+};
+
+export const respondToBloodPostService = async (
+  postId: string,
+  responderId: string,
+  data: RespondBloodPostPayload,
+) => {
+  const post = await prisma.bloodPost.findUnique({
+    where: { id: postId },
+  });
+
+  if (!post) {
+    throw new AppError("Blood request not found.", 404);
+  }
+
+  // Prevent users from responding to their own requests
+  if (post.authorId === responderId) {
+    throw new AppError("You cannot volunteer for your own blood request.", 400);
+  }
+
+  // Prevent duplicate responses from the same user on the same post
+  const existingResponse = await prisma.bloodResponse.findFirst({
+    where: { postId, responderId },
+  });
+
+  if (existingResponse) {
+    throw new AppError("You have already responded to this request.", 409);
+  }
+
+  return await prisma.bloodResponse.create({
+    data: {
+      postId,
+      responderId,
+      message: data.message,
+    },
+  });
+};
+
+export const resolveBloodPostService = async (
+  postId: string,
+  userId: string,
+  role?: string,
+) => {
+  const post = await prisma.bloodPost.findUnique({
+    where: { id: postId },
+  });
+
+  if (!post) {
+    throw new AppError("Blood request not found.", 404);
+  }
+
+  if (post.authorId !== userId && role !== "ADMIN") {
+    throw new AppError(
+      "You do not have permission to mark this request as fulfilled.",
+      403,
+    );
+  }
+
+  return await prisma.bloodPost.update({
+    where: { id: postId },
+    data: { isFulfilled: true },
+  });
+};
+
+export const deleteBloodPostService = async (
+  postId: string,
+  userId: string,
+  role?: string,
+) => {
+  const post = await prisma.bloodPost.findUnique({
+    where: { id: postId },
+  });
+
+  if (!post) {
+    throw new AppError("Blood request not found.", 404);
+  }
+
+  if (post.authorId !== userId && role !== "ADMIN") {
+    throw new AppError(
+      "You do not have permission to delete this request.",
+      403,
+    );
+  }
+
+  return await prisma.bloodPost.delete({
+    where: { id: postId },
+  });
+};
+</file>
+
+<file path="src/modules/event/event.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../utils/catchAsync";
+import * as eventService from "./event.service";
+
+export const createEvent = catchAsync(async (req: Request, res: Response) => {
+  const newEvent = await eventService.createEventService(req.body);
+
+  res.status(201).json({
+    success: true,
+    message: "Campus event created successfully.",
+    data: newEvent,
+  });
+});
+
+export const getEvents = catchAsync(async (req: Request, res: Response) => {
+  // 👇 Call the renamed service
+  const events = await eventService.getAllEventsService();
+
+  res.status(200).json({
+    success: true,
+    message: "Campus events retrieved successfully.",
+    data: events,
+  });
+});
+
+export const deleteEvent = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+
+  await eventService.deleteEventService(id);
+
+  res.status(200).json({
+    success: true,
+    message: "Campus event deleted successfully.",
+  });
+});
+</file>
+
+<file path="src/modules/event/event.service.ts">
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+import { CreateEventPayload } from "./event.schema";
+
+export const createEventService = async (data: CreateEventPayload) => {
+  return await prisma.campusEvent.create({
+    data: {
+      title: data.title,
+      description: data.description,
+      location: data.location,
+      eventDate: data.eventDate,
+    },
+  });
+};
+
+// 👇 Renamed to accurately reflect that it returns ALL events
+export const getAllEventsService = async () => {
+  return await prisma.campusEvent.findMany({
+    orderBy: {
+      eventDate: "asc",
+    },
+  });
+};
+
+export const deleteEventService = async (id: string) => {
+  const existingEvent = await prisma.campusEvent.findUnique({
+    where: { id },
+  });
+
+  if (!existingEvent) {
+    throw new AppError("Campus event not found.", 404);
+  }
+
+  return await prisma.campusEvent.delete({
+    where: { id },
+  });
+};
+</file>
+
+<file path="src/modules/forum/forum.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../utils/catchAsync";
+import * as forumService from "./forum.service";
+
+export const createPost = catchAsync(async (req: Request, res: Response) => {
+  const authorId = req.user.id;
+  const newPost = await forumService.createPostService(authorId, req.body);
+
+  res.status(201).json({
+    success: true,
+    message: "Forum post created successfully.",
+    data: newPost,
+  });
+});
+
+export const getFeed = catchAsync(async (req: Request, res: Response) => {
+  const posts = await forumService.getAllPostsService();
+
+  res.status(200).json({
+    success: true,
+    message: "Forum feed retrieved successfully.",
+    data: posts,
+  });
+});
+
+export const getThread = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const post = await forumService.getSinglePostService(id);
+
+  res.status(200).json({
+    success: true,
+    message: "Forum thread retrieved successfully.",
+    data: post,
+  });
+});
+
+export const replyToPost = catchAsync(async (req: Request, res: Response) => {
+  const postId = req.params.id as string;
+  const responderId = req.user.id;
+
+  const response = await forumService.createResponseService(
+    postId,
+    responderId,
+    req.body,
+  );
+
+  res.status(201).json({
+    success: true,
+    message: "Reply added successfully.",
+    data: response,
+  });
+});
+
+export const markResolved = catchAsync(async (req: Request, res: Response) => {
+  const postId = req.params.id as string;
+  const userId = req.user.id;
+  const role = req.user.role; // Extract role for Admin check
+
+  const resolvedPost = await forumService.resolvePostService(
+    postId,
+    userId,
+    role,
+  );
+
+  res.status(200).json({
+    success: true,
+    message: "Post marked as resolved successfully.",
+    data: resolvedPost,
+  });
+});
+
+// Update Post Controller
+export const updatePost = catchAsync(async (req: Request, res: Response) => {
+  const postId = req.params.id as string;
+  const userId = req.user.id;
+
+  const updatedPost = await forumService.updatePostService(
+    postId,
+    userId,
+    req.body,
+  );
+
+  res.status(200).json({
+    success: true,
+    message: "Forum post updated successfully.",
+    data: updatedPost,
+  });
+});
+
+// Delete Post Controller
+export const deletePost = catchAsync(async (req: Request, res: Response) => {
+  const postId = req.params.id as string;
+  const userId = req.user.id;
+  const role = req.user.role; // Extract role for Admin check
+
+  await forumService.deletePostService(postId, userId, role);
+
+  res.status(200).json({
+    success: true,
+    message: "Forum post deleted successfully.",
+  });
+});
+</file>
+
+<file path="src/modules/forum/forum.service.ts">
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+import {
+  CreatePostPayload,
+  CreateResponsePayload,
+  UpdatePostPayload,
+} from "./forum.schema";
+
+export const createPostService = async (
+  authorId: string,
+  data: CreatePostPayload,
+) => {
+  return await prisma.helpPost.create({
+    data: {
+      title: data.title,
+      description: data.description,
+      authorId,
+    },
+  });
+};
+
+export const getAllPostsService = async () => {
+  return await prisma.helpPost.findMany({
+    orderBy: {
+      createdAt: "desc",
+    },
+    include: {
+      author: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          role: true,
+          studentProfile: true,
+          teacherProfile: true,
+        },
+      },
+      _count: {
+        select: { responses: true },
+      },
+    },
+  });
+};
+
+export const getSinglePostService = async (id: string) => {
+  const post = await prisma.helpPost.findUnique({
+    where: { id },
+    include: {
+      author: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          role: true,
+          studentProfile: true,
+          teacherProfile: true,
+        },
+      },
+      responses: {
+        orderBy: { createdAt: "asc" },
+        include: {
+          responder: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+              role: true,
+              studentProfile: true,
+              teacherProfile: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!post) {
+    throw new AppError("Forum post not found.", 404);
+  }
+
+  return post;
+};
+
+export const createResponseService = async (
+  postId: string,
+  responderId: string,
+  data: CreateResponsePayload,
+) => {
+  const post = await prisma.helpPost.findUnique({
+    where: { id: postId },
+  });
+
+  if (!post) {
+    throw new AppError("Forum post not found.", 404);
+  }
+
+  return await prisma.helpResponse.create({
+    data: {
+      content: data.content,
+      postId,
+      responderId,
+    },
+  });
+};
+
+export const resolvePostService = async (
+  postId: string,
+  userId: string,
+  role: string,
+) => {
+  const post = await prisma.helpPost.findUnique({
+    where: { id: postId },
+  });
+
+  if (!post) {
+    throw new AppError("Forum post not found.", 404);
+  }
+
+  // Admin Override applied here
+  if (post.authorId !== userId && role !== "ADMIN") {
+    throw new AppError(
+      "You do not have permission to perform this action.",
+      403,
+    );
+  }
+
+  return await prisma.helpPost.update({
+    where: { id: postId },
+    data: { isResolved: true },
+  });
+};
+
+// Update Post Service
+export const updatePostService = async (
+  postId: string,
+  userId: string,
+  data: UpdatePostPayload,
+) => {
+  const post = await prisma.helpPost.findUnique({
+    where: { id: postId },
+  });
+
+  if (!post) {
+    throw new AppError("Forum post not found.", 404);
+  }
+
+  // Edit action is strictly for the original author (No Admin override requested here)
+  if (post.authorId !== userId) {
+    throw new AppError("You do not have permission to edit this post.", 403);
+  }
+
+  return await prisma.helpPost.update({
+    where: { id: postId },
+    data, // Prisma natively ignores undefined values
+  });
+};
+
+// Delete Post Service
+export const deletePostService = async (
+  postId: string,
+  userId: string,
+  role: string,
+) => {
+  const post = await prisma.helpPost.findUnique({
+    where: { id: postId },
+  });
+
+  if (!post) {
+    throw new AppError("Forum post not found.", 404);
+  }
+
+  // Admin Override applied here
+  if (post.authorId !== userId && role !== "ADMIN") {
+    throw new AppError(
+      "You do not have permission to perform this action.",
+      403,
+    );
+  }
+
+  return await prisma.helpPost.delete({
+    where: { id: postId },
+  });
+};
+</file>
+
+<file path="src/modules/hub/assessments/assessments.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../../middleware/auth.middleware";
+import { validateRequest } from "../../../middleware/validateRequest";
+import {
+  createAssessmentSchema,
+  submitAssessmentSchema,
+  gradeSubmissionSchema,
+  bulkGradeSchema,
+} from "./assessments.schema";
+import {
+  createAssessment,
+  getAssessments,
+  submitAssessment,
+  gradeSubmission,
+  bulkGrade,
+} from "./assessments.controller";
+
+const router = Router({ mergeParams: true });
+
+// 👇 FIX: Removed the "/hubs" prefix because it's already mounted inside hub.routes.ts
+router.post(
+  "/:id/assessments",
+  requireAuth,
+  validateRequest(createAssessmentSchema),
+  createAssessment,
+);
+router.get("/:id/assessments", requireAuth, getAssessments);
+
+// Submissions & Grading
+router.post(
+  "/:id/assessments/:assessmentId/submit",
+  requireAuth,
+  validateRequest(submitAssessmentSchema),
+  submitAssessment,
+);
+router.patch(
+  "/:id/submissions/:submissionId/grade",
+  requireAuth,
+  validateRequest(gradeSubmissionSchema),
+  gradeSubmission,
+);
+router.post(
+  "/:id/assessments/:assessmentId/bulk-grade",
+  requireAuth,
+  validateRequest(bulkGradeSchema),
+  bulkGrade,
+);
+
+export const assessmentRoutes = router;
+</file>
+
+<file path="src/modules/hub/assessments/assessments.service.ts">
+import { prisma } from "../../../lib/prisma";
+import { verifyHubRole } from "../hub.service";
+import { AppError } from "../../../utils/AppError";
+
+export const createAssessment = async (
+  userId: string,
+  hubId: string,
+  data: any,
+) => {
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
+  return await prisma.assessment.create({
+    data: { hubId, creatorId: userId, ...data },
+  });
+};
+
+export const getAssessments = async (hubId: string) => {
+  return await prisma.assessment.findMany({
+    where: { hubId },
+    orderBy: { deadline: "asc" },
+    include: { submissions: true },
+  });
+};
+
+export const submitAssessment = async (
+  userId: string,
+  assessmentId: string,
+  submittedUrl: string,
+) => {
+  const assessment = await prisma.assessment.findUnique({
+    where: { id: assessmentId },
+  });
+  if (!assessment) throw new AppError("Assessment not found", 404);
+
+  // 👈 FIX: Added "TA" and ensured "CR" are allowed to submit
+  await verifyHubRole(userId, assessment.hubId, ["STUDENT", "CR", "TA"]);
+
+  return await prisma.submission.upsert({
+    where: { assessmentId_studentId: { assessmentId, studentId: userId } },
+    update: { submittedUrl },
+    create: { assessmentId, studentId: userId, submittedUrl },
+  });
+};
+
+export const gradeSubmission = async (
+  userId: string,
+  submissionId: string,
+  marks: number,
+) => {
+  const submission = await prisma.submission.findUnique({
+    where: { id: submissionId },
+    include: { assessment: true },
+  });
+  if (!submission) throw new AppError("Submission not found", 404);
+
+  await verifyHubRole(userId, submission.assessment.hubId, ["TEACHER", "TA"]);
+
+  return await prisma.submission.update({
+    where: { id: submissionId },
+    data: { marks, gradedById: userId },
+  });
+};
+
+export const bulkGrade = async (
+  userId: string,
+  assessmentId: string,
+  grades: { studentId: string; marks: number }[],
+) => {
+  const assessment = await prisma.assessment.findUnique({
+    where: { id: assessmentId },
+  });
+  if (!assessment) throw new AppError("Assessment not found", 404);
+
+  await verifyHubRole(userId, assessment.hubId, ["TEACHER", "CR", "TA"]);
+
+  return await prisma.$transaction(
+    grades.map((grade) =>
+      prisma.submission.upsert({
+        where: {
+          assessmentId_studentId: { assessmentId, studentId: grade.studentId },
+        },
+        update: { marks: grade.marks, gradedById: userId },
+        create: {
+          assessmentId,
+          studentId: grade.studentId,
+          marks: grade.marks,
+          gradedById: userId,
+        },
+      }),
+    ),
+  );
+};
+</file>
+
+<file path="src/modules/hub/hub.controller.ts">
+import { Request, Response } from "express";
+import { catchAsync } from "../../utils/catchAsync";
+import * as hubService from "./hub.service";
+
+export const createHub = catchAsync(async (req: Request, res: Response) => {
+  const hub = await hubService.createHubService(req.user.id, req.body);
+  res
+    .status(201)
+    .json({ success: true, message: "Hub created successfully", data: hub });
+});
+
+export const getAvailableTeachers = catchAsync(
+  async (req: Request, res: Response) => {
+    const teachers = await hubService.getAvailableTeachersService();
+    res.status(200).json({ success: true, data: teachers });
+  },
+);
+
+export const joinHub = catchAsync(async (req: Request, res: Response) => {
+  const member = await hubService.joinHubService(
+    req.user.id,
+    req.body.joinCode,
+  );
+  res
+    .status(200)
+    .json({ success: true, message: "Joined hub successfully", data: member });
+});
+
+export const getMyHubs = catchAsync(async (req: Request, res: Response) => {
+  const hubs = await hubService.getMyHubsService(req.user.id);
+  res.status(200).json({ success: true, data: hubs });
+});
+
+export const getHubDetails = catchAsync(async (req: Request, res: Response) => {
+  const hub = await hubService.getHubDetailsService(req.params.id as string);
+  res.status(200).json({ success: true, data: hub });
+});
+
+export const updateMemberRole = catchAsync(
+  async (req: Request, res: Response) => {
+    const member = await hubService.updateMemberRoleService(
+      req.user.id,
+      req.params.id as string,
+      req.params.memberId as string,
+      req.body.role,
+    );
+    res
+      .status(200)
+      .json({ success: true, message: "Member role updated", data: member });
+  },
+);
+
+// 👈 NEW: Controller for Leave/Remove
+export const removeMember = catchAsync(async (req: Request, res: Response) => {
+  await hubService.removeMemberService(
+    req.user.id,
+    req.params.id as string,
+    req.params.memberId as string,
+  );
+
+  res.status(200).json({
+    success: true,
+    message: "Member removed from the hub successfully.",
+  });
+});
+
+export const updateHub = catchAsync(async (req: Request, res: Response) => {
+  const hubId = req.params.id as string;
+  const userId = req.user.id;
+
+  const updatedHub = await hubService.updateHubService(userId, hubId, req.body);
+
+  res.status(200).json({
+    success: true,
+    message: "Hub updated successfully",
+    data: updatedHub,
+  });
+});
+
+export const archiveHub = catchAsync(async (req: Request, res: Response) => {
+  const hub = await hubService.archiveHubService(
+    req.user.id,
+    req.params.id as string,
+    req.body.isArchived,
+  );
+  res
+    .status(200)
+    .json({ success: true, message: "Hub archive status updated", data: hub });
+});
+
+export const deleteHub = catchAsync(async (req: Request, res: Response) => {
+  await hubService.deleteHubService(req.user.id, req.params.id as string);
+
+  res.status(200).json({
+    success: true,
+    message: "Course Hub and all associated data deleted successfully.",
+  });
+});
+</file>
+
+<file path="src/modules/hub/hub.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../middleware/auth.middleware";
+import { validateRequest } from "../../middleware/validateRequest";
+import {
+  createHubSchema,
+  joinHubSchema,
+  updateMemberRoleSchema,
+  archiveHubSchema,
+  updateHubSchema,
+} from "./hub.schema";
+import {
+  createHub,
+  joinHub,
+  getMyHubs,
+  getHubDetails,
+  updateMemberRole,
+  removeMember, // 👈 Import new controller
+  archiveHub,
+  getAvailableTeachers,
+  updateHub,
+  deleteHub,
+} from "./hub.controller";
+
+import { resourceRoutes } from "../hub/resources/resources.routes";
+import { contentRoutes } from "../hub/content/content.routes";
+import { assessmentRoutes } from "./assessments/assessments.routes";
+
+const router = Router();
+
+// --- Core Hub Routes ---
+router.post("/", requireAuth, validateRequest(createHubSchema), createHub);
+router.post("/join", requireAuth, validateRequest(joinHubSchema), joinHub);
+router.get("/teachers", requireAuth, getAvailableTeachers);
+router.get("/my", requireAuth, getMyHubs);
+router.get("/:id", requireAuth, getHubDetails);
+
+router.patch("/:id", requireAuth, validateRequest(updateHubSchema), updateHub);
+router.patch(
+  "/:id/members/:memberId/role",
+  requireAuth,
+  validateRequest(updateMemberRoleSchema),
+  updateMemberRole,
+);
+
+// 👈 NEW: Add DELETE route for members
+router.delete("/:id/members/:memberId", requireAuth, removeMember);
+router.delete("/:id", requireAuth, deleteHub);
+
+router.patch(
+  "/:id/archive",
+  requireAuth,
+  validateRequest(archiveHubSchema),
+  archiveHub,
+);
+
+// Mount the Sub-Routes directly onto the Hub Router
+router.use("/", resourceRoutes);
+router.use("/", contentRoutes);
+router.use("/", assessmentRoutes);
+
+export const hubRoutes = router;
+</file>
+
+<file path="src/modules/hub/hub.schema.ts">
+import { z } from "zod";
+
+export const createHubSchema = z.object({
+  body: z.object({
+    courseCode: z.string().min(1, "Course code is required"),
+    courseName: z.string().min(1, "Course name is required"),
+    credit: z.number().positive(),
+    termOffer: z.string().min(1, "Term offer is required"),
+    weeklyClassSchedule: z
+      .array(
+        z.object({
+          day: z.string(),
+          startTime: z.string(),
+          endTime: z.string(),
+          room: z.string().optional(),
+        }),
+      )
+      .min(1, "At least one class schedule is required"),
+    department: z.string().min(1, "Department is required"),
+    batch: z.string().min(1, "Batch is required"),
+    semesterNumber: z.number().positive(),
+    teacherId: z.string().optional(),
+  }),
+});
+
+export const joinHubSchema = z.object({
+  body: z.object({
+    joinCode: z
+      .string()
+      .length(6, { message: "Join code must be exactly 6 characters" }),
+  }),
+});
+
+export const updateMemberRoleSchema = z.object({
+  body: z.object({
+    role: z.enum(["TEACHER", "CR", "TA", "STUDENT"]),
+  }),
+});
+
+export const updateHubSchema = z.object({
+  body: z.object({
+    courseName: z.string().optional(),
+    department: z.string().optional(),
+    batch: z.string().optional(),
+    termOffer: z.string().optional(),
+
+    weeklyClassSchedule: z.any().optional(),
+
+    isReviewOpen: z.boolean().optional(),
+
+    termExams: z
+      .array(
+        z.object({
+          type: z
+            .string()
+            .min(1, "Exam type is required (e.g., Midterm, Final)"),
+          date: z.string().optional(),
+          time: z.string().optional(),
+          room: z.string().optional(),
+        }),
+      )
+      .optional(),
+  }),
+});
+
+export type UpdateHubPayload = z.infer<typeof updateHubSchema>["body"];
+
+export const archiveHubSchema = z.object({
+  body: z.object({
+    isArchived: z.boolean(),
+  }),
+});
+
+export type CreateHubPayload = z.infer<typeof createHubSchema>["body"];
+</file>
+
+<file path="src/modules/hub/hub.service.ts">
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+import { CreateHubPayload, UpdateHubPayload } from "./hub.schema";
+
+// 🛡️ Centralized Authorization Helper
+export const verifyHubRole = async (
+  userId: string,
+  hubId: string,
+  allowedRoles: string[],
+) => {
+  const member = await prisma.hubMember.findUnique({
+    where: { userId_hubId: { userId, hubId } },
+  });
+  if (!member || !allowedRoles.includes(member.role)) {
+    throw new AppError(
+      "You do not have permission to perform this action in this hub.",
+      403,
+    );
+  }
+  return member;
+};
+
+export const getAvailableTeachersService = async () => {
+  return await prisma.user.findMany({
+    where: { role: "TEACHER" },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      teacherProfile: { select: { department: true, designation: true } },
+    },
+    orderBy: { name: "asc" },
+  });
+};
+
+const generateJoinCode = () =>
+  Math.random().toString(36).substring(2, 8).toUpperCase();
+
+export const createHubService = async (
+  userId: string,
+  data: CreateHubPayload,
+) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { studentProfile: true },
+  });
+
+  if (!user) throw new AppError("User not found", 404);
+
+  const isCR = user.studentProfile?.isCR === true;
+  const isTeacher = user.role === "TEACHER";
+
+  if (!isCR && !isTeacher) {
+    throw new AppError(
+      "Only Teachers and Class Representatives can create a Hub.",
+      403,
+    );
+  }
+
+  if (isCR && !data.teacherId) {
+    throw new AppError(
+      "CR must assign a teacher (teacherId) when creating a hub.",
+      400,
+    );
+  }
+
+  const joinCode = generateJoinCode();
+
+  return await prisma.$transaction(async (tx) => {
+    const hub = await tx.courseHub.create({
+      data: {
+        courseCode: data.courseCode,
+        courseName: data.courseName,
+        credit: data.credit,
+        termOffer: data.termOffer,
+        weeklyClassSchedule: data.weeklyClassSchedule as any,
+        department: data.department,
+        batch: data.batch,
+        semesterNumber: data.semesterNumber,
+        joinCode,
+      },
+    });
+
+    // Add Creator to the Hub
+    await tx.hubMember.create({
+      data: { userId, hubId: hub.id, role: isTeacher ? "TEACHER" : "CR" },
+    });
+
+    // Automatically add the assigned teacher if a CR created it
+    if (isCR && data.teacherId) {
+      await tx.hubMember.create({
+        data: { userId: data.teacherId, hubId: hub.id, role: "TEACHER" },
+      });
+    }
+    return hub;
+  });
+};
+
+export const joinHubService = async (userId: string, joinCode: string) => {
+  const hub = await prisma.courseHub.findUnique({ where: { joinCode } });
+  if (!hub) throw new AppError("Invalid join code.", 404);
+
+  // Prisma will throw a unique constraint error if they are already a member
+  return await prisma.hubMember.create({
+    data: { userId, hubId: hub.id, role: "STUDENT" },
+    include: { hub: true },
+  });
+};
+
+export const getMyHubsService = async (userId: string) => {
+  return await prisma.hubMember.findMany({
+    where: { userId },
+    include: {
+      hub: {
+        include: {
+          _count: { select: { members: true } },
+          members: {
+            where: { role: "TEACHER" },
+            select: { user: { select: { name: true } } },
+            take: 1, // Just grab the primary teacher
+          },
+          assessments: {
+            where: { deadline: { gt: new Date() } }, // Only future deadlines
+            orderBy: { deadline: "asc" },
+            take: 1, // Only get the absolute next upcoming assessment
+            select: { id: true, title: true, type: true, deadline: true },
+          },
+        },
+      },
+    },
+  });
+};
+
+export const getHubDetailsService = async (hubId: string) => {
+  const hub = await prisma.courseHub.findUnique({
+    where: { id: hubId },
+    include: {
+      members: {
+        include: {
+          // 👈 UPDATED: Added email and profile IDs
+          user: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+              role: true,
+              email: true,
+              studentProfile: { select: { studentId: true } },
+              teacherProfile: { select: { teacherId: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!hub) throw new AppError("Hub not found", 404);
+  return hub;
+};
+
+export const updateMemberRoleService = async (
+  userId: string,
+  hubId: string,
+  memberId: string,
+  newRole: any,
+) => {
+  const requesterMember = await verifyHubRole(userId, hubId, [
+    "TEACHER",
+    "CR",
+    "TA",
+  ]);
+
+  const targetMember = await prisma.hubMember.findUnique({
+    where: { id: memberId },
+  });
+
+  if (!targetMember) throw new AppError("Member not found.", 404);
+
+  // 👇 FIX: Prevent both CRs AND TAs from modifying Teacher roles
+  if (
+    (requesterMember.role === "CR" || requesterMember.role === "TA") &&
+    targetMember.role === "TEACHER"
+  ) {
+    throw new AppError(
+      "Class Representatives and TAs cannot modify Teacher roles.",
+      403,
+    );
+  }
+
+  if (
+    (requesterMember.role === "CR" || requesterMember.role === "TA") &&
+    newRole === "TEACHER"
+  ) {
+    throw new AppError(
+      "Class Representatives and TAs cannot assign Teacher roles.",
+      403,
+    );
+  }
+
+  return await prisma.hubMember.update({
+    where: { id: memberId },
+    data: { role: newRole },
+  });
+};
+
+export const removeMemberService = async (
+  userId: string,
+  hubId: string,
+  memberId: string,
+) => {
+  const targetMember = await prisma.hubMember.findUnique({
+    where: { id: memberId },
+  });
+
+  if (!targetMember) throw new AppError("Member not found.", 404);
+
+  // Allow users to remove themselves ("Leave Hub")
+  if (targetMember.userId === userId) {
+    return await prisma.hubMember.delete({ where: { id: memberId } });
+  }
+
+  // 👇 FIX: Allow TAs to kick students, but verify their role first
+  const requesterMember = await verifyHubRole(userId, hubId, [
+    "TEACHER",
+    "CR",
+    "TA",
+  ]);
+
+  // 👇 FIX: Security Check - CR and TA cannot kick a TEACHER
+  if (
+    (requesterMember.role === "CR" || requesterMember.role === "TA") &&
+    targetMember.role === "TEACHER"
+  ) {
+    throw new AppError(
+      "Class Representatives and TAs cannot remove Teachers from the hub.",
+      403,
+    );
+  }
+
+  return await prisma.hubMember.delete({
+    where: { id: memberId },
+  });
+};
+
+export const updateHubService = async (
+  userId: string,
+  hubId: string,
+  data: UpdateHubPayload,
+) => {
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
+
+  return await prisma.courseHub.update({
+    where: { id: hubId },
+    data,
+  });
+};
+
+export const archiveHubService = async (
+  userId: string,
+  hubId: string,
+  isArchived: boolean,
+) => {
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
+  return await prisma.courseHub.update({
+    where: { id: hubId },
+    data: { isArchived },
+  });
+};
+
+export const deleteHubService = async (userId: string, hubId: string) => {
+  // 👈 Only Teachers and CRs can delete a hub
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
+
+  return await prisma.courseHub.delete({
+    where: { id: hubId },
+  });
+};
+</file>
+
+<file path="src/modules/hub/reviews/reviews.service.ts">
+import { prisma } from "../../../lib/prisma";
+import { verifyHubRole } from "../hub.service";
+import { AppError } from "../../../utils/AppError";
+
+export const updateReviewSettings = async (
+  userId: string,
+  hubId: string,
+  data: any,
+) => {
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
+  return await prisma.courseHub.update({
+    where: { id: hubId },
+    data: {
+      isReviewOpen: data.isReviewOpen,
+      reviewQuestions: data.reviewQuestions,
+    },
+  });
+};
+
+export const submitReview = async (
+  userId: string,
+  hubId: string,
+  data: any,
+) => {
+  // 👈 FIX: Added role verification for reviews
+  await verifyHubRole(userId, hubId, ["STUDENT", "CR", "TA"]);
+
+  const hub = await prisma.courseHub.findUnique({ where: { id: hubId } });
+
+  // Checking either flag based on your schema migration
+  if (!hub || (!hub.isReviewOpen && !hub.isReviewOpen)) {
+    throw new AppError(
+      "Review submission is currently closed for this hub.",
+      403,
+    );
+  }
+
+  const existingReview = await prisma.courseReview.findUnique({
+    where: { hubId_studentId: { hubId, studentId: userId } },
+  });
+
+  if (existingReview) {
+    throw new AppError(
+      "You have already submitted a review for this course.",
+      409,
+    );
+  }
+
+  return await prisma.courseReview.create({
+    data: { hubId, studentId: userId, ...data },
+  });
+};
+
+export const getReviews = async (hubId: string) => {
+  const reviews = await prisma.courseReview.findMany({
+    where: { hubId },
+    include: {
+      student: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          email: true,
+          studentProfile: { select: { studentId: true } }, // 👈 ADDED THIS
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const totalReviews = reviews.length;
+  const averageRating =
+    totalReviews > 0
+      ? (
+          reviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews
+        ).toFixed(1)
+      : 0;
+
+  // Sanitize identifying information if anonymous
+  const sanitizedReviews = reviews.map((review) => {
+    if (review.isAnonymous) {
+      return {
+        ...review,
+        student: {
+          id: "HIDDEN",
+          name: "Anonymous Student",
+          email: "HIDDEN",
+          image: null,
+          studentProfile: null, // 👈 ADDED THIS
+        },
+      };
+    }
+    return review;
+  });
+
+  return {
+    reviews: sanitizedReviews,
+    totalReviews,
+    averageRating,
+  };
+};
+</file>
+
+<file path="src/server.ts">
+import app from "./app";
+import { prisma } from "./lib/prisma";
+import { envConfig } from "./config/env";
+
+const startServer = async () => {
+  try {
+    await prisma.$connect();
+    console.log("✅ PostgreSQL Database connected successfully via Prisma.");
+
+    app.listen(envConfig.PORT, () => {
+      console.log(
+        `🚀 SMUCT UniCompanion Backend running on http://localhost:${envConfig.PORT}`,
+      );
+      console.log(
+        `🔒 BetterAuth endpoints available at http://localhost:${envConfig.PORT}/api/auth`,
+      );
+    });
+  } catch (error) {
+    console.error("❌ Failed to start the server:");
+    console.error(error);
+
+    await prisma.$disconnect();
+    process.exit(1);
+  }
+};
+
+startServer();
+</file>
+
+<file path="src/modules/student/student.controller.ts">
+import { Request, Response } from "express";
+import * as studentService from "./student.service";
+import { catchAsync } from "../../utils/catchAsync";
+import { AppError } from "../../utils/AppError";
+
+export const onboardStudent = catchAsync(
+  async (req: Request, res: Response) => {
+    const userId = req.user.id;
+    const result = await studentService.onboardStudentService(userId, req.body);
+
+    res.status(201).json({
+      success: true,
+      message: "Student profile created successfully.",
+      data: result,
+    });
+  },
+);
+
+export const updateProfileImage = catchAsync(
+  async (req: Request, res: Response) => {
+    const userId = req.user.id;
+    const { imageUrl } = req.body;
+
+    const updatedUser = await studentService.updateProfileImageService(
+      userId,
+      imageUrl,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Profile image updated successfully.",
+      data: updatedUser,
+    });
+  },
+);
+
+export const getStudentProfile = catchAsync(
+  async (req: Request, res: Response) => {
+    const userId = req.user.id;
+    const userProfile = await studentService.getStudentProfileByUserId(userId);
+
+    if (!userProfile || !userProfile.studentProfile) {
+      throw new AppError("Student profile not found.", 404);
+    }
+
+    // Flatten response for mobile client consumption
+    const formattedProfile = {
+      id: userProfile.id,
+      name: userProfile.name,
+      email: userProfile.email,
+      image: userProfile.image,
+      phoneNumber: userProfile.phoneNumber,
+      bloodGroup: userProfile.bloodGroup,
+      role: userProfile.role,
+      ...userProfile.studentProfile,
+    };
+
+    res.status(200).json({
+      success: true,
+      message: "Profile retrieved successfully.",
+      data: formattedProfile,
+    });
+  },
+);
+
+export const updateProfile = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user.id;
+  const updatedProfile = await studentService.updateStudentProfileData(
+    userId,
+    req.body,
+  );
+
+  if (!updatedProfile) {
+    throw new AppError("Failed to retrieve updated profile.", 500);
+  }
+
+  const formattedProfile = {
+    id: updatedProfile.id,
+    name: updatedProfile.name,
+    email: updatedProfile.email,
+    image: updatedProfile.image,
+    phoneNumber: updatedProfile.phoneNumber,
+    bloodGroup: updatedProfile.bloodGroup,
+    role: updatedProfile.role,
+    ...updatedProfile.studentProfile,
+  };
+
+  res.status(200).json({
+    success: true,
+    message: "Profile updated successfully.",
+    data: formattedProfile,
+  });
+});
+</file>
+
+<file path="src/modules/student/student.routes.ts">
+import { Router } from "express";
+import { requireAuth } from "../../middleware/auth.middleware";
+import { validateRequest } from "../../middleware/validateRequest";
+import {
+  onboardStudentSchema,
+  updateProfileImageSchema,
+  updateProfileSchema,
+} from "./student.schema";
+import {
+  getStudentProfile,
+  onboardStudent,
+  updateProfile,
+  updateProfileImage,
+} from "./student.controller";
+
+const router = Router();
+
+router.post(
+  "/onboard",
+  requireAuth,
+  validateRequest(onboardStudentSchema),
+  onboardStudent,
+);
+
+router.patch(
+  "/profile/image",
+  requireAuth,
+  validateRequest(updateProfileImageSchema),
+  updateProfileImage,
+);
+
+router.get("/profile", requireAuth, getStudentProfile);
+
+router.patch(
+  "/profile",
+  requireAuth,
+  validateRequest(updateProfileSchema),
+  updateProfile,
+);
+
+export const studentRoutes = router;
+</file>
+
+<file path="src/modules/student/student.schema.ts">
+import { z } from "zod";
+
+export const onboardStudentSchema = z.object({
+  body: z.object({
+    studentId: z.string().min(1, "Student ID is required"),
+    faculty: z.string().min(1, "Faculty is required"),
+    department: z.string().min(1, "Department is required"),
+    program: z.string().min(1, "Program is required"),
+    batch: z.string().min(1, "Batch is required"),
+    currentSemester: z
+      .number()
+      .min(1)
+      .max(12, "Semester must be between 1 and 12"),
+    section: z.string().min(1, "Section is required"),
+  }),
+});
+
+export const updateProfileImageSchema = z.object({
+  body: z.object({
+    imageUrl: z.string().url("Must be a valid URL"),
+  }),
+});
+
+export const updateProfileSchema = z.object({
+  body: z.object({
+    name: z.string().optional(),
+    phoneNumber: z.string().optional(),
+    batch: z.string().optional(),
+    currentSemester: z.number().min(1).max(12).optional(),
+    section: z.string().optional(),
+    bloodGroup: z
+      .enum([
+        "A_POSITIVE",
+        "A_NEGATIVE",
+        "B_POSITIVE",
+        "B_NEGATIVE",
+        "AB_POSITIVE",
+        "AB_NEGATIVE",
+        "O_POSITIVE",
+        "O_NEGATIVE",
+      ])
+      .optional(),
+
+    faculty: z.string().optional(),
+    program: z.string().optional(),
+    skills: z.array(z.string()).optional(),
+    linkedInUrl: z
+      .string()
+      .url({ message: "Must be a valid URL" })
+      .or(z.literal(""))
+      .optional(),
+    personalWebsiteUrl: z
+      .string()
+      .url({ message: "Must be a valid URL" })
+      .or(z.literal(""))
+      .optional(),
+  }),
+});
+</file>
+
+<file path="src/modules/student/student.service.ts">
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+
+export type OnboardPayload = {
+  studentId: string;
+  faculty: string;
+  department: string;
+  program: string;
+  batch: string;
+  currentSemester: number;
+  section: string;
+};
+
+type UpdateProfilePayload = {
+  name?: string;
+  phoneNumber?: string;
+  bloodGroup?: any;
+  batch?: string;
+  currentSemester?: number;
+  section?: string;
+  skills?: string;
+  linkedInUrl?: string;
+  personalWebsiteUrl?: string;
+};
+
+export const onboardStudentService = async (
+  userId: string,
+  data: OnboardPayload,
+) => {
+  const existingProfile = await prisma.studentProfile.findUnique({
+    where: { userId },
+  });
+
+  if (existingProfile) {
+    throw new AppError("A student profile already exists for this user.", 409);
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: userId },
+      data: { role: "STUDENT" },
+    });
+
+    return await tx.studentProfile.create({
+      data: {
+        userId,
+        studentId: data.studentId,
+        faculty: data.faculty,
+        department: data.department,
+        program: data.program,
+        batch: data.batch,
+        currentSemester: data.currentSemester,
+        section: data.section,
+        isCR: false,
+        isTA: false,
+      },
+    });
+  });
+};
+
+export const updateProfileImageService = async (
+  userId: string,
+  imageUrl: string,
+) => {
+  return await prisma.user.update({
+    where: { id: userId },
+    data: { image: imageUrl },
+    select: { id: true, name: true, image: true },
+  });
+};
+
+export const getStudentProfileByUserId = async (userId: string) => {
+  return await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      image: true,
+      phoneNumber: true,
+      bloodGroup: true,
+      role: true,
+      studentProfile: {
+        select: {
+          studentId: true,
+          faculty: true,
+          department: true,
+          program: true,
+          batch: true,
+          currentSemester: true,
+          section: true,
+          isCR: true,
+          isTA: true,
+          skills: true,
+          linkedInUrl: true,
+          personalWebsiteUrl: true,
+        },
+      },
+    },
+  });
+};
+
+export const updateStudentProfileData = async (
+  userId: string,
+  data: UpdateProfilePayload,
+) => {
+  return await prisma.$transaction(async (tx) => {
+    // 1. User table updates
+    const userUpdateData: any = {};
+    if (data.name) userUpdateData.name = data.name;
+    if (data.phoneNumber !== undefined)
+      userUpdateData.phoneNumber = data.phoneNumber;
+    if (data.bloodGroup !== undefined)
+      userUpdateData.bloodGroup = data.bloodGroup;
+
+    if (Object.keys(userUpdateData).length > 0) {
+      await tx.user.update({
+        where: { id: userId },
+        data: userUpdateData,
+      });
+    }
+
+    // 2. StudentProfile table updates
+    const profileUpdateData: any = {};
+    if (data.batch) profileUpdateData.batch = data.batch;
+    if (data.currentSemester)
+      profileUpdateData.currentSemester = data.currentSemester;
+    if (data.section !== undefined) profileUpdateData.section = data.section;
+    if (data.skills !== undefined) profileUpdateData.skills = data.skills;
+    if (data.linkedInUrl !== undefined)
+      profileUpdateData.linkedInUrl = data.linkedInUrl;
+    if (data.personalWebsiteUrl !== undefined)
+      profileUpdateData.personalWebsiteUrl = data.personalWebsiteUrl;
+
+    if (Object.keys(profileUpdateData).length > 0) {
+      await tx.studentProfile.update({
+        where: { userId: userId },
+        data: profileUpdateData,
+      });
+    }
+
+    // Return merged updated data
+    return await getStudentProfileByUserId(userId);
+  });
+};
+</file>
+
+<file path="prisma/schema.prisma">
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==============================
+// ENUMS
+// ==============================
+
+enum SystemRole {
+  ADMIN
+  STUDENT
+  TEACHER
+}
+
+enum HubRole {
+  TEACHER
+  CR
+  TA
+  STUDENT
+}
+
+enum AssessmentType {
+  ASSIGNMENT
+  QUIZ
+  PRESENTATION
+}
+
+enum SubmissionType {
+  ONLINE
+  HAND
+}
+
+enum BloodGroup {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+}
+
+// ==============================
+// BETTER AUTH CORE SCHEMAS
+// ==============================
+
+model User {
+  id            String      @id @default(uuid())
+  email         String      @unique
+  emailVerified Boolean     @default(false)
+  name          String
+  image         String?
+  role          SystemRole?
+  phoneNumber   String?
+  bloodGroup    BloodGroup?
+
+  // Better Auth Relations
+  sessions Session[]
+  accounts Account[]
+
+  // 1-to-1 Profiles
+  studentProfile StudentProfile?
+  teacherProfile TeacherProfile?
+
+  // App Relations
+  hubs          HubMember[]
+  resources     Resource[]
+  createdTasks  Assessment[]   @relation("CreatedAssessments")
+  submissions   Submission[]
+  gradedWork    Submission[]   @relation("GradedSubmissions")
+  helpPosts     HelpPost[]
+  helpResponses HelpResponse[]
+  bloodPosts    BloodPost[]
+  reviews       CourseReview[]
+
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  bloodResponses       BloodResponse[]
+  complaints           Complaint[]
+  fieldBookings        FieldBooking[]
+  hubAnnouncements     HubAnnouncement[]
+  hubDiscussions       HubDiscussion[]
+  hubDiscussionReplies HubDiscussionReply[]
+  announcementComments AnnouncementComment[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String? // Hashed password for credentials provider
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ==============================
+// ROLE-SPECIFIC PROFILES
+// ==============================
+
+model StudentProfile {
+  id        String @id @default(uuid())
+  userId    String @unique
+  studentId String @unique
+
+  faculty         String
+  department      String
+  program         String
+  batch           String
+  currentSemester Int
+  section         String
+
+  isCR Boolean @default(false)
+  isTA Boolean @default(false)
+
+  skills             String[]
+  linkedInUrl        String?
+  personalWebsiteUrl String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TeacherProfile {
+  id        String @id @default(uuid())
+  userId    String @unique
+  teacherId String @unique
+
+  designation String
+  department  String
+  faculty     String
+
+  officeRoom        String?
+  consultationHours String?
+
+  expertiseFields        String[]
+  academicQualifications Json?
+
+  linkedInUrl        String?
+  personalWebsiteUrl String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==============================
+// COURSE HUB MODULE
+// ==============================
+
+model CourseHub {
+  id                  String  @id @default(uuid())
+  courseCode          String
+  courseName          String
+  credit              Float
+  termOffer           String
+  weeklyClassSchedule Json
+  termExams           Json? // 👈 NEW: Consolidated exam data
+  joinCode            String  @unique
+  isArchived          Boolean @default(false)
+  department          String
+  batch               String
+  semesterNumber      Int
+
+  isReviewOpen    Boolean @default(false)
+  reviewQuestions Json?
+
+  members       HubMember[]
+  resources     Resource[]
+  assessments   Assessment[]
+  reviews       CourseReview[]
+  announcements HubAnnouncement[]
+  discussions   HubDiscussion[]
+
+  createdAt DateTime @default(now())
+}
+
+model HubMember {
+  id       String  @id @default(uuid())
+  userId   String
+  hubId    String
+  role     HubRole
+  isActive Boolean @default(true)
+
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hub  CourseHub @relation(fields: [hubId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, hubId])
+}
+
+// ==============================
+// HUB ANNOUNCEMENTS & DISCUSSIONS
+// ==============================
+
+model HubAnnouncement {
+  id                String   @id @default(uuid())
+  hubId             String
+  creatorId         String
+  content           String
+  attachedLinkUrl   String? // 👈 NEW
+  attachedLinkTitle String? // 👈 NEW
+  createdAt         DateTime @default(now())
+
+  hub      CourseHub             @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  creator  User                  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  comments AnnouncementComment[] // 👈 NEW
+}
+
+model AnnouncementComment {
+  id             String   @id @default(uuid())
+  content        String
+  announcementId String
+  authorId       String
+  createdAt      DateTime @default(now())
+
+  announcement HubAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  author       User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model HubDiscussion {
+  id        String   @id @default(uuid())
+  hubId     String
+  authorId  String
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+
+  hub     CourseHub            @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  author  User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  replies HubDiscussionReply[]
+}
+
+model HubDiscussionReply {
+  id           String   @id @default(uuid())
+  discussionId String
+  authorId     String
+  content      String
+  createdAt    DateTime @default(now())
+
+  discussion HubDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  author     User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+// ==============================
+// ASSESSMENTS & GRADING
+// ==============================
+
+model Assessment {
+  id             String          @id @default(uuid())
+  hubId          String
+  creatorId      String
+  title          String
+  description    String?
+  type           AssessmentType
+  submissionType SubmissionType?
+  deadline       DateTime
+  totalMarks     Float
+
+  hub         CourseHub    @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  creator     User         @relation("CreatedAssessments", fields: [creatorId], references: [id])
+  submissions Submission[]
+  createdAt   DateTime     @default(now())
+}
+
+model Submission {
+  id           String  @id @default(uuid())
+  assessmentId String
+  studentId    String
+  submittedUrl String?
+  marks        Float?
+  gradedById   String?
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  student    User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  gradedBy   User?      @relation("GradedSubmissions", fields: [gradedById], references: [id])
+  createdAt  DateTime   @default(now())
+
+  @@unique([assessmentId, studentId])
+}
+
+// ==============================
+// RESOURCES & DIGITAL VAULT
+// ==============================
+
+model Resource {
+  id            String  @id @default(uuid())
+  title         String
+  driveUrl      String
+  uploaderId    String
+  hubId         String? // If Null -> Global Vault. If present -> Local Hub
+  isStudentNote Boolean @default(false)
+  rating        Float   @default(0) // Vault Promotion Threshold
+
+  uploader  User       @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+  hub       CourseHub? @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+}
+
+// ==============================
+// COMMUNITY & POSTS
+// ==============================
+
+model HelpPost {
+  id          String         @id @default(uuid())
+  authorId    String
+  title       String
+  description String
+  isResolved  Boolean        @default(false)
+  author      User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  responses   HelpResponse[]
+  createdAt   DateTime       @default(now())
+}
+
+model HelpResponse {
+  id          String   @id @default(uuid())
+  postId      String
+  responderId String
+  content     String
+  post        HelpPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  responder   User     @relation(fields: [responderId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+}
+
+model BloodPost {
+  id               String          @id @default(uuid())
+  authorId         String
+  patientName      String
+  patientCondition String
+  bloodGroup       BloodGroup
+  location         String
+  urgency          String
+  contactPhone     String
+  isFulfilled      Boolean         @default(false)
+  author           User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  responses        BloodResponse[]
+  createdAt        DateTime        @default(now())
+}
+
+model BloodResponse {
+  id          String  @id @default(uuid())
+  postId      String
+  responderId String
+  message     String? // Optional short message like "I am nearby and can come now"
+
+  post      BloodPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  responder User      @relation(fields: [responderId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+}
+
+// ==============================
+// RATINGS & GLOBAL ADMIN
+// ==============================
+
+model CourseReview {
+  id          String  @id @default(uuid())
+  hubId       String
+  studentId   String
+  rating      Int
+  comment     String?
+  isAnonymous Boolean @default(true)
+  answers     Json?
+
+  hub       CourseHub @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  student   User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@unique([hubId, studentId]) // One review per student per hub
+}
+
+model BusSchedule {
+  id            String   @id @default(uuid())
+  route         String
+  busNumber     String
+  departureTime String
+  stops         String[]
+  createdAt     DateTime @default(now())
+}
+
+// ==============================
+// ACADEMIC CALENDAR MODULE
+// ==============================
+
+model AcademicCalendar {
+  id                String          @id @default(uuid())
+  title             String
+  semester          String
+  isActive          Boolean         @default(true)
+  isGlobal          Boolean         @default(false)
+  targetFaculties   String[]
+  targetDepartments String[]
+  events            CalendarEvent[] // 👈 This connects the events
+  createdAt         DateTime        @default(now())
+}
+
+model CalendarEvent {
+  id          String           @id @default(uuid())
+  calendarId  String
+  calendar    AcademicCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime?
+  isHoliday   Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+}
+
+// ==============================
+// GLOBAL NOTICEBOARD & EVENTS
+// ==============================
+
+model Notice {
+  id                String   @id @default(uuid())
+  referenceNo       String?
+  title             String
+  body              String
+  issuerName        String
+  issuerDesignation String
+  copyTo            String[]
+
+  issueDate DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CampusEvent {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  location    String? // e.g., "Auditorium", "Permanent Campus Ground"
+  eventDate   DateTime // Admin specified date and time
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==============================
+// COMPLAINTS MANAGEMENT
+// ==============================
+enum ComplaintStatus {
+  PENDING
+  RESOLVED
+  REJECTED
+}
+
+model Complaint {
+  id          String          @id @default(uuid())
+  userId      String
+  title       String
+  description String
+  category    String // e.g., "Facilities", "Academic", "Hostel", "Other"
+  status      ComplaintStatus @default(PENDING)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==============================
+// ALUMNI DIRECTORY
+// ==============================
+model Alumni {
+  id                 String   @id @default(uuid())
+  name               String
+  email              String?
+  batch              String
+  graduationYear     Int
+  department         String
+  degree             String?
+  currentCompany     String?
+  currentPosition    String?
+  skills             String[]
+  linkedInUrl        String?
+  personalWebsiteUrl String?
+  image              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==============================
+// FIELD BOOKING
+// ==============================
+enum BookingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model FieldBooking {
+  id          String        @id @default(uuid())
+  userId      String
+  purpose     String // e.g., "CSE Dept Football Practice"
+  bookingDate DateTime
+  startTime   DateTime
+  endTime     DateTime
+  status      BookingStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// A single row table to control if the field is open or closed globally
+model FieldSetting {
+  id            String   @id @default(uuid())
+  isBookingOpen Boolean  @default(true)
+  closedNotice  String? // The notice shown when booking is disabled
+  updatedAt     DateTime @updatedAt
+}
+</file>
+
+<file path="src/app.ts">
+import express, { Application, Request, Response } from "express";
+import cors from "cors";
+import { toNodeHandler } from "better-auth/node";
+import { auth } from "./lib/auth";
+import { studentRoutes } from "./modules/student/student.routes";
+import { globalErrorHandler } from "./middleware/globalErrorHandler";
+import { teacherRoutes } from "./modules/teacher/teacher.routes";
+import { calendarRoutes } from "./modules/calendar/calendar.routes";
+import { busRoutes } from "./modules/bus/bus.routes";
+import { noticeRoutes } from "./modules/notice/notice.routes";
+import { eventRoutes } from "./modules/event/event.routes";
+import { userRoutes } from "./modules/user/user.routes";
+import { forumRoutes } from "./modules/forum/forum.routes";
+import { bloodRoutes } from "./modules/blood/blood.routes";
+import { directoryRoutes } from "./modules/directory/directory.routes";
+import { complaintRoutes } from "./modules/complaint/complaint.routes";
+import { alumniRoutes } from "./modules/alumni/alumni.routes";
+import { fieldRoutes } from "./modules/field/field.routes";
+import { hubRoutes } from "./modules/hub/hub.routes";
+import { contentRoutes } from "./modules/hub/content/content.routes";
+import { assessmentRoutes } from "./modules/hub/assessments/assessments.routes";
+import { reviewRoutes } from "./modules/hub/reviews/reviews.routes";
+
+const app: Application = express();
+
+app.use(
+  cors({
+    origin: ["*", "http://192.168.0.102:8081", "http://192.168.0.100"],
+    credentials: true,
+  }),
+);
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.all("/api/auth/{*any}", toNodeHandler(auth));
+
+app.get("/health", (req: Request, res: Response) => {
+  res.status(200).json({
+    status: "ok",
+    message: "SMUCT UniCompanion Engine is online",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.use("/api/students", studentRoutes);
+app.use("/api/teachers", teacherRoutes);
+app.use("/api/calendars", calendarRoutes);
+app.use("/api/buses", busRoutes);
+app.use("/api/notices", noticeRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/events", eventRoutes);
+app.use("/api/forum", forumRoutes);
+app.use("/api/blood", bloodRoutes);
+app.use("/api/directory", directoryRoutes);
+app.use("/api/complaints", complaintRoutes);
+app.use("/api/alumni", alumniRoutes);
+app.use("/api/field", fieldRoutes);
+
+// 2. MOUNT THE HUB ROUTES
+app.use("/api/hubs", hubRoutes); // Mounts base hub routes to /api/hubs
+app.use("/api", contentRoutes); // Mounts nested routes like /api/hubs/:id/discussions
+app.use("/api", assessmentRoutes);
+app.use("/api", reviewRoutes);
+
+// Global Error Handler
+app.use(globalErrorHandler);
+
+export default app;
+</file>
+
+</files>

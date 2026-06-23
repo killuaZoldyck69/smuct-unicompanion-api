@@ -21,14 +21,16 @@ const envSchema = z.object({
     "Direct connection URL for Prisma migrations",
   ),
 
-  BETTER_AUTH_SECRET: z
-    .string()
-    .min(
-      32,
-      "Better Auth Secret must be at least 32 characters long for security",
-    ),
+  BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: urlValidator,
   TRUSTED_ORIGINS: z.string().optional(),
+
+  FRONTEND_URL: urlValidator,
+  SMTP_HOST: z.string().default("smtp.gmail.com"),
+  SMTP_PORT: z.coerce.number().default(465),
+  SMTP_USER: z.string().email(),
+  SMTP_PASS: z.string().min(16),
+  EMAIL_FROM: z.string().email(),
 
   PORT: z.coerce.number().default(5000),
   NODE_ENV: z
