@@ -37,6 +37,28 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.get("/api/auth/redirect-to-app", (req: Request, res: Response) => {
+  const { token, type } = req.query; // e.g., type = "reset-password" or "verify-email"
+
+  // Construct the deep link for your mobile app
+  const deepLink = `smuct-unicompanion://${type}?token=${encodeURIComponent(token as string)}`;
+
+  res.send(`
+    <html>
+      <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh;">
+        <div style="text-align: center;">
+          <p>Redirecting you to the app...</p>
+<a href="${deepLink}" style="font-size: 20px; color: blue; padding: 20px; display: block;">
+  Click here if you are not redirected automatically.
+</a>        </div>
+        <script>
+          window.location.href = "${deepLink}";
+        </script>
+      </body>
+    </html>
+  `);
+});
+
 app.all("/api/auth/{*any}", toNodeHandler(auth));
 
 app.get("/health", (req: Request, res: Response) => {

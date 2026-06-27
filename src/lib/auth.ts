@@ -32,17 +32,16 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: true,
     sendResetPassword: async ({ user, url, token }) => {
-      const resetLink = `${envConfig.FRONTEND_URL}/reset-password?token=${encodeURIComponent(token)}`;
+      // Point to the redirector URL, pass 'reset-password' as the 'type'
+      const resetLink = `${envConfig.FRONTEND_URL}?token=${encodeURIComponent(token)}&type=reset-password`;
 
       await sendEmail({
         to: user.email,
         subject: "Reset Your Password - SMUCT UniCompanion",
         html: `
-          <h2>Password Reset Request</h2>
-          <p>Hi ${user.name},</p>
-          <p>Click the link below to reset your password. If you didn't request this, safely ignore this email.</p>
-          <a href="${resetLink}">Reset Password</a>
-        `,
+      <h2>Password Reset Request</h2>
+      <a href="${resetLink}" style="...">Reset Password</a>
+    `,
       });
     },
   },
@@ -52,17 +51,16 @@ export const auth = betterAuth({
     sendVerificationEmail: async ({ user, url, token }) => {
       if ((user as any).role === "TEACHER") return;
 
-      const verificationLink = `${envConfig.FRONTEND_URL}/verify-email?token=${encodeURIComponent(token)}`;
+      // Point to the redirector URL, pass 'verify-email' as the 'type'
+      const verificationLink = `${envConfig.FRONTEND_URL}?token=${encodeURIComponent(token)}&type=verify-email`;
 
       await sendEmail({
         to: user.email,
         subject: "Welcome to SMUCT UniCompanion! Verify your email",
         html: `
-          <h2>Welcome aboard, ${user.name}! 🚀</h2>
-          <p>Your student account has been created successfully.</p>
-          <p>Please verify your email address to log in and access the Campus Hub:</p>
-          <a href="${verificationLink}">Verify My Email</a>
-        `,
+      <h2>Welcome aboard! 🚀</h2>
+      <a href="${verificationLink}" style="...">Verify My Email</a>
+    `,
       });
     },
   },
