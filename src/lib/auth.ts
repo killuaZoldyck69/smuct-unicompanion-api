@@ -6,17 +6,19 @@ import { bearer } from "better-auth/plugins";
 import { sendEmail } from "./email";
 import { envConfig } from "../config/env";
 
+// 👇 Parse origins safely from the .env string
+const parsedTrustedOrigins = envConfig.TRUSTED_ORIGINS
+  ? envConfig.TRUSTED_ORIGINS.split(",").map((url) => url.trim())
+  : [];
+
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
 
-  // 👇 NEW: Add trustedOrigins here 👇
   trustedOrigins: [
-    "http://localhost:8081",
-    "http://192.168.0.102:8081", // Your current Expo network IP
-    "smuct-unicompanion://", // Your deep link scheme
-    envConfig.FRONTEND_URL, // Dynamically trust whatever is in your .env
+    "smuct-unicompanion://",
+    envConfig.FRONTEND_URL,
+    ...parsedTrustedOrigins,
   ],
-  // 👆 ============================ 👆
 
   user: {
     additionalFields: {

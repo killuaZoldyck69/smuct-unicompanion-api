@@ -25,7 +25,11 @@ const app: Application = express();
 
 app.use(
   cors({
-    origin: ["*", "http://192.168.0.102:8081", "http://192.168.0.100"],
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+
+      return callback(null, true);
+    },
     credentials: true,
   }),
 );
