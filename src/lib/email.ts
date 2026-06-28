@@ -1,15 +1,4 @@
-// src/lib/email.ts
-import nodemailer from "nodemailer";
 import { envConfig } from "../config/env";
-
-// Configure Nodemailer for Gmail
-const transporter = nodemailer.createTransport({
-  service: "gmail", // Nodemailer has built-in support for Gmail
-  auth: {
-    user: envConfig.SMTP_USER,
-    pass: envConfig.SMTP_PASS,
-  },
-});
 
 type SendEmailOptions = {
   to: string;
@@ -19,19 +8,41 @@ type SendEmailOptions = {
 
 export const sendEmail = async (options: SendEmailOptions) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"SMUCT UniCompanion" <${envConfig.EMAIL_FROM}>`,
-      to: options.to,
-      subject: options.subject,
-      html: options.html,
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "api-key": envConfig.BREVO_API_KEY,
+      },
+      body: JSON.stringify({
+        sender: {
+          name: "SMUCT UniCompanion",
+          email: "nh694225@gmail.com",
+        },
+        to: [
+          {
+            email: options.to,
+          },
+        ],
+        subject: options.subject,
+        htmlContent: options.html,
+      }),
     });
 
-    console.log(
-      `✅ Email sent successfully to ${options.to} (Message ID: ${info.messageId})`,
-    );
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error(`❌ Brevo API Error sending to ${options.to}:`, errorData);
+      return false;
+    }
+
+    console.log(`✅ Email sent successfully via Brevo to ${options.to}`);
     return true;
   } catch (error) {
-    console.error(`❌ Error sending email to ${options.to}:`, error);
+    console.error(
+      `❌ Network/Server Error sending email to ${options.to}:`,
+      error,
+    );
     return false;
   }
 };

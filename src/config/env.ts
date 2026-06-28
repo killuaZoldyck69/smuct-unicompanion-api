@@ -26,6 +26,8 @@ const envSchema = z.object({
   TRUSTED_ORIGINS: z.string().optional(),
 
   FRONTEND_URL: urlValidator,
+  BREVO_API_KEY: z.string().min(1, "Brevo API key is required"),
+
   SMTP_HOST: z.string().default("smtp.gmail.com"),
   SMTP_PORT: z.coerce.number().default(465),
   SMTP_USER: z.string().email(),
