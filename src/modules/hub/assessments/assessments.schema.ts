@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ASSESSMENT_TYPE_VALUES } from "../../../constants/enums";
 
 const datePreprocess = z.preprocess(
   (val) => {
@@ -13,7 +14,7 @@ export const createAssessmentSchema = z.object({
   body: z.object({
     title: z.string().min(1, "Title is required"),
     description: z.string().optional(),
-    type: z.enum(["ASSIGNMENT", "QUIZ", "PRESENTATION"]),
+    type: z.enum(ASSESSMENT_TYPE_VALUES),
     deadline: datePreprocess,
     totalMarks: z.number().positive(),
   }),
@@ -37,3 +38,14 @@ export const bulkGradeSchema = z.object({
     )
     .min(1, "Must provide at least one grade"),
 });
+
+export type CreateAssessmentPayload = z.infer<
+  typeof createAssessmentSchema
+>["body"];
+export type SubmitAssessmentPayload = z.infer<
+  typeof submitAssessmentSchema
+>["body"];
+export type GradeSubmissionPayload = z.infer<
+  typeof gradeSubmissionSchema
+>["body"];
+export type BulkGradePayload = z.infer<typeof bulkGradeSchema>["body"];

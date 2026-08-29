@@ -1,24 +1,31 @@
-import { prisma } from "../../../lib/prisma";
 import { verifyHubRole } from "../hub.service";
 import { AppError } from "../../../utils/AppError";
+import * as assessmentsRepository from "./assessments.repository";
+import { CreateAssessmentPayload } from "./assessments.schema";
 
 export const createAssessment = async (
   userId: string,
   hubId: string,
-  data: any,
+  data: CreateAssessmentPayload,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
-  return await prisma.assessment.create({
-    data: { hubId, creatorId: userId, ...data },
-  });
+  return await assessmentsRepository.createAssessment(userId, hubId, data);
 };
 
 export const getAssessments = async (hubId: string) => {
-  return await prisma.assessment.findMany({
-    where: { hubId },
-    orderBy: { deadline: "asc" },
-    include: { submissions: true },
-  });
+  return await assessmentsRepository.findAssessmentsByHubId(hubId);
+};
+
+export const getAssessmentSubmissions = async (
+  userId: string,
+  assessmentId: string,
+) => {
+  const assessment = await assessmentsRepository.findAssessmentById(assessmentId);
+  if (!assessment) throw new AppError("Assessment not found", 404);
+
+  await verifyHubRole(userId, assessment.hubId, ["TEACHER", "CR", "TA"]);
+
+  return await assessmentsRepository.findAssessmentSubmissions(assessmentId);
 };
 
 export const submitAssessment = async (
@@ -26,19 +33,16 @@ export const submitAssessment = async (
   assessmentId: string,
   submittedUrl: string,
 ) => {
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId },
-  });
+  const assessment = await assessmentsRepository.findAssessmentById(assessmentId);
   if (!assessment) throw new AppError("Assessment not found", 404);
 
-  // 👈 FIX: Added "TA" and ensured "CR" are allowed to submit
   await verifyHubRole(userId, assessment.hubId, ["STUDENT", "CR", "TA"]);
 
-  return await prisma.submission.upsert({
-    where: { assessmentId_studentId: { assessmentId, studentId: userId } },
-    update: { submittedUrl },
-    create: { assessmentId, studentId: userId, submittedUrl },
-  });
+  return await assessmentsRepository.upsertSubmission(
+    assessmentId,
+    userId,
+    submittedUrl,
+  );
 };
 
 export const gradeSubmission = async (
@@ -46,18 +50,16 @@ export const gradeSubmission = async (
   submissionId: string,
   marks: number,
 ) => {
-  const submission = await prisma.submission.findUnique({
-    where: { id: submissionId },
-    include: { assessment: true },
-  });
+  const submission = await assessmentsRepository.findSubmissionById(submissionId);
   if (!submission) throw new AppError("Submission not found", 404);
 
   await verifyHubRole(userId, submission.assessment.hubId, ["TEACHER", "TA"]);
 
-  return await prisma.submission.update({
-    where: { id: submissionId },
-    data: { marks, gradedById: userId },
-  });
+  return await assessmentsRepository.updateSubmissionGrade(
+    submissionId,
+    marks,
+    userId,
+  );
 };
 
 export const bulkGrade = async (
@@ -65,27 +67,14 @@ export const bulkGrade = async (
   assessmentId: string,
   grades: { studentId: string; marks: number }[],
 ) => {
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId },
-  });
+  const assessment = await assessmentsRepository.findAssessmentById(assessmentId);
   if (!assessment) throw new AppError("Assessment not found", 404);
 
   await verifyHubRole(userId, assessment.hubId, ["TEACHER", "CR", "TA"]);
 
-  return await prisma.$transaction(
-    grades.map((grade) =>
-      prisma.submission.upsert({
-        where: {
-          assessmentId_studentId: { assessmentId, studentId: grade.studentId },
-        },
-        update: { marks: grade.marks, gradedById: userId },
-        create: {
-          assessmentId,
-          studentId: grade.studentId,
-          marks: grade.marks,
-          gradedById: userId,
-        },
-      }),
-    ),
+  return await assessmentsRepository.bulkUpsertGrades(
+    assessmentId,
+    userId,
+    grades,
   );
 };

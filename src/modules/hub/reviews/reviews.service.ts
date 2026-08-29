@@ -1,43 +1,41 @@
-import { prisma } from "../../../lib/prisma";
 import { verifyHubRole } from "../hub.service";
 import { AppError } from "../../../utils/AppError";
+import * as reviewsRepository from "./reviews.repository";
+import {
+  SubmitReviewPayload,
+  UpdateReviewSettingsPayload,
+} from "./reviews.schema";
 
 export const updateReviewSettings = async (
   userId: string,
   hubId: string,
-  data: any,
+  data: UpdateReviewSettingsPayload,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
-  return await prisma.courseHub.update({
-    where: { id: hubId },
-    data: {
-      isReviewOpen: data.isReviewOpen,
-      reviewQuestions: data.reviewQuestions,
-    },
-  });
+  return await reviewsRepository.updateHubReviewSettings(hubId, data);
 };
 
 export const submitReview = async (
   userId: string,
   hubId: string,
-  data: any,
+  data: SubmitReviewPayload,
 ) => {
-  // 👈 FIX: Added role verification for reviews
   await verifyHubRole(userId, hubId, ["STUDENT", "CR", "TA"]);
 
-  const hub = await prisma.courseHub.findUnique({ where: { id: hubId } });
+  const hub = await reviewsRepository.findHubById(hubId);
 
-  // Checking either flag based on your schema migration
-  if (!hub || (!hub.isReviewOpen && !hub.isReviewOpen)) {
+  // Validate that reviews are enabled for this hub
+  if (!hub || !hub.isReviewOpen) {
     throw new AppError(
       "Review submission is currently closed for this hub.",
       403,
     );
   }
 
-  const existingReview = await prisma.courseReview.findUnique({
-    where: { hubId_studentId: { hubId, studentId: userId } },
-  });
+  const existingReview = await reviewsRepository.findExistingReview(
+    hubId,
+    userId,
+  );
 
   if (existingReview) {
     throw new AppError(
@@ -46,27 +44,11 @@ export const submitReview = async (
     );
   }
 
-  return await prisma.courseReview.create({
-    data: { hubId, studentId: userId, ...data },
-  });
+  return await reviewsRepository.createCourseReview(hubId, userId, data);
 };
 
 export const getReviews = async (hubId: string) => {
-  const reviews = await prisma.courseReview.findMany({
-    where: { hubId },
-    include: {
-      student: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-          email: true,
-          studentProfile: { select: { studentId: true } }, // 👈 ADDED THIS
-        },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const reviews = await reviewsRepository.findReviewsByHubId(hubId);
 
   const totalReviews = reviews.length;
   const averageRating =
@@ -86,7 +68,7 @@ export const getReviews = async (hubId: string) => {
           name: "Anonymous Student",
           email: "HIDDEN",
           image: null,
-          studentProfile: null, // 👈 ADDED THIS
+          studentProfile: null,
         },
       };
     }

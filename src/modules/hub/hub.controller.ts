@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../../utils/catchAsync";
 import * as hubService from "./hub.service";
+import { verifyHubRole } from "./hub.service";
 
 export const createHub = catchAsync(async (req: Request, res: Response) => {
   const hub = await hubService.createHubService(req.user.id, req.body);
@@ -32,6 +33,12 @@ export const getMyHubs = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getHubDetails = catchAsync(async (req: Request, res: Response) => {
+  await verifyHubRole(req.user.id, req.params.id as string, [
+    "TEACHER",
+    "CR",
+    "TA",
+    "STUDENT",
+  ]);
   const hub = await hubService.getHubDetailsService(req.params.id as string);
   res.status(200).json({ success: true, data: hub });
 });

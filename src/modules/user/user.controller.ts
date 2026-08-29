@@ -3,12 +3,13 @@ import { catchAsync } from "../../utils/catchAsync";
 import * as userService from "./user.service";
 
 export const getAllUsers = catchAsync(async (req: Request, res: Response) => {
-  const users = await userService.getAllUsersService();
+  const result = await userService.getAllUsersService(req.query);
 
   res.status(200).json({
     success: true,
     message: "Users retrieved successfully.",
-    data: users,
+    data: result.data,
+    meta: result.meta,
   });
 });
 

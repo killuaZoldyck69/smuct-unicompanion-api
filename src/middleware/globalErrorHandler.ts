@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import { Prisma } from "../../generated/prisma/client";
 import { AppError } from "../utils/AppError";
+import { envConfig } from "../config/env";
 
 export const globalErrorHandler = (
   err: any,
@@ -43,6 +44,6 @@ export const globalErrorHandler = (
     success: false,
     message,
     errorSources,
-    stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
+    stack: envConfig.NODE_ENV === "development" ? err.stack : undefined,
   });
 };

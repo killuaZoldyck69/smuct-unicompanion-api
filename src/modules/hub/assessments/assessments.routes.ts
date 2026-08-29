@@ -10,6 +10,7 @@ import {
 import {
   createAssessment,
   getAssessments,
+  getAssessmentSubmissions,
   submitAssessment,
   gradeSubmission,
   bulkGrade,
@@ -25,6 +26,11 @@ router.post(
   createAssessment,
 );
 router.get("/:id/assessments", requireAuth, getAssessments);
+router.get(
+  "/:id/assessments/:assessmentId/submissions",
+  requireAuth,
+  getAssessmentSubmissions,
+);
 
 // Submissions & Grading
 router.post(

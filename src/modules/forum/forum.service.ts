@@ -1,5 +1,5 @@
-import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
+import * as forumRepository from "./forum.repository";
 import {
   CreatePostPayload,
   CreateResponsePayload,
@@ -10,69 +10,50 @@ export const createPostService = async (
   authorId: string,
   data: CreatePostPayload,
 ) => {
-  return await prisma.helpPost.create({
-    data: {
-      title: data.title,
-      description: data.description,
-      authorId,
-    },
-  });
+  return await forumRepository.createHelpPost(authorId, data);
 };
 
-export const getAllPostsService = async () => {
-  return await prisma.helpPost.findMany({
-    orderBy: {
-      createdAt: "desc",
+export const getAllPostsService = async (query?: {
+  page?: number | string;
+  limit?: number | string;
+  filter?: string;
+  search?: string;
+}) => {
+  const page = Math.max(1, Number(query?.page) || 1);
+  const limit = Math.max(1, Math.min(100, Number(query?.limit) || 25));
+  const skip = (page - 1) * limit;
+
+  const where: any = {};
+  if (query?.filter === "UNRESOLVED") {
+    where.isResolved = false;
+  } else if (query?.filter === "RESOLVED") {
+    where.isResolved = true;
+  }
+  if (query?.search) {
+    where.OR = [
+      { title: { contains: query.search, mode: "insensitive" } },
+      { description: { contains: query.search, mode: "insensitive" } },
+    ];
+  }
+
+  const [posts, total] = await Promise.all([
+    forumRepository.findHelpPosts(where, skip, limit),
+    forumRepository.countHelpPosts(where),
+  ]);
+
+  return {
+    data: posts,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
     },
-    include: {
-      author: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-          role: true,
-          studentProfile: true,
-          teacherProfile: true,
-        },
-      },
-      _count: {
-        select: { responses: true },
-      },
-    },
-  });
+  };
 };
 
 export const getSinglePostService = async (id: string) => {
-  const post = await prisma.helpPost.findUnique({
-    where: { id },
-    include: {
-      author: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-          role: true,
-          studentProfile: true,
-          teacherProfile: true,
-        },
-      },
-      responses: {
-        orderBy: { createdAt: "asc" },
-        include: {
-          responder: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-              role: true,
-              studentProfile: true,
-              teacherProfile: true,
-            },
-          },
-        },
-      },
-    },
-  });
+  const post = await forumRepository.findHelpPostWithDetails(id);
 
   if (!post) {
     throw new AppError("Forum post not found.", 404);
@@ -86,21 +67,13 @@ export const createResponseService = async (
   responderId: string,
   data: CreateResponsePayload,
 ) => {
-  const post = await prisma.helpPost.findUnique({
-    where: { id: postId },
-  });
+  const post = await forumRepository.findHelpPostById(postId);
 
   if (!post) {
     throw new AppError("Forum post not found.", 404);
   }
 
-  return await prisma.helpResponse.create({
-    data: {
-      content: data.content,
-      postId,
-      responderId,
-    },
-  });
+  return await forumRepository.createHelpResponse(postId, responderId, data);
 };
 
 export const resolvePostService = async (
@@ -108,9 +81,7 @@ export const resolvePostService = async (
   userId: string,
   role: string,
 ) => {
-  const post = await prisma.helpPost.findUnique({
-    where: { id: postId },
-  });
+  const post = await forumRepository.findHelpPostById(postId);
 
   if (!post) {
     throw new AppError("Forum post not found.", 404);
@@ -124,10 +95,7 @@ export const resolvePostService = async (
     );
   }
 
-  return await prisma.helpPost.update({
-    where: { id: postId },
-    data: { isResolved: true },
-  });
+  return await forumRepository.updateHelpPost(postId, { isResolved: true });
 };
 
 // Update Post Service
@@ -136,9 +104,7 @@ export const updatePostService = async (
   userId: string,
   data: UpdatePostPayload,
 ) => {
-  const post = await prisma.helpPost.findUnique({
-    where: { id: postId },
-  });
+  const post = await forumRepository.findHelpPostById(postId);
 
   if (!post) {
     throw new AppError("Forum post not found.", 404);
@@ -149,10 +115,7 @@ export const updatePostService = async (
     throw new AppError("You do not have permission to edit this post.", 403);
   }
 
-  return await prisma.helpPost.update({
-    where: { id: postId },
-    data, // Prisma natively ignores undefined values
-  });
+  return await forumRepository.updateHelpPost(postId, data);
 };
 
 // Delete Post Service
@@ -161,9 +124,7 @@ export const deletePostService = async (
   userId: string,
   role: string,
 ) => {
-  const post = await prisma.helpPost.findUnique({
-    where: { id: postId },
-  });
+  const post = await forumRepository.findHelpPostById(postId);
 
   if (!post) {
     throw new AppError("Forum post not found.", 404);
@@ -177,7 +138,5 @@ export const deletePostService = async (
     );
   }
 
-  return await prisma.helpPost.delete({
-    where: { id: postId },
-  });
+  return await forumRepository.deleteHelpPostById(postId);
 };

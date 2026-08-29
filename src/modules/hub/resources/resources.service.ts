@@ -1,5 +1,5 @@
-import { prisma } from "../../../lib/prisma";
 import { verifyHubRole } from "../hub.service";
+import * as resourcesRepository from "./resources.repository";
 import { CreateResourcePayload } from "./resources.schema";
 
 export const createResourceService = async (
@@ -9,21 +9,9 @@ export const createResourceService = async (
 ) => {
   // All members can upload resources (Teachers upload lectures, Students upload notes)
   await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
-  return await prisma.resource.create({
-    data: {
-      ...data,
-      hubId,
-      uploaderId: userId,
-    },
-  });
+  return await resourcesRepository.createResource(userId, hubId, data);
 };
 
 export const getResourcesService = async (hubId: string) => {
-  return await prisma.resource.findMany({
-    where: { hubId },
-    include: {
-      uploader: { select: { id: true, name: true, image: true, role: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  return await resourcesRepository.findResourcesByHubId(hubId);
 };

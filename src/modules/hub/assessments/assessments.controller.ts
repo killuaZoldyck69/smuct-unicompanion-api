@@ -48,6 +48,16 @@ export const gradeSubmission = catchAsync(
   },
 );
 
+export const getAssessmentSubmissions = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await assessmentService.getAssessmentSubmissions(
+      req.user.id,
+      req.params.assessmentId as string,
+    );
+    res.status(200).json({ success: true, data });
+  },
+);
+
 export const bulkGrade = catchAsync(async (req: Request, res: Response) => {
   const data = await assessmentService.bulkGrade(
     req.user.id,

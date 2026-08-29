@@ -1,35 +1,32 @@
-import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
+import * as alumniRepository from "./alumni.repository";
 import { CreateAlumniPayload, UpdateAlumniPayload } from "./alumni.schema";
 
 export const getAllAlumniService = async () => {
-  return await prisma.alumni.findMany({ orderBy: { graduationYear: "desc" } });
+  return await alumniRepository.findAllAlumni(100);
 };
 
 export const createAlumniService = async (data: CreateAlumniPayload) => {
-  return await prisma.alumni.create({ data });
+  return await alumniRepository.createAlumni(data);
 };
 
 export const bulkCreateAlumniService = async (
   dataArray: CreateAlumniPayload[],
 ) => {
-  return await prisma.alumni.createMany({
-    data: dataArray,
-    skipDuplicates: true,
-  });
+  return await alumniRepository.bulkCreateAlumni(dataArray);
 };
 
 export const updateAlumniService = async (
   id: string,
   data: UpdateAlumniPayload,
 ) => {
-  const alumni = await prisma.alumni.findUnique({ where: { id } });
+  const alumni = await alumniRepository.findAlumniById(id);
   if (!alumni) throw new AppError("Alumni not found", 404);
-  return await prisma.alumni.update({ where: { id }, data });
+  return await alumniRepository.updateAlumni(id, data);
 };
 
 export const deleteAlumniService = async (id: string) => {
-  const alumni = await prisma.alumni.findUnique({ where: { id } });
+  const alumni = await alumniRepository.findAlumniById(id);
   if (!alumni) throw new AppError("Alumni not found", 404);
-  return await prisma.alumni.delete({ where: { id } });
+  return await alumniRepository.deleteAlumniById(id);
 };

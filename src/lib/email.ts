@@ -18,7 +18,7 @@ export const sendEmail = async (options: SendEmailOptions) => {
       body: JSON.stringify({
         sender: {
           name: "SMUCT UniCompanion",
-          email: "nh694225@gmail.com",
+          email: envConfig.EMAIL_FROM,
         },
         to: [
           {

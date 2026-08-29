@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { COMPLAINT_STATUS_VALUES } from "../../constants/enums";
 
 export const createComplaintSchema = z.object({
   body: z.object({
@@ -10,7 +11,7 @@ export const createComplaintSchema = z.object({
 
 export const updateComplaintStatusSchema = z.object({
   body: z.object({
-    status: z.enum(["PENDING", "RESOLVED", "REJECTED"], {
+    status: z.enum(COMPLAINT_STATUS_VALUES, {
       message: "Status must be PENDING, RESOLVED, or REJECTED",
     }),
   }),

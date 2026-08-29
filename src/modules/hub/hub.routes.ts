@@ -24,6 +24,7 @@ import {
 import { resourceRoutes } from "../hub/resources/resources.routes";
 import { contentRoutes } from "../hub/content/content.routes";
 import { assessmentRoutes } from "./assessments/assessments.routes";
+import { reviewRoutes } from "./reviews/reviews.routes";
 
 const router = Router();
 
@@ -57,5 +58,6 @@ router.patch(
 router.use("/", resourceRoutes);
 router.use("/", contentRoutes);
 router.use("/", assessmentRoutes);
+router.use("/", reviewRoutes);
 
 export const hubRoutes = router;

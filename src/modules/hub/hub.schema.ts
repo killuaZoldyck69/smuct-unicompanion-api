@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { HUB_ROLE_VALUES, HubRole } from "../../constants/enums";
 
 export const createHubSchema = z.object({
   body: z.object({
@@ -33,7 +34,7 @@ export const joinHubSchema = z.object({
 
 export const updateMemberRoleSchema = z.object({
   body: z.object({
-    role: z.enum(["TEACHER", "CR", "TA", "STUDENT"]),
+    role: z.enum(HUB_ROLE_VALUES),
   }),
 });
 
@@ -43,11 +44,8 @@ export const updateHubSchema = z.object({
     department: z.string().optional(),
     batch: z.string().optional(),
     termOffer: z.string().optional(),
-
     weeklyClassSchedule: z.any().optional(),
-
     isReviewOpen: z.boolean().optional(),
-
     termExams: z
       .array(
         z.object({
@@ -63,8 +61,6 @@ export const updateHubSchema = z.object({
   }),
 });
 
-export type UpdateHubPayload = z.infer<typeof updateHubSchema>["body"];
-
 export const archiveHubSchema = z.object({
   body: z.object({
     isArchived: z.boolean(),
@@ -72,3 +68,9 @@ export const archiveHubSchema = z.object({
 });
 
 export type CreateHubPayload = z.infer<typeof createHubSchema>["body"];
+export type JoinHubPayload = z.infer<typeof joinHubSchema>["body"];
+export type UpdateMemberRolePayload = z.infer<
+  typeof updateMemberRoleSchema
+>["body"];
+export type UpdateHubPayload = z.infer<typeof updateHubSchema>["body"];
+export type ArchiveHubPayload = z.infer<typeof archiveHubSchema>["body"];

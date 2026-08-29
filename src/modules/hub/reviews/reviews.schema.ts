@@ -15,3 +15,8 @@ export const submitReviewSchema = z.object({
     answers: z.any(), // JSON mapping to custom questions
   }),
 });
+
+export type UpdateReviewSettingsPayload = z.infer<
+  typeof updateReviewSettingsSchema
+>["body"];
+export type SubmitReviewPayload = z.infer<typeof submitReviewSchema>["body"];

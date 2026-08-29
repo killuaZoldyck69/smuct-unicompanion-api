@@ -1,34 +1,23 @@
-import { prisma } from "../../../lib/prisma";
 import { verifyHubRole } from "../hub.service";
+import * as contentRepository from "./content.repository";
+import {
+  CreateAnnouncementPayload,
+  CreateDiscussionPayload,
+} from "./content.schema";
 
-// 1. Update createAnnouncement to accept link fields
 export const createAnnouncement = async (
   userId: string,
   hubId: string,
-  data: any,
+  data: CreateAnnouncementPayload,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
-  return await prisma.hubAnnouncement.create({
-    data: { hubId, creatorId: userId, ...data }, // Spread includes the links
-  });
+  return await contentRepository.createHubAnnouncement(userId, hubId, data);
 };
 
 export const getAnnouncements = async (hubId: string) => {
-  return await prisma.hubAnnouncement.findMany({
-    where: { hubId },
-    include: {
-      creator: { select: { id: true, name: true, image: true } },
-      comments: {
-        // 👈 Added this to fetch comments!
-        include: { author: { select: { id: true, name: true, image: true } } },
-        orderBy: { createdAt: "asc" },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  return await contentRepository.findAnnouncementsByHubId(hubId);
 };
 
-// 3. Add the comment creation service
 export const createAnnouncementComment = async (
   userId: string,
   hubId: string,
@@ -36,20 +25,20 @@ export const createAnnouncementComment = async (
   content: string,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
-  return await prisma.announcementComment.create({
-    data: { announcementId, authorId: userId, content },
-  });
+  return await contentRepository.createAnnouncementComment(
+    userId,
+    announcementId,
+    content,
+  );
 };
 
 export const createDiscussion = async (
   userId: string,
   hubId: string,
-  data: any,
+  data: CreateDiscussionPayload,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
-  return await prisma.hubDiscussion.create({
-    data: { hubId, authorId: userId, ...data },
-  });
+  return await contentRepository.createHubDiscussion(userId, hubId, data);
 };
 
 export const replyToDiscussion = async (
@@ -59,23 +48,15 @@ export const replyToDiscussion = async (
   content: string,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
-  return await prisma.hubDiscussionReply.create({
-    data: { discussionId, authorId: userId, content },
-  });
+  return await contentRepository.createDiscussionReply(
+    userId,
+    discussionId,
+    content,
+  );
 };
 
 export const getDiscussions = async (hubId: string) => {
-  return await prisma.hubDiscussion.findMany({
-    where: { hubId },
-    include: {
-      replies: {
-        include: { author: { select: { id: true, name: true, image: true } } },
-        orderBy: { createdAt: "asc" },
-      },
-      author: { select: { id: true, name: true, image: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  return await contentRepository.findDiscussionsByHubId(hubId);
 };
 
 export const commentOnAnnouncement = async (
@@ -86,8 +67,9 @@ export const commentOnAnnouncement = async (
 ) => {
   // All hub members can comment on announcements
   await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
-
-  return await prisma.announcementComment.create({
-    data: { announcementId, authorId: userId, content },
-  });
+  return await contentRepository.createAnnouncementComment(
+    userId,
+    announcementId,
+    content,
+  );
 };

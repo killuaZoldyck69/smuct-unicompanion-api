@@ -1,5 +1,5 @@
-import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
+import * as bloodRepository from "./blood.repository";
 import {
   CreateBloodPostPayload,
   RespondBloodPostPayload,
@@ -9,63 +9,15 @@ export const createBloodPostService = async (
   authorId: string,
   data: CreateBloodPostPayload,
 ) => {
-  return await prisma.bloodPost.create({
-    data: {
-      ...data,
-      authorId,
-    },
-  });
+  return await bloodRepository.createBloodPost(authorId, data);
 };
 
 export const getBloodFeedService = async () => {
-  return await prisma.bloodPost.findMany({
-    orderBy: {
-      createdAt: "desc",
-    },
-    include: {
-      author: {
-        select: { id: true, name: true, image: true },
-      },
-      _count: {
-        select: { responses: true },
-      },
-    },
-  });
+  return await bloodRepository.findBloodFeed(100);
 };
 
 export const getBloodPostByIdService = async (id: string) => {
-  const post = await prisma.bloodPost.findUnique({
-    where: { id },
-    include: {
-      author: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-          bloodGroup: true,
-          phoneNumber: true,
-          studentProfile: true,
-          teacherProfile: true,
-        },
-      },
-      responses: {
-        orderBy: { createdAt: "asc" },
-        include: {
-          responder: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-              bloodGroup: true,
-              phoneNumber: true,
-              studentProfile: true,
-              teacherProfile: true,
-            },
-          },
-        },
-      },
-    },
-  });
+  const post = await bloodRepository.findBloodPostWithDetails(id);
 
   if (!post) {
     throw new AppError("Blood request not found.", 404);
@@ -79,9 +31,7 @@ export const respondToBloodPostService = async (
   responderId: string,
   data: RespondBloodPostPayload,
 ) => {
-  const post = await prisma.bloodPost.findUnique({
-    where: { id: postId },
-  });
+  const post = await bloodRepository.findBloodPostById(postId);
 
   if (!post) {
     throw new AppError("Blood request not found.", 404);
@@ -93,21 +43,20 @@ export const respondToBloodPostService = async (
   }
 
   // Prevent duplicate responses from the same user on the same post
-  const existingResponse = await prisma.bloodResponse.findFirst({
-    where: { postId, responderId },
-  });
+  const existingResponse = await bloodRepository.findBloodResponse(
+    postId,
+    responderId,
+  );
 
   if (existingResponse) {
     throw new AppError("You have already responded to this request.", 409);
   }
 
-  return await prisma.bloodResponse.create({
-    data: {
-      postId,
-      responderId,
-      message: data.message,
-    },
-  });
+  return await bloodRepository.createBloodResponse(
+    postId,
+    responderId,
+    data.message,
+  );
 };
 
 export const resolveBloodPostService = async (
@@ -115,9 +64,7 @@ export const resolveBloodPostService = async (
   userId: string,
   role?: string,
 ) => {
-  const post = await prisma.bloodPost.findUnique({
-    where: { id: postId },
-  });
+  const post = await bloodRepository.findBloodPostById(postId);
 
   if (!post) {
     throw new AppError("Blood request not found.", 404);
@@ -130,10 +77,7 @@ export const resolveBloodPostService = async (
     );
   }
 
-  return await prisma.bloodPost.update({
-    where: { id: postId },
-    data: { isFulfilled: true },
-  });
+  return await bloodRepository.updateBloodPostFulfilled(postId, true);
 };
 
 export const deleteBloodPostService = async (
@@ -141,9 +85,7 @@ export const deleteBloodPostService = async (
   userId: string,
   role?: string,
 ) => {
-  const post = await prisma.bloodPost.findUnique({
-    where: { id: postId },
-  });
+  const post = await bloodRepository.findBloodPostById(postId);
 
   if (!post) {
     throw new AppError("Blood request not found.", 404);
@@ -156,7 +98,5 @@ export const deleteBloodPostService = async (
     );
   }
 
-  return await prisma.bloodPost.delete({
-    where: { id: postId },
-  });
+  return await bloodRepository.deleteBloodPostById(postId);
 };

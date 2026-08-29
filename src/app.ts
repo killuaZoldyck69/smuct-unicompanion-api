@@ -17,22 +17,44 @@ import { complaintRoutes } from "./modules/complaint/complaint.routes";
 import { alumniRoutes } from "./modules/alumni/alumni.routes";
 import { fieldRoutes } from "./modules/field/field.routes";
 import { hubRoutes } from "./modules/hub/hub.routes";
-import { contentRoutes } from "./modules/hub/content/content.routes";
-import { assessmentRoutes } from "./modules/hub/assessments/assessments.routes";
-import { reviewRoutes } from "./modules/hub/reviews/reviews.routes";
+
+import { envConfig } from "./config/env";
+import { globalLimiter, authLimiter } from "./middleware/rateLimit.middleware";
 
 const app: Application = express();
+
+// Parse and construct the CORS allowed origins whitelist
+const parsedTrustedOrigins = envConfig.TRUSTED_ORIGINS
+  ? envConfig.TRUSTED_ORIGINS.split(",").map((url) => url.trim())
+  : [];
+
+const allowedOrigins = [
+  envConfig.FRONTEND_URL,
+  "smuct-unicompanion://",
+  ...parsedTrustedOrigins,
+].filter(Boolean);
 
 app.use(
   cors({
     origin: function (origin, callback) {
+      // Allow requests with no origin header (e.g. mobile apps, curl, server-to-server)
       if (!origin) return callback(null, true);
 
-      return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
   }),
 );
+
+// Apply Rate Limiters
+app.use(globalLimiter);
+app.use("/api/auth", authLimiter);
+
+app.all("/api/auth/{*any}", toNodeHandler(auth));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -59,8 +81,6 @@ app.get("/api/auth/redirect-to-app", (req: Request, res: Response) => {
   `);
 });
 
-app.all("/api/auth/{*any}", toNodeHandler(auth));
-
 app.get("/health", (req: Request, res: Response) => {
   res.status(200).json({
     status: "ok",
@@ -84,10 +104,7 @@ app.use("/api/alumni", alumniRoutes);
 app.use("/api/field", fieldRoutes);
 
 // 2. MOUNT THE HUB ROUTES
-app.use("/api/hubs", hubRoutes); // Mounts base hub routes to /api/hubs
-app.use("/api", contentRoutes); // Mounts nested routes like /api/hubs/:id/discussions
-app.use("/api", assessmentRoutes);
-app.use("/api", reviewRoutes);
+app.use("/api/hubs", hubRoutes);
 
 // Global Error Handler
 app.use(globalErrorHandler);

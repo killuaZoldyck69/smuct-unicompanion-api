@@ -14,12 +14,13 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getFeed = catchAsync(async (req: Request, res: Response) => {
-  const posts = await forumService.getAllPostsService();
+  const result = await forumService.getAllPostsService(req.query);
 
   res.status(200).json({
     success: true,
     message: "Forum feed retrieved successfully.",
-    data: posts,
+    data: result.data,
+    meta: result.meta,
   });
 });
 

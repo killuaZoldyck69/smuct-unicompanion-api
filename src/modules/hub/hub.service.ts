@@ -1,6 +1,10 @@
-import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
-import { CreateHubPayload, UpdateHubPayload } from "./hub.schema";
+import * as hubRepository from "./hub.repository";
+import {
+  CreateHubPayload,
+  UpdateHubPayload,
+  UpdateMemberRolePayload,
+} from "./hub.schema";
 
 // 🛡️ Centralized Authorization Helper
 export const verifyHubRole = async (
@@ -8,9 +12,7 @@ export const verifyHubRole = async (
   hubId: string,
   allowedRoles: string[],
 ) => {
-  const member = await prisma.hubMember.findUnique({
-    where: { userId_hubId: { userId, hubId } },
-  });
+  const member = await hubRepository.findHubMember(userId, hubId);
   if (!member || !allowedRoles.includes(member.role)) {
     throw new AppError(
       "You do not have permission to perform this action in this hub.",
@@ -21,16 +23,7 @@ export const verifyHubRole = async (
 };
 
 export const getAvailableTeachersService = async () => {
-  return await prisma.user.findMany({
-    where: { role: "TEACHER" },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      teacherProfile: { select: { department: true, designation: true } },
-    },
-    orderBy: { name: "asc" },
-  });
+  return await hubRepository.findAvailableTeachers();
 };
 
 const generateJoinCode = () =>
@@ -40,10 +33,7 @@ export const createHubService = async (
   userId: string,
   data: CreateHubPayload,
 ) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { studentProfile: true },
-  });
+  const user = await hubRepository.findUserWithStudentProfile(userId);
 
   if (!user) throw new AppError("User not found", 404);
 
@@ -66,93 +56,29 @@ export const createHubService = async (
 
   const joinCode = generateJoinCode();
 
-  return await prisma.$transaction(async (tx) => {
-    const hub = await tx.courseHub.create({
-      data: {
-        courseCode: data.courseCode,
-        courseName: data.courseName,
-        credit: data.credit,
-        termOffer: data.termOffer,
-        weeklyClassSchedule: data.weeklyClassSchedule as any,
-        department: data.department,
-        batch: data.batch,
-        semesterNumber: data.semesterNumber,
-        joinCode,
-      },
-    });
-
-    // Add Creator to the Hub
-    await tx.hubMember.create({
-      data: { userId, hubId: hub.id, role: isTeacher ? "TEACHER" : "CR" },
-    });
-
-    // Automatically add the assigned teacher if a CR created it
-    if (isCR && data.teacherId) {
-      await tx.hubMember.create({
-        data: { userId: data.teacherId, hubId: hub.id, role: "TEACHER" },
-      });
-    }
-    return hub;
-  });
+  return await hubRepository.createHubWithMembers(
+    userId,
+    data,
+    isTeacher,
+    isCR,
+    joinCode,
+  );
 };
 
 export const joinHubService = async (userId: string, joinCode: string) => {
-  const hub = await prisma.courseHub.findUnique({ where: { joinCode } });
+  const hub = await hubRepository.findHubByJoinCode(joinCode);
   if (!hub) throw new AppError("Invalid join code.", 404);
 
   // Prisma will throw a unique constraint error if they are already a member
-  return await prisma.hubMember.create({
-    data: { userId, hubId: hub.id, role: "STUDENT" },
-    include: { hub: true },
-  });
+  return await hubRepository.createHubMember(userId, hub.id, "STUDENT");
 };
 
 export const getMyHubsService = async (userId: string) => {
-  return await prisma.hubMember.findMany({
-    where: { userId },
-    include: {
-      hub: {
-        include: {
-          _count: { select: { members: true } },
-          members: {
-            where: { role: "TEACHER" },
-            select: { user: { select: { name: true } } },
-            take: 1, // Just grab the primary teacher
-          },
-          assessments: {
-            where: { deadline: { gt: new Date() } }, // Only future deadlines
-            orderBy: { deadline: "asc" },
-            take: 1, // Only get the absolute next upcoming assessment
-            select: { id: true, title: true, type: true, deadline: true },
-          },
-        },
-      },
-    },
-  });
+  return await hubRepository.findMyHubMemberships(userId);
 };
 
 export const getHubDetailsService = async (hubId: string) => {
-  const hub = await prisma.courseHub.findUnique({
-    where: { id: hubId },
-    include: {
-      members: {
-        include: {
-          // 👈 UPDATED: Added email and profile IDs
-          user: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-              role: true,
-              email: true,
-              studentProfile: { select: { studentId: true } },
-              teacherProfile: { select: { teacherId: true } },
-            },
-          },
-        },
-      },
-    },
-  });
+  const hub = await hubRepository.findHubWithMembersAndDetails(hubId);
   if (!hub) throw new AppError("Hub not found", 404);
   return hub;
 };
@@ -161,7 +87,7 @@ export const updateMemberRoleService = async (
   userId: string,
   hubId: string,
   memberId: string,
-  newRole: any,
+  newRole: UpdateMemberRolePayload["role"],
 ) => {
   const requesterMember = await verifyHubRole(userId, hubId, [
     "TEACHER",
@@ -169,13 +95,11 @@ export const updateMemberRoleService = async (
     "TA",
   ]);
 
-  const targetMember = await prisma.hubMember.findUnique({
-    where: { id: memberId },
-  });
+  const targetMember = await hubRepository.findHubMemberById(memberId);
 
   if (!targetMember) throw new AppError("Member not found.", 404);
 
-  // 👇 FIX: Prevent both CRs AND TAs from modifying Teacher roles
+  // Prevent both CRs AND TAs from modifying Teacher roles
   if (
     (requesterMember.role === "CR" || requesterMember.role === "TA") &&
     targetMember.role === "TEACHER"
@@ -196,10 +120,7 @@ export const updateMemberRoleService = async (
     );
   }
 
-  return await prisma.hubMember.update({
-    where: { id: memberId },
-    data: { role: newRole },
-  });
+  return await hubRepository.updateHubMemberRole(memberId, newRole);
 };
 
 export const removeMemberService = async (
@@ -207,25 +128,23 @@ export const removeMemberService = async (
   hubId: string,
   memberId: string,
 ) => {
-  const targetMember = await prisma.hubMember.findUnique({
-    where: { id: memberId },
-  });
+  const targetMember = await hubRepository.findHubMemberById(memberId);
 
   if (!targetMember) throw new AppError("Member not found.", 404);
 
   // Allow users to remove themselves ("Leave Hub")
   if (targetMember.userId === userId) {
-    return await prisma.hubMember.delete({ where: { id: memberId } });
+    return await hubRepository.deleteHubMemberById(memberId);
   }
 
-  // 👇 FIX: Allow TAs to kick students, but verify their role first
+  // Allow TAs to kick students, but verify their role first
   const requesterMember = await verifyHubRole(userId, hubId, [
     "TEACHER",
     "CR",
     "TA",
   ]);
 
-  // 👇 FIX: Security Check - CR and TA cannot kick a TEACHER
+  // Security Check - CR and TA cannot kick a TEACHER
   if (
     (requesterMember.role === "CR" || requesterMember.role === "TA") &&
     targetMember.role === "TEACHER"
@@ -236,9 +155,7 @@ export const removeMemberService = async (
     );
   }
 
-  return await prisma.hubMember.delete({
-    where: { id: memberId },
-  });
+  return await hubRepository.deleteHubMemberById(memberId);
 };
 
 export const updateHubService = async (
@@ -248,10 +165,7 @@ export const updateHubService = async (
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
 
-  return await prisma.courseHub.update({
-    where: { id: hubId },
-    data,
-  });
+  return await hubRepository.updateHub(hubId, data);
 };
 
 export const archiveHubService = async (
@@ -260,17 +174,12 @@ export const archiveHubService = async (
   isArchived: boolean,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
-  return await prisma.courseHub.update({
-    where: { id: hubId },
-    data: { isArchived },
-  });
+  return await hubRepository.updateHubArchiveStatus(hubId, isArchived);
 };
 
 export const deleteHubService = async (userId: string, hubId: string) => {
-  // 👈 Only Teachers and CRs can delete a hub
+  // Only Teachers and CRs can delete a hub
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
 
-  return await prisma.courseHub.delete({
-    where: { id: hubId },
-  });
+  return await hubRepository.deleteHubById(hubId);
 };

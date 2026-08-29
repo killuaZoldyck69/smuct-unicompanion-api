@@ -1,13 +1,16 @@
 import app from "./app";
 import { prisma } from "./lib/prisma";
 import { envConfig } from "./config/env";
+import { Server } from "http";
+
+let server: Server;
 
 const startServer = async () => {
   try {
     await prisma.$connect();
     console.log("✅ PostgreSQL Database connected successfully via Prisma.");
 
-    app.listen(envConfig.PORT, () => {
+    server = app.listen(envConfig.PORT, () => {
       console.log(
         `🚀 SMUCT UniCompanion Backend running on http://localhost:${envConfig.PORT}`,
       );
@@ -24,4 +27,23 @@ const startServer = async () => {
   }
 };
 
+const handleShutdown = async (signal: string) => {
+  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+  if (server) {
+    server.close(async () => {
+      console.log("🔌 HTTP server closed.");
+      await prisma.$disconnect();
+      console.log("🗄️ Database disconnected cleanly.");
+      process.exit(0);
+    });
+  } else {
+    await prisma.$disconnect();
+    process.exit(0);
+  }
+};
+
+process.on("SIGINT", () => handleShutdown("SIGINT"));
+process.on("SIGTERM", () => handleShutdown("SIGTERM"));
+
 startServer();
+

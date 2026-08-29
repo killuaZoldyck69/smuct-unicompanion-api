@@ -14,17 +14,17 @@ import {
 const router = Router({ mergeParams: true });
 
 router.patch(
-  "/hubs/:id/review-settings",
+  "/:id/review-settings",
   requireAuth,
   validateRequest(updateReviewSettingsSchema),
   updateReviewSettings,
 );
 router.post(
-  "/hubs/:id/reviews",
+  "/:id/reviews",
   requireAuth,
   validateRequest(submitReviewSchema),
   submitReview,
 );
-router.get("/hubs/:id/reviews", requireAuth, getReviews);
+router.get("/:id/reviews", requireAuth, getReviews);
 
 export const reviewRoutes = router;

@@ -1,32 +1,53 @@
-import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
+import * as userRepository from "./user.repository";
 import { UpdateRolePayload } from "./user.schema";
 
-export const getAllUsersService = async () => {
-  return await prisma.user.findMany({
-    include: {
-      studentProfile: true,
-      teacherProfile: true,
+export const getAllUsersService = async (query?: {
+  page?: number | string;
+  limit?: number | string;
+  role?: any;
+  search?: string;
+}) => {
+  const page = Math.max(1, Number(query?.page) || 1);
+  const limit = Math.max(1, Math.min(100, Number(query?.limit) || 25));
+  const skip = (page - 1) * limit;
+
+  const where: any = {};
+  if (query?.role) {
+    where.role = query.role;
+  }
+  if (query?.search) {
+    where.OR = [
+      { name: { contains: query.search, mode: "insensitive" } },
+      { email: { contains: query.search, mode: "insensitive" } },
+    ];
+  }
+
+  const [users, total] = await Promise.all([
+    userRepository.findUsersWithProfiles(where, skip, limit),
+    userRepository.countUsers(where),
+  ]);
+
+  return {
+    data: users,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
     },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+  };
 };
 
 export const deleteUserService = async (id: string) => {
-  const existingUser = await prisma.user.findUnique({
-    where: { id },
-  });
+  const existingUser = await userRepository.findUserById(id);
 
   if (!existingUser) {
     throw new AppError("User not found.", 404);
   }
 
   // Cascades automatically to StudentProfile, TeacherProfile, Session, Account, etc.
-  return await prisma.user.delete({
-    where: { id },
-  });
+  return await userRepository.deleteUserById(id);
 };
 
 export const updateStudentRoleService = async (
@@ -34,10 +55,7 @@ export const updateStudentRoleService = async (
   action: UpdateRolePayload["action"],
 ) => {
   // Verify user exists and retrieve their student profile
-  const user = await prisma.user.findUnique({
-    where: { id },
-    include: { studentProfile: true },
-  });
+  const user = await userRepository.findUserWithStudentProfile(id);
 
   if (!user) {
     throw new AppError("User not found.", 404);
@@ -61,8 +79,5 @@ export const updateStudentRoleService = async (
   }
 
   // Apply the update to the delegated StudentProfile
-  return await prisma.studentProfile.update({
-    where: { userId: id },
-    data: updateData,
-  });
+  return await userRepository.updateStudentProfileByUserId(id, updateData);
 };

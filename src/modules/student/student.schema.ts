@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BLOOD_GROUP_VALUES } from "../../constants/enums";
 
 export const onboardStudentSchema = z.object({
   body: z.object({
@@ -28,19 +29,7 @@ export const updateProfileSchema = z.object({
     batch: z.string().optional(),
     currentSemester: z.number().min(1).max(12).optional(),
     section: z.string().optional(),
-    bloodGroup: z
-      .enum([
-        "A_POSITIVE",
-        "A_NEGATIVE",
-        "B_POSITIVE",
-        "B_NEGATIVE",
-        "AB_POSITIVE",
-        "AB_NEGATIVE",
-        "O_POSITIVE",
-        "O_NEGATIVE",
-      ])
-      .optional(),
-
+    bloodGroup: z.enum(BLOOD_GROUP_VALUES).optional(),
     faculty: z.string().optional(),
     program: z.string().optional(),
     skills: z.array(z.string()).optional(),
@@ -56,3 +45,7 @@ export const updateProfileSchema = z.object({
       .optional(),
   }),
 });
+
+export type OnboardStudentPayload = z.infer<typeof onboardStudentSchema>["body"];
+export type UpdateProfileImagePayload = z.infer<typeof updateProfileImageSchema>["body"];
+export type UpdateProfilePayload = z.infer<typeof updateProfileSchema>["body"];

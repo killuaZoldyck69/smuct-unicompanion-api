@@ -1,13 +1,11 @@
-import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
+import * as fieldRepository from "./field.repository";
 import { UpdateFieldSettingsPayload, BookFieldPayload } from "./field.schema";
 
 export const getFieldSettingsService = async () => {
-  let settings = await prisma.fieldSetting.findFirst();
+  let settings = await fieldRepository.findFieldSettings();
   if (!settings) {
-    settings = await prisma.fieldSetting.create({
-      data: { isBookingOpen: true },
-    });
+    settings = await fieldRepository.createDefaultFieldSettings();
   }
   return settings;
 };
@@ -16,10 +14,7 @@ export const updateFieldSettingsService = async (
   data: UpdateFieldSettingsPayload,
 ) => {
   const settings = await getFieldSettingsService();
-  return await prisma.fieldSetting.update({
-    where: { id: settings.id },
-    data,
-  });
+  return await fieldRepository.updateFieldSettings(settings.id, data);
 };
 
 export const bookFieldService = async (
@@ -36,15 +31,12 @@ export const bookFieldService = async (
   }
 
   // 2. Prevent booking if the time slot overlaps with an already APPROVED booking
-  const conflictingBooking = await prisma.fieldBooking.findFirst({
-    where: {
-      status: "APPROVED",
-      bookingDate: data.bookingDate,
-      // Overlap math: (newStart < existingEnd) AND (newEnd > existingStart)
-      startTime: { lt: data.endTime },
-      endTime: { gt: data.startTime },
-    },
-  });
+  const conflictingBooking =
+    await fieldRepository.findConflictingApprovedBooking(
+      data.bookingDate,
+      data.startTime,
+      data.endTime,
+    );
 
   if (conflictingBooking) {
     throw new AppError(
@@ -54,25 +46,15 @@ export const bookFieldService = async (
   }
 
   // 3. Create the booking request
-  return await prisma.fieldBooking.create({
-    data: { ...data, userId },
-  });
+  return await fieldRepository.createFieldBooking(userId, data);
 };
 
 export const getMyBookingsService = async (userId: string) => {
-  return await prisma.fieldBooking.findMany({
-    where: { userId },
-    orderBy: { bookingDate: "desc" },
-  });
+  return await fieldRepository.findBookingsByUserId(userId, 100);
 };
 
 export const getAllBookingsService = async () => {
-  return await prisma.fieldBooking.findMany({
-    orderBy: { bookingDate: "desc" },
-    include: {
-      user: { select: { id: true, name: true, email: true, image: true } },
-    },
-  });
+  return await fieldRepository.findAllBookings(100);
 };
 
 export const getApprovedScheduleService = async () => {
@@ -80,38 +62,25 @@ export const getApprovedScheduleService = async () => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  return await prisma.fieldBooking.findMany({
-    where: {
-      status: "APPROVED",
-      bookingDate: {
-        gte: today,
-      },
-    },
-    include: {
-      user: { select: { name: true } },
-    },
-    orderBy: [{ bookingDate: "asc" }, { startTime: "asc" }],
-  });
+  return await fieldRepository.findApprovedFutureSchedule(today, 100);
 };
 
 export const updateBookingStatusService = async (
   id: string,
   status: "APPROVED" | "REJECTED",
 ) => {
-  const booking = await prisma.fieldBooking.findUnique({ where: { id } });
+  const booking = await fieldRepository.findBookingById(id);
   if (!booking) throw new AppError("Booking not found", 404);
 
   // If the admin is trying to approve, double-check for overlaps just in case
   // two pending requests were made for the same slot before one was approved.
   if (status === "APPROVED") {
-    const conflictingBooking = await prisma.fieldBooking.findFirst({
-      where: {
-        status: "APPROVED",
-        bookingDate: booking.bookingDate,
-        startTime: { lt: booking.endTime },
-        endTime: { gt: booking.startTime },
-      },
-    });
+    const conflictingBooking =
+      await fieldRepository.findConflictingApprovedBooking(
+        booking.bookingDate,
+        booking.startTime,
+        booking.endTime,
+      );
 
     if (conflictingBooking) {
       throw new AppError(
@@ -121,8 +90,5 @@ export const updateBookingStatusService = async (
     }
   }
 
-  return await prisma.fieldBooking.update({
-    where: { id },
-    data: { status },
-  });
+  return await fieldRepository.updateBookingStatus(id, status);
 };
