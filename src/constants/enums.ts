@@ -6,6 +6,13 @@ import {
   SubmissionType,
   ComplaintStatus,
   BookingStatus,
+  LostFoundType,
+  LostFoundStatus,
+  LostFoundCategory,
+  ListingType,
+  ListingStatus,
+  ItemCondition,
+  MarketplaceCategory,
 } from "../../generated/prisma/enums";
 
 export {
@@ -16,6 +23,13 @@ export {
   SubmissionType,
   ComplaintStatus,
   BookingStatus,
+  LostFoundType,
+  LostFoundStatus,
+  LostFoundCategory,
+  ListingType,
+  ListingStatus,
+  ItemCondition,
+  MarketplaceCategory,
 };
 
 export const BLOOD_GROUP_VALUES = [
@@ -64,3 +78,50 @@ export const BOOKING_STATUS_VALUES = [
   BookingStatus.APPROVED,
   BookingStatus.REJECTED,
 ] as const;
+
+export const LOST_FOUND_TYPE_VALUES = [
+  LostFoundType.LOST,
+  LostFoundType.FOUND,
+] as const;
+
+export const LOST_FOUND_STATUS_VALUES = [
+  LostFoundStatus.ACTIVE,
+  LostFoundStatus.CLAIMED,
+  LostFoundStatus.RESOLVED,
+] as const;
+
+export const LOST_FOUND_CATEGORY_VALUES = [
+  LostFoundCategory.BOOKS,
+  LostFoundCategory.ELECTRONICS,
+  LostFoundCategory.ID_CARD,
+  LostFoundCategory.KEYS,
+  LostFoundCategory.CLOTHING,
+  LostFoundCategory.OTHER,
+] as const;
+
+export const LISTING_TYPE_VALUES = [
+  ListingType.SELLING,
+  ListingType.BUYING,
+] as const;
+
+export const LISTING_STATUS_VALUES = [
+  ListingStatus.ACTIVE,
+  ListingStatus.SOLD,
+  ListingStatus.CLOSED,
+] as const;
+
+export const ITEM_CONDITION_VALUES = [
+  ItemCondition.NEW,
+  ItemCondition.LIKE_NEW,
+  ItemCondition.GOOD,
+  ItemCondition.FAIR,
+] as const;
+
+export const MARKETPLACE_CATEGORY_VALUES = [
+  MarketplaceCategory.TEXTBOOKS,
+  MarketplaceCategory.ELECTRONICS,
+  MarketplaceCategory.STATIONERY,
+  MarketplaceCategory.CLOTHING,
+  MarketplaceCategory.OTHER,
+] as const;
+

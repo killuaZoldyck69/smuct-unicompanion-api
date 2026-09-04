@@ -18,6 +18,8 @@ import { alumniRoutes } from "./modules/alumni/alumni.routes";
 import { fieldRoutes } from "./modules/field/field.routes";
 import { hubRoutes } from "./modules/hub/hub.routes";
 import { uploadRoutes } from "./modules/upload/upload.routes";
+import { lostFoundRoutes } from "./modules/lost-found/lost-found.routes";
+import { marketplaceRoutes } from "./modules/marketplace/marketplace.routes";
 
 import { envConfig } from "./config/env";
 import { globalLimiter, authLimiter } from "./middleware/rateLimit.middleware";
@@ -109,6 +111,10 @@ app.use("/api/hubs", hubRoutes);
 
 // 3. MOUNT UPLOAD ROUTES
 app.use("/api/upload", uploadRoutes);
+
+// 4. MOUNT CAMPUS HUB COMMUNITY ROUTES
+app.use("/api/lost-found", lostFoundRoutes);
+app.use("/api/marketplace", marketplaceRoutes);
 
 // Global Error Handler
 app.use(globalErrorHandler);

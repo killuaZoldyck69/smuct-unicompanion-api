@@ -54,8 +54,11 @@ export async function uploadBufferToCloudinary(
       {
         folder,
         resource_type: "image",
-        public_id: filename ? filename.replace(/\.[^/.]+$/, "") : undefined,
-        transformation: [{ quality: "auto", fetch_format: "auto" }],
+        transformation: [
+          { width: 1080, crop: "limit" },
+          { quality: "auto:good" },
+          { fetch_format: "auto" },
+        ],
       },
       (error?: any, result?: UploadApiResponse) => {
         if (error || !result) {

@@ -39,9 +39,9 @@ const envSchema = z.object({
     .enum(["development", "production", "test"])
     .default("development"),
 
-  // CLOUDINARY_CLOUD_NAME: z.string().optional().default(""),
-  // CLOUDINARY_API_KEY: z.string().optional().default(""),
-  // CLOUDINARY_API_SECRET: z.string().optional().default(""),
+  CLOUDINARY_CLOUD_NAME: z.string().optional().default(""),
+  CLOUDINARY_API_KEY: z.string().optional().default(""),
+  CLOUDINARY_API_SECRET: z.string().optional().default(""),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

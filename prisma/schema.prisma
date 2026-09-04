@@ -69,6 +69,52 @@ enum EventCategory {
   OTHER
 }
 
+enum LostFoundType {
+  LOST
+  FOUND
+}
+
+enum LostFoundStatus {
+  ACTIVE
+  CLAIMED
+  RESOLVED
+}
+
+enum LostFoundCategory {
+  BOOKS
+  ELECTRONICS
+  ID_CARD
+  KEYS
+  CLOTHING
+  OTHER
+}
+
+enum ListingType {
+  SELLING
+  BUYING
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  CLOSED
+}
+
+enum ItemCondition {
+  NEW
+  LIKE_NEW
+  GOOD
+  FAIR
+}
+
+enum MarketplaceCategory {
+  TEXTBOOKS
+  ELECTRONICS
+  STATIONERY
+  CLOTHING
+  OTHER
+}
+
 // ==============================
 // BETTER AUTH CORE SCHEMAS
 // ==============================
@@ -111,6 +157,10 @@ model User {
   hubDiscussions       HubDiscussion[]
   hubDiscussionReplies HubDiscussionReply[]
   announcementComments AnnouncementComment[]
+  lostFoundPosts       LostFoundPost[]
+  lostFoundComments    LostFoundComment[]
+  marketplacePosts     MarketplacePost[]
+  marketplaceComments  MarketplaceComment[]
 
   @@map("user")
 }
@@ -614,4 +664,96 @@ model FieldSetting {
   isBookingOpen Boolean  @default(true)
   closedNotice  String? // The notice shown when booking is disabled
   updatedAt     DateTime @updatedAt
+}
+
+// ==============================
+// LOST & FOUND
+// ==============================
+
+model LostFoundPost {
+  id          String            @id @default(uuid())
+  authorId    String
+  type        LostFoundType
+  title       String
+  description String
+  category    LostFoundCategory
+  location    String
+  status      LostFoundStatus   @default(ACTIVE)
+  images      String[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  author   User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments LostFoundComment[]
+
+  @@index([authorId])
+  @@index([status, type])
+  @@map("lost_found_post")
+}
+
+model LostFoundComment {
+  id        String   @id @default(uuid())
+  postId    String
+  authorId  String
+  parentId  String?
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post    LostFoundPost      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent  LostFoundComment?  @relation("LostFoundCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies LostFoundComment[] @relation("LostFoundCommentReplies")
+
+  @@index([postId])
+  @@index([authorId])
+  @@index([parentId])
+  @@map("lost_found_comment")
+}
+
+// ==============================
+// CAMPUS MARKETPLACE (BUY & SELL)
+// ==============================
+
+model MarketplacePost {
+  id           String              @id @default(uuid())
+  authorId     String
+  type         ListingType
+  title        String
+  description  String
+  price        Float?
+  category     MarketplaceCategory
+  condition    ItemCondition?
+  status       ListingStatus       @default(ACTIVE)
+  images       String[]
+  contactPhone String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  author   User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments MarketplaceComment[]
+
+  @@index([authorId])
+  @@index([status, type])
+  @@map("marketplace_post")
+}
+
+model MarketplaceComment {
+  id        String   @id @default(uuid())
+  postId    String
+  authorId  String
+  parentId  String?
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post    MarketplacePost      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent  MarketplaceComment?  @relation("MarketplaceCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies MarketplaceComment[] @relation("MarketplaceCommentReplies")
+
+  @@index([postId])
+  @@index([authorId])
+  @@index([parentId])
+  @@map("marketplace_comment")
 }
