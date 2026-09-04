@@ -17,6 +17,7 @@ import { complaintRoutes } from "./modules/complaint/complaint.routes";
 import { alumniRoutes } from "./modules/alumni/alumni.routes";
 import { fieldRoutes } from "./modules/field/field.routes";
 import { hubRoutes } from "./modules/hub/hub.routes";
+import { uploadRoutes } from "./modules/upload/upload.routes";
 
 import { envConfig } from "./config/env";
 import { globalLimiter, authLimiter } from "./middleware/rateLimit.middleware";
@@ -51,8 +52,8 @@ app.use(
 );
 
 // Apply Rate Limiters
-app.use(globalLimiter);
-app.use("/api/auth", authLimiter);
+// app.use(globalLimiter);
+// app.use("/api/auth", authLimiter);
 
 app.all("/api/auth/{*any}", toNodeHandler(auth));
 
@@ -105,6 +106,9 @@ app.use("/api/field", fieldRoutes);
 
 // 2. MOUNT THE HUB ROUTES
 app.use("/api/hubs", hubRoutes);
+
+// 3. MOUNT UPLOAD ROUTES
+app.use("/api/upload", uploadRoutes);
 
 // Global Error Handler
 app.use(globalErrorHandler);

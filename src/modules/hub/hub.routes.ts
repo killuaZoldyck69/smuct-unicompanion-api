@@ -32,6 +32,7 @@ const router = Router();
 router.post("/", requireAuth, validateRequest(createHubSchema), createHub);
 router.post("/join", requireAuth, validateRequest(joinHubSchema), joinHub);
 router.get("/teachers", requireAuth, getAvailableTeachers);
+router.get("/available-teachers", requireAuth, getAvailableTeachers);
 router.get("/my", requireAuth, getMyHubs);
 router.get("/:id", requireAuth, getHubDetails);
 

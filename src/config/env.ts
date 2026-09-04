@@ -30,14 +30,18 @@ const envSchema = z.object({
 
   SMTP_HOST: z.string().default("smtp.gmail.com"),
   SMTP_PORT: z.coerce.number().default(465),
-  SMTP_USER: z.string().email(),
+  SMTP_USER: z.email(),
   SMTP_PASS: z.string().min(16),
-  EMAIL_FROM: z.string().email(),
+  EMAIL_FROM: z.email(),
 
   PORT: z.coerce.number().default(5000),
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
+
+  // CLOUDINARY_CLOUD_NAME: z.string().optional().default(""),
+  // CLOUDINARY_API_KEY: z.string().optional().default(""),
+  // CLOUDINARY_API_SECRET: z.string().optional().default(""),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
