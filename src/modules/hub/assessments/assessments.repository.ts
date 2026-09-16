@@ -1,5 +1,8 @@
 import { prisma } from "../../../lib/prisma";
-import { CreateAssessmentPayload } from "./assessments.schema";
+import {
+  CreateAssessmentPayload,
+  UpdateAssessmentPayload,
+} from "./assessments.schema";
 
 export const createAssessment = async (
   userId: string,
@@ -13,6 +16,7 @@ export const createAssessment = async (
       title: data.title,
       description: data.description,
       type: data.type,
+      submissionType: data.submissionType,
       deadline: data.deadline,
       totalMarks: data.totalMarks,
     },
@@ -125,4 +129,29 @@ export const bulkUpsertGrades = async (
       }),
     ),
   );
+};
+
+export const updateAssessment = async (
+  assessmentId: string,
+  data: UpdateAssessmentPayload,
+) => {
+  return await prisma.assessment.update({
+    where: { id: assessmentId },
+    data: {
+      ...(data.title !== undefined && { title: data.title }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.type !== undefined && { type: data.type }),
+      ...(data.submissionType !== undefined && {
+        submissionType: data.submissionType,
+      }),
+      ...(data.deadline !== undefined && { deadline: data.deadline }),
+      ...(data.totalMarks !== undefined && { totalMarks: data.totalMarks }),
+    },
+  });
+};
+
+export const deleteAssessment = async (assessmentId: string) => {
+  return await prisma.assessment.delete({
+    where: { id: assessmentId },
+  });
 };

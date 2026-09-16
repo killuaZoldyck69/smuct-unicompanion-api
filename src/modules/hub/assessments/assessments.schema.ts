@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { ASSESSMENT_TYPE_VALUES } from "../../../constants/enums";
+import {
+  ASSESSMENT_TYPE_VALUES,
+  SUBMISSION_TYPE_VALUES,
+} from "../../../constants/enums";
 
 const datePreprocess = z.preprocess(
   (val) => {
@@ -15,8 +18,20 @@ export const createAssessmentSchema = z.object({
     title: z.string().min(1, "Title is required"),
     description: z.string().optional(),
     type: z.enum(ASSESSMENT_TYPE_VALUES),
+    submissionType: z.enum(SUBMISSION_TYPE_VALUES).optional().default("ONLINE"),
     deadline: datePreprocess,
     totalMarks: z.number().positive(),
+  }),
+});
+
+export const updateAssessmentSchema = z.object({
+  body: z.object({
+    title: z.string().min(1, "Title cannot be empty").optional(),
+    description: z.string().optional(),
+    type: z.enum(ASSESSMENT_TYPE_VALUES).optional(),
+    submissionType: z.enum(SUBMISSION_TYPE_VALUES).optional(),
+    deadline: datePreprocess.optional(),
+    totalMarks: z.number().positive().optional(),
   }),
 });
 
@@ -41,6 +56,9 @@ export const bulkGradeSchema = z.object({
 
 export type CreateAssessmentPayload = z.infer<
   typeof createAssessmentSchema
+>["body"];
+export type UpdateAssessmentPayload = z.infer<
+  typeof updateAssessmentSchema
 >["body"];
 export type SubmitAssessmentPayload = z.infer<
   typeof submitAssessmentSchema

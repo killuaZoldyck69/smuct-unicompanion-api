@@ -3,6 +3,7 @@ import { requireAuth } from "../../../middleware/auth.middleware";
 import { validateRequest } from "../../../middleware/validateRequest";
 import {
   createAssessmentSchema,
+  updateAssessmentSchema,
   submitAssessmentSchema,
   gradeSubmissionSchema,
   bulkGradeSchema,
@@ -10,6 +11,8 @@ import {
 import {
   createAssessment,
   getAssessments,
+  updateAssessment,
+  deleteAssessment,
   getAssessmentSubmissions,
   submitAssessment,
   gradeSubmission,
@@ -26,6 +29,23 @@ router.post(
   createAssessment,
 );
 router.get("/:id/assessments", requireAuth, getAssessments);
+router.patch(
+  [
+    "/:id/assessments/:assessmentId",
+    "/assessments/:assessmentId",
+  ],
+  requireAuth,
+  validateRequest(updateAssessmentSchema),
+  updateAssessment,
+);
+router.delete(
+  [
+    "/:id/assessments/:assessmentId",
+    "/assessments/:assessmentId",
+  ],
+  requireAuth,
+  deleteAssessment,
+);
 router.get(
   [
     "/:id/assessments/:assessmentId/submissions",

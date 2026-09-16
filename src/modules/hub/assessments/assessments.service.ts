@@ -1,7 +1,10 @@
 import { verifyHubRole } from "../hub.service";
 import { AppError } from "../../../utils/AppError";
 import * as assessmentsRepository from "./assessments.repository";
-import { CreateAssessmentPayload } from "./assessments.schema";
+import {
+  CreateAssessmentPayload,
+  UpdateAssessmentPayload,
+} from "./assessments.schema";
 
 export const createAssessment = async (
   userId: string,
@@ -77,4 +80,29 @@ export const bulkGrade = async (
     userId,
     grades,
   );
+};
+
+export const updateAssessment = async (
+  userId: string,
+  assessmentId: string,
+  data: UpdateAssessmentPayload,
+) => {
+  const assessment = await assessmentsRepository.findAssessmentById(assessmentId);
+  if (!assessment) throw new AppError("Assessment not found", 404);
+
+  await verifyHubRole(userId, assessment.hubId, ["TEACHER", "CR", "TA"]);
+
+  return await assessmentsRepository.updateAssessment(assessmentId, data);
+};
+
+export const deleteAssessment = async (
+  userId: string,
+  assessmentId: string,
+) => {
+  const assessment = await assessmentsRepository.findAssessmentById(assessmentId);
+  if (!assessment) throw new AppError("Assessment not found", 404);
+
+  await verifyHubRole(userId, assessment.hubId, ["TEACHER", "CR", "TA"]);
+
+  return await assessmentsRepository.deleteAssessment(assessmentId);
 };

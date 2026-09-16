@@ -68,3 +68,28 @@ export const bulkGrade = catchAsync(async (req: Request, res: Response) => {
     .status(200)
     .json({ success: true, message: "Bulk grading complete", data });
 });
+
+export const updateAssessment = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await assessmentService.updateAssessment(
+      req.user.id,
+      req.params.assessmentId as string,
+      req.body,
+    );
+    res
+      .status(200)
+      .json({ success: true, message: "Assessment updated", data });
+  },
+);
+
+export const deleteAssessment = catchAsync(
+  async (req: Request, res: Response) => {
+    await assessmentService.deleteAssessment(
+      req.user.id,
+      req.params.assessmentId as string,
+    );
+    res
+      .status(200)
+      .json({ success: true, message: "Assessment deleted" });
+  },
+);
