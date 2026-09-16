@@ -42,6 +42,9 @@ model CourseHub {
   isReviewOpen    Boolean @default(false)
   reviewQuestions Json?
 
+  meetUrl     String?
+  isClassLive Boolean @default(false)
+
   members       HubMember[]
   resources     Resource[]
   assessments   Assessment[]

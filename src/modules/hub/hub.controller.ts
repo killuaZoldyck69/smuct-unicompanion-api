@@ -103,3 +103,21 @@ export const deleteHub = catchAsync(async (req: Request, res: Response) => {
     message: "Course Hub and all associated data deleted successfully.",
   });
 });
+
+export const toggleLiveClass = catchAsync(
+  async (req: Request, res: Response) => {
+    const hub = await hubService.toggleLiveClassService(
+      req.user.id,
+      req.params.id as string,
+      req.body.isClassLive,
+      req.body.meetUrl,
+    );
+    res.status(200).json({
+      success: true,
+      message: req.body.isClassLive
+        ? "Class is now live"
+        : "Live class ended",
+      data: hub,
+    });
+  },
+);

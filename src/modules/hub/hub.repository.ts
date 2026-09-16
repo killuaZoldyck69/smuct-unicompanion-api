@@ -184,6 +184,20 @@ export const updateHubArchiveStatus = async (
   });
 };
 
+export const updateHubLiveClass = async (
+  hubId: string,
+  isClassLive: boolean,
+  meetUrl?: string | null,
+) => {
+  return await prisma.courseHub.update({
+    where: { id: hubId },
+    data: {
+      isClassLive,
+      ...(meetUrl !== undefined && { meetUrl }),
+    },
+  });
+};
+
 export const deleteHubById = async (hubId: string) => {
   return await prisma.courseHub.delete({
     where: { id: hubId },

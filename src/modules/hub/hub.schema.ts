@@ -60,6 +60,15 @@ export const updateHubSchema = z.object({
         }),
       )
       .optional(),
+    meetUrl: z.string().nullable().optional(),
+    isClassLive: z.boolean().optional(),
+  }),
+});
+
+export const toggleLiveClassSchema = z.object({
+  body: z.object({
+    isClassLive: z.boolean(),
+    meetUrl: z.string().nullable().optional(),
   }),
 });
 
@@ -75,4 +84,7 @@ export type UpdateMemberRolePayload = z.infer<
   typeof updateMemberRoleSchema
 >["body"];
 export type UpdateHubPayload = z.infer<typeof updateHubSchema>["body"];
+export type ToggleLiveClassPayload = z.infer<
+  typeof toggleLiveClassSchema
+>["body"];
 export type ArchiveHubPayload = z.infer<typeof archiveHubSchema>["body"];

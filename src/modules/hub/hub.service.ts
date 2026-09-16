@@ -177,6 +177,16 @@ export const archiveHubService = async (
   return await hubRepository.updateHubArchiveStatus(hubId, isArchived);
 };
 
+export const toggleLiveClassService = async (
+  userId: string,
+  hubId: string,
+  isClassLive: boolean,
+  meetUrl?: string | null,
+) => {
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
+  return await hubRepository.updateHubLiveClass(hubId, isClassLive, meetUrl);
+};
+
 export const deleteHubService = async (userId: string, hubId: string) => {
   // Only Teachers and CRs can delete a hub
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);

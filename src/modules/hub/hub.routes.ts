@@ -7,6 +7,7 @@ import {
   updateMemberRoleSchema,
   archiveHubSchema,
   updateHubSchema,
+  toggleLiveClassSchema,
 } from "./hub.schema";
 import {
   createHub,
@@ -19,6 +20,7 @@ import {
   getAvailableTeachers,
   updateHub,
   deleteHub,
+  toggleLiveClass,
 } from "./hub.controller";
 
 import { resourceRoutes } from "../hub/resources/resources.routes";
@@ -37,6 +39,12 @@ router.get("/my", requireAuth, getMyHubs);
 router.get("/:id", requireAuth, getHubDetails);
 
 router.patch("/:id", requireAuth, validateRequest(updateHubSchema), updateHub);
+router.patch(
+  "/:id/live-class",
+  requireAuth,
+  validateRequest(toggleLiveClassSchema),
+  toggleLiveClass,
+);
 router.patch(
   "/:id/members/:memberId/role",
   requireAuth,
