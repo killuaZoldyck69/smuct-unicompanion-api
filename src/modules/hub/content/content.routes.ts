@@ -18,32 +18,46 @@ import {
 
 const router = Router({ mergeParams: true });
 
-// 👇 REMOVED "/hubs" from all paths!
+// Support both canonical /:id/announcements and legacy /:id/content/announcements
 router.post(
-  "/:id/announcements",
+  ["/:id/announcements", "/:id/content/announcements"],
   requireAuth,
   validateRequest(createAnnouncementSchema),
   createAnnouncement,
 );
-router.get("/:id/announcements", requireAuth, getAnnouncements);
+router.get(
+  ["/:id/announcements", "/:id/content/announcements"],
+  requireAuth,
+  getAnnouncements,
+);
 
 router.post(
-  "/:id/discussions",
+  ["/:id/discussions", "/:id/content/discussions"],
   requireAuth,
   validateRequest(createDiscussionSchema),
   createDiscussion,
 );
-router.get("/:id/discussions", requireAuth, getDiscussions);
+router.get(
+  ["/:id/discussions", "/:id/content/discussions"],
+  requireAuth,
+  getDiscussions,
+);
 
 router.post(
-  "/:id/discussions/:discussionId/reply",
+  [
+    "/:id/discussions/:discussionId/reply",
+    "/:id/content/discussions/:discussionId/reply",
+  ],
   requireAuth,
   validateRequest(replyDiscussionSchema),
   replyDiscussion,
 );
 
 router.post(
-  "/:id/announcements/:announcementId/comments",
+  [
+    "/:id/announcements/:announcementId/comments",
+    "/:id/content/announcements/:announcementId/comments",
+  ],
   requireAuth,
   validateRequest(commentAnnouncementSchema),
   commentAnnouncement,

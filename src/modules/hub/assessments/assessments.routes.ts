@@ -27,26 +27,39 @@ router.post(
 );
 router.get("/:id/assessments", requireAuth, getAssessments);
 router.get(
-  "/:id/assessments/:assessmentId/submissions",
+  [
+    "/:id/assessments/:assessmentId/submissions",
+    "/assessments/:assessmentId/submissions",
+  ],
   requireAuth,
   getAssessmentSubmissions,
 );
 
 // Submissions & Grading
 router.post(
-  "/:id/assessments/:assessmentId/submit",
+  [
+    "/:id/assessments/:assessmentId/submit",
+    "/assessments/:assessmentId/submit",
+  ],
   requireAuth,
   validateRequest(submitAssessmentSchema),
   submitAssessment,
 );
 router.patch(
-  "/:id/submissions/:submissionId/grade",
+  [
+    "/:id/submissions/:submissionId/grade",
+    "/submissions/:submissionId/grade",
+    "/assessments/submissions/:submissionId/grade",
+  ],
   requireAuth,
   validateRequest(gradeSubmissionSchema),
   gradeSubmission,
 );
 router.post(
-  "/:id/assessments/:assessmentId/bulk-grade",
+  [
+    "/:id/assessments/:assessmentId/bulk-grade",
+    "/assessments/:assessmentId/bulk-grade",
+  ],
   requireAuth,
   validateRequest(bulkGradeSchema),
   bulkGrade,

@@ -3,8 +3,13 @@ import { z } from "zod";
 export const createAnnouncementSchema = z.object({
   body: z.object({
     content: z.string().min(1, "Announcement content cannot be empty"),
-    attachedLinkUrl: z.string().url("Must be a valid URL").optional(),
-    attachedLinkTitle: z.string().optional(),
+    attachedLinkUrl: z
+      .string()
+      .url("Must be a valid URL")
+      .optional()
+      .or(z.literal(""))
+      .nullable(),
+    attachedLinkTitle: z.string().optional().nullable(),
   }),
 });
 
