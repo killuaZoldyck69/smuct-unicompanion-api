@@ -1,0 +1,68 @@
+// ==============================
+// LOST & FOUND ENUMS
+// ==============================
+
+enum LostFoundType {
+  LOST
+  FOUND
+}
+
+enum LostFoundStatus {
+  ACTIVE
+  CLAIMED
+  RESOLVED
+}
+
+enum LostFoundCategory {
+  BOOKS
+  ELECTRONICS
+  ID_CARD
+  KEYS
+  CLOTHING
+  OTHER
+}
+
+// ==============================
+// LOST & FOUND MODULE
+// ==============================
+
+model LostFoundPost {
+  id          String            @id @default(uuid())
+  authorId    String
+  type        LostFoundType
+  title       String
+  description String
+  category    LostFoundCategory
+  location    String
+  status      LostFoundStatus   @default(ACTIVE)
+  images      String[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  author   User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments LostFoundComment[]
+
+  @@index([authorId])
+  @@index([status, type])
+  @@map("lost_found_post")
+}
+
+model LostFoundComment {
+  id        String   @id @default(uuid())
+  postId    String
+  authorId  String
+  parentId  String?
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post    LostFoundPost      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent  LostFoundComment?  @relation("LostFoundCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies LostFoundComment[] @relation("LostFoundCommentReplies")
+
+  @@index([postId])
+  @@index([authorId])
+  @@index([parentId])
+  @@map("lost_found_comment")
+}

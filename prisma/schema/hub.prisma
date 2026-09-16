@@ -1,0 +1,210 @@
+// ==============================
+// COURSE HUB ENUMS
+// ==============================
+
+enum HubRole {
+  TEACHER
+  CR
+  TA
+  STUDENT
+}
+
+enum AssessmentType {
+  ASSIGNMENT
+  QUIZ
+  PRESENTATION
+}
+
+enum SubmissionType {
+  ONLINE
+  HAND
+}
+
+// ==============================
+// COURSE HUB MODULE
+// ==============================
+
+model CourseHub {
+  id                  String  @id @default(uuid())
+  courseCode          String
+  courseName          String
+  credit              Float
+  termOffer           String
+  weeklyClassSchedule Json
+  termExams           Json? // Consolidated exam data
+  joinCode            String  @unique
+  isArchived          Boolean @default(false)
+  department          String
+  batch               String
+  section             String?
+  semesterNumber      Int
+
+  isReviewOpen    Boolean @default(false)
+  reviewQuestions Json?
+
+  members       HubMember[]
+  resources     Resource[]
+  assessments   Assessment[]
+  reviews       CourseReview[]
+  announcements HubAnnouncement[]
+  discussions   HubDiscussion[]
+
+  createdAt DateTime @default(now())
+}
+
+model HubMember {
+  id       String  @id @default(uuid())
+  userId   String
+  hubId    String
+  role     HubRole
+  isActive Boolean @default(true)
+
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hub  CourseHub @relation(fields: [hubId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, hubId])
+  @@index([hubId])
+  @@index([userId])
+}
+
+// ==============================
+// HUB ANNOUNCEMENTS & DISCUSSIONS
+// ==============================
+
+model HubAnnouncement {
+  id                String   @id @default(uuid())
+  hubId             String
+  creatorId         String
+  content           String
+  attachedLinkUrl   String?
+  attachedLinkTitle String?
+  createdAt         DateTime @default(now())
+
+  hub      CourseHub             @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  creator  User                  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  comments AnnouncementComment[]
+
+  @@index([hubId])
+}
+
+model AnnouncementComment {
+  id             String   @id @default(uuid())
+  content        String
+  announcementId String
+  authorId       String
+  createdAt      DateTime @default(now())
+
+  announcement HubAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  author       User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([announcementId])
+}
+
+model HubDiscussion {
+  id        String   @id @default(uuid())
+  hubId     String
+  authorId  String
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+
+  hub     CourseHub            @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  author  User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  replies HubDiscussionReply[]
+
+  @@index([hubId])
+}
+
+model HubDiscussionReply {
+  id           String   @id @default(uuid())
+  discussionId String
+  authorId     String
+  content      String
+  createdAt    DateTime @default(now())
+
+  discussion HubDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  author     User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([discussionId])
+}
+
+// ==============================
+// ASSESSMENTS & GRADING
+// ==============================
+
+model Assessment {
+  id             String          @id @default(uuid())
+  hubId          String
+  creatorId      String?
+  title          String
+  description    String?
+  type           AssessmentType
+  submissionType SubmissionType?
+  deadline       DateTime
+  totalMarks     Float
+
+  hub         CourseHub    @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  creator     User?        @relation("CreatedAssessments", fields: [creatorId], references: [id], onDelete: SetNull)
+  submissions Submission[]
+  createdAt   DateTime     @default(now())
+
+  @@index([hubId])
+}
+
+model Submission {
+  id           String  @id @default(uuid())
+  assessmentId String
+  studentId    String
+  submittedUrl String?
+  marks        Float?
+  gradedById   String?
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  student    User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  gradedBy   User?      @relation("GradedSubmissions", fields: [gradedById], references: [id])
+  createdAt  DateTime   @default(now())
+
+  @@unique([assessmentId, studentId])
+  @@index([assessmentId])
+}
+
+// ==============================
+// RESOURCES & DIGITAL VAULT
+// ==============================
+
+model Resource {
+  id            String  @id @default(uuid())
+  title         String
+  driveUrl      String
+  uploaderId    String
+  hubId         String? // If Null -> Global Vault. If present -> Local Hub
+  isStudentNote Boolean @default(false)
+  rating        Float   @default(0) // Vault Promotion Threshold
+
+  uploader  User       @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+  hub       CourseHub? @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@index([hubId])
+}
+
+// ==============================
+// COURSE REVIEWS
+// ==============================
+
+model CourseReview {
+  id          String  @id @default(uuid())
+  hubId       String
+  studentId   String
+  rating      Int
+  comment     String?
+  isAnonymous Boolean @default(true)
+  answers     Json?
+
+  hub       CourseHub @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  student   User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@unique([hubId, studentId]) // One review per student per hub
+  @@index([hubId])
+}

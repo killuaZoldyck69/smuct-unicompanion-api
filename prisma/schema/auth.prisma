@@ -1,0 +1,164 @@
+// ==============================
+// ENUMS & AUTH TYPES
+// ==============================
+
+enum SystemRole {
+  ADMIN
+  STUDENT
+  TEACHER
+}
+
+enum BloodGroup {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+}
+
+// ==============================
+// BETTER AUTH CORE SCHEMAS
+// ==============================
+
+model User {
+  id            String      @id @default(uuid())
+  email         String      @unique
+  emailVerified Boolean     @default(false)
+  name          String
+  image         String?
+  role          SystemRole?
+  phoneNumber   String?
+  bloodGroup    BloodGroup?
+
+  // Better Auth Relations
+  sessions Session[]
+  accounts Account[]
+
+  // 1-to-1 Profiles
+  studentProfile StudentProfile?
+  teacherProfile TeacherProfile?
+
+  // App Relations
+  hubs          HubMember[]
+  resources     Resource[]
+  createdTasks  Assessment[]   @relation("CreatedAssessments")
+  submissions   Submission[]
+  gradedWork    Submission[]   @relation("GradedSubmissions")
+  helpPosts     HelpPost[]
+  helpResponses HelpResponse[]
+  bloodPosts    BloodPost[]
+  reviews       CourseReview[]
+
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  bloodResponses       BloodResponse[]
+  complaints           Complaint[]
+  fieldBookings        FieldBooking[]
+  hubAnnouncements     HubAnnouncement[]
+  hubDiscussions       HubDiscussion[]
+  hubDiscussionReplies HubDiscussionReply[]
+  announcementComments AnnouncementComment[]
+  lostFoundPosts       LostFoundPost[]
+  lostFoundComments    LostFoundComment[]
+  marketplacePosts     MarketplacePost[]
+  marketplaceComments  MarketplaceComment[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String? // Hashed password for credentials provider
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ==============================
+// ROLE-SPECIFIC PROFILES
+// ==============================
+
+model StudentProfile {
+  id        String @id @default(uuid())
+  userId    String @unique
+  studentId String @unique
+
+  faculty         String
+  department      String
+  program         String
+  batch           String
+  currentSemester Int
+  section         String
+
+  isCR Boolean @default(false)
+  isTA Boolean @default(false)
+
+  skills             String[]
+  linkedInUrl        String?
+  personalWebsiteUrl String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TeacherProfile {
+  id        String @id @default(uuid())
+  userId    String @unique
+  teacherId String @unique
+
+  designation String
+  department  String
+  faculty     String
+
+  officeRoom        String?
+  consultationHours String?
+
+  expertiseFields        String[]
+  academicQualifications Json?
+
+  linkedInUrl        String?
+  personalWebsiteUrl String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

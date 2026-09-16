@@ -1,0 +1,63 @@
+// ==============================
+// ACADEMIC CALENDAR ENUMS
+// ==============================
+
+enum CalendarStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum EventCategory {
+  CLASS
+  REGISTRATION
+  DEADLINE
+  EXAM
+  HOLIDAY
+  MAKEUP_CLASS
+  RESULT
+  ACADEMIC
+  OTHER
+}
+
+// ==============================
+// ACADEMIC CALENDAR MODULE
+// ==============================
+
+model AcademicCalendar {
+  id                String          @id @default(uuid())
+  title             String
+  semester          String
+  academicYear      Int             @default(2026)
+  status            CalendarStatus  @default(DRAFT)
+  isActive          Boolean         @default(true)
+  isGlobal          Boolean         @default(false)
+  targetFaculties   String[]
+  targetDepartments String[]
+  publishedAt       DateTime?
+  createdBy         String?
+  updatedBy         String?
+  events            CalendarEvent[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @default(now()) @updatedAt
+}
+
+model CalendarEvent {
+  id          String           @id @default(uuid())
+  calendarId  String
+  calendar    AcademicCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  category    EventCategory    @default(ACADEMIC)
+  startDate   DateTime
+  endDate     DateTime?
+  weekNumber  Int?
+  isHoliday   Boolean          @default(false)
+  isAllDay    Boolean          @default(true)
+  remarks     String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @default(now()) @updatedAt
+
+  @@index([calendarId])
+  @@index([startDate])
+}

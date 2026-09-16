@@ -1,0 +1,76 @@
+// ==============================
+// MARKETPLACE ENUMS
+// ==============================
+
+enum ListingType {
+  SELLING
+  BUYING
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  CLOSED
+}
+
+enum ItemCondition {
+  NEW
+  LIKE_NEW
+  GOOD
+  FAIR
+}
+
+enum MarketplaceCategory {
+  TEXTBOOKS
+  ELECTRONICS
+  STATIONERY
+  CLOTHING
+  OTHER
+}
+
+// ==============================
+// CAMPUS MARKETPLACE (BUY & SELL)
+// ==============================
+
+model MarketplacePost {
+  id           String              @id @default(uuid())
+  authorId     String
+  type         ListingType
+  title        String
+  description  String
+  price        Float?
+  category     MarketplaceCategory
+  condition    ItemCondition?
+  status       ListingStatus       @default(ACTIVE)
+  images       String[]
+  contactPhone String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  author   User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments MarketplaceComment[]
+
+  @@index([authorId])
+  @@index([status, type])
+  @@map("marketplace_post")
+}
+
+model MarketplaceComment {
+  id        String   @id @default(uuid())
+  postId    String
+  authorId  String
+  parentId  String?
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post    MarketplacePost      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent  MarketplaceComment?  @relation("MarketplaceCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies MarketplaceComment[] @relation("MarketplaceCommentReplies")
+
+  @@index([postId])
+  @@index([authorId])
+  @@index([parentId])
+  @@map("marketplace_comment")
+}

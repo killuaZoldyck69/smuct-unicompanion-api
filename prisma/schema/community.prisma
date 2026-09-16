@@ -1,0 +1,61 @@
+// ==============================
+// COMMUNITY & PEER SUPPORT
+// ==============================
+
+model HelpPost {
+  id          String         @id @default(uuid())
+  authorId    String
+  title       String
+  description String
+  isResolved  Boolean        @default(false)
+  author      User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  responses   HelpResponse[]
+  createdAt   DateTime       @default(now())
+
+  @@index([authorId])
+}
+
+model HelpResponse {
+  id          String   @id @default(uuid())
+  postId      String
+  responderId String
+  content     String
+  post        HelpPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  responder   User     @relation(fields: [responderId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+}
+
+// ==============================
+// EMERGENCY BLOOD DONATION
+// ==============================
+
+model BloodPost {
+  id               String          @id @default(uuid())
+  authorId         String
+  patientName      String
+  patientCondition String
+  bloodGroup       BloodGroup
+  location         String
+  urgency          String
+  contactPhone     String
+  isFulfilled      Boolean         @default(false)
+  author           User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  responses        BloodResponse[]
+  createdAt        DateTime        @default(now())
+
+  @@index([authorId])
+}
+
+model BloodResponse {
+  id          String  @id @default(uuid())
+  postId      String
+  responderId String
+  message     String?
+
+  post      BloodPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  responder User      @relation(fields: [responderId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@index([postId])
+  @@index([responderId])
+}
