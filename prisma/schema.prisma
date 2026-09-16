@@ -275,6 +275,7 @@ model CourseHub {
   isArchived          Boolean @default(false)
   department          String
   batch               String
+  section             String?
   semesterNumber      Int
 
   isReviewOpen    Boolean @default(false)
