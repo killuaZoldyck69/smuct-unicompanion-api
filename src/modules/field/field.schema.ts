@@ -17,12 +17,17 @@ export const updateFieldSettingsSchema = z.object({
 });
 
 export const bookFieldSchema = z.object({
-  body: z.object({
-    purpose: z.string().min(1, "Purpose is required"),
-    bookingDate: datePreprocess,
-    startTime: datePreprocess,
-    endTime: datePreprocess,
-  }),
+  body: z
+    .object({
+      purpose: z.string().min(1, "Purpose is required"),
+      bookingDate: datePreprocess.optional(),
+      startTime: datePreprocess,
+      endTime: datePreprocess,
+    })
+    .transform((data) => ({
+      ...data,
+      bookingDate: data.bookingDate ?? data.startTime,
+    })),
 });
 
 export const updateBookingStatusSchema = z.object({
