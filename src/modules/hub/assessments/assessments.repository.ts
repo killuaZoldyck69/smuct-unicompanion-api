@@ -26,7 +26,7 @@ export const createAssessment = async (
 export const findAssessmentsByHubId = async (hubId: string) => {
   return await prisma.assessment.findMany({
     where: { hubId },
-    orderBy: { deadline: "asc" },
+    orderBy: { createdAt: "desc" },
     include: {
       submissions: {
         include: {
