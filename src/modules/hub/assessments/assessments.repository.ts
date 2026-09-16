@@ -24,6 +24,22 @@ export const findAssessmentsByHubId = async (hubId: string) => {
     where: { hubId },
     orderBy: { deadline: "asc" },
     include: {
+      submissions: {
+        include: {
+          student: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+              studentProfile: true,
+            },
+          },
+          gradedBy: {
+            select: { id: true, name: true },
+          },
+        },
+      },
       _count: {
         select: { submissions: true },
       },
