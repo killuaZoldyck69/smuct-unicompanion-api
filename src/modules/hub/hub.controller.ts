@@ -12,8 +12,12 @@ export const createHub = catchAsync(async (req: Request, res: Response) => {
 
 export const getAvailableTeachers = catchAsync(
   async (req: Request, res: Response) => {
-    const teachers = await hubService.getAvailableTeachersService();
-    res.status(200).json({ success: true, data: teachers });
+    const result = await hubService.getAvailableTeachersService(req.query);
+    res.status(200).json({
+      success: true,
+      data: result.teachers,
+      meta: result.meta,
+    });
   },
 );
 

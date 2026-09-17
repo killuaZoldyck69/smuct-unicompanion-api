@@ -47,3 +47,4 @@ process.on("SIGTERM", () => handleShutdown("SIGTERM"));
 
 startServer();
 
+// Hub teachers query updated

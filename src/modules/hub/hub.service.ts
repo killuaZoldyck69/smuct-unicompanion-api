@@ -22,8 +22,10 @@ export const verifyHubRole = async (
   return member;
 };
 
-export const getAvailableTeachersService = async () => {
-  return await hubRepository.findAvailableTeachers();
+export const getAvailableTeachersService = async (
+  query?: hubRepository.FindAvailableTeachersQuery,
+) => {
+  return await hubRepository.findAvailableTeachers(query);
 };
 
 const generateJoinCode = () =>

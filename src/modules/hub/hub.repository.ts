@@ -8,31 +8,112 @@ export const findHubMember = async (userId: string, hubId: string) => {
   });
 };
 
-export const findAvailableTeachers = async () => {
-  return await prisma.user.findMany({
-    where: { role: "TEACHER" },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      image: true,
-      phoneNumber: true,
-      role: true,
-      teacherProfile: {
-        select: {
-          department: true,
-          designation: true,
-          faculty: true,
-          officeRoom: true,
-          consultationHours: true,
-          expertiseFields: true,
-          linkedInUrl: true,
-          personalWebsiteUrl: true,
+export interface FindAvailableTeachersQuery {
+  search?: string;
+  department?: string;
+  page?: number | string;
+  limit?: number | string;
+}
+
+export const findAvailableTeachers = async (
+  query?: FindAvailableTeachersQuery,
+) => {
+  const where: any = { role: "TEACHER" };
+
+  if (query?.department?.trim()) {
+    where.teacherProfile = {
+      department: { contains: query.department.trim(), mode: "insensitive" },
+    };
+  }
+
+  if (query?.search?.trim()) {
+    const s = query.search.trim();
+    where.OR = [
+      { name: { contains: s, mode: "insensitive" } },
+      { email: { contains: s, mode: "insensitive" } },
+      { phoneNumber: { contains: s, mode: "insensitive" } },
+      {
+        teacherProfile: {
+          OR: [
+            { department: { contains: s, mode: "insensitive" } },
+            { designation: { contains: s, mode: "insensitive" } },
+            { faculty: { contains: s, mode: "insensitive" } },
+            { officeRoom: { contains: s, mode: "insensitive" } },
+          ],
         },
       },
+    ];
+  }
+
+  const select = {
+    id: true,
+    name: true,
+    email: true,
+    image: true,
+    phoneNumber: true,
+    role: true,
+    teacherProfile: {
+      select: {
+        department: true,
+        designation: true,
+        faculty: true,
+        officeRoom: true,
+        consultationHours: true,
+        expertiseFields: true,
+        linkedInUrl: true,
+        personalWebsiteUrl: true,
+      },
     },
+  };
+
+  const isPaginated = query?.page !== undefined || query?.limit !== undefined;
+
+  if (isPaginated) {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 15));
+    const skip = (page - 1) * limit;
+
+    const [teachers, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select,
+        skip,
+        take: limit,
+        orderBy: { name: "asc" },
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      teachers,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasMore: page < totalPages,
+      },
+    };
+  }
+
+  const teachers = await prisma.user.findMany({
+    where,
+    select,
     orderBy: { name: "asc" },
   });
+
+  return {
+    teachers,
+    meta: {
+      page: 1,
+      limit: teachers.length,
+      total: teachers.length,
+      totalPages: 1,
+      hasMore: false,
+    },
+  };
 };
 
 export const findUserWithStudentProfile = async (userId: string) => {
