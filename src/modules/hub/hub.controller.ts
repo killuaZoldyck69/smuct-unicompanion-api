@@ -125,3 +125,33 @@ export const toggleLiveClass = catchAsync(
     });
   },
 );
+
+export const createClassNotice = catchAsync(
+  async (req: Request, res: Response) => {
+    const notice = await hubService.createClassNoticeService(
+      req.user.id,
+      req.params.id as string,
+      req.body,
+    );
+    res.status(201).json({
+      success: true,
+      message: "Class notice published successfully.",
+      data: notice,
+    });
+  },
+);
+
+export const deleteClassNotice = catchAsync(
+  async (req: Request, res: Response) => {
+    await hubService.deleteClassNoticeService(
+      req.user.id,
+      req.params.id as string,
+      req.params.noticeId as string,
+    );
+    res.status(200).json({
+      success: true,
+      message: "Class notice removed successfully.",
+    });
+  },
+);
+

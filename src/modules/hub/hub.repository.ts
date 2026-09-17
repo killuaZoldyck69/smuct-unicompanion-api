@@ -185,7 +185,11 @@ export const findMyHubMemberships = async (userId: string) => {
           _count: { select: { members: true } },
           members: {
             where: { role: "TEACHER" },
-            select: { user: { select: { name: true } } },
+            select: {
+              id: true,
+              role: true,
+              user: { select: { id: true, name: true, image: true, email: true } },
+            },
             take: 1,
           },
           assessments: {
@@ -193,6 +197,15 @@ export const findMyHubMemberships = async (userId: string) => {
             orderBy: { deadline: "asc" },
             take: 1,
             select: { id: true, title: true, type: true, deadline: true },
+          },
+          classNotices: {
+            where: { isActive: true },
+            include: {
+              author: {
+                select: { id: true, name: true, image: true, role: true },
+              },
+            },
+            orderBy: { createdAt: "desc" },
           },
         },
       },
@@ -218,6 +231,15 @@ export const findHubWithMembersAndDetails = async (hubId: string) => {
             },
           },
         },
+      },
+      classNotices: {
+        where: { isActive: true },
+        include: {
+          author: {
+            select: { id: true, name: true, image: true, role: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
       },
     },
   });
@@ -284,3 +306,80 @@ export const deleteHubById = async (hubId: string) => {
     where: { id: hubId },
   });
 };
+
+export const createClassNotice = async (
+  hubId: string,
+  authorId: string,
+  data: {
+    type: any;
+    title?: string;
+    message: string;
+    targetDay: string;
+    effectiveDate: Date;
+    newRoom?: string;
+    newTime?: string;
+    meetUrl?: string;
+  },
+) => {
+  return await prisma.classNotice.create({
+    data: {
+      hubId,
+      authorId,
+      type: data.type,
+      title: data.title,
+      message: data.message,
+      targetDay: data.targetDay,
+      effectiveDate: data.effectiveDate,
+      newRoom: data.newRoom,
+      newTime: data.newTime,
+      meetUrl: data.meetUrl,
+    },
+    include: {
+      author: {
+        select: { id: true, name: true, image: true, role: true },
+      },
+    },
+  });
+};
+
+export const deactivatePreviousNotices = async (
+  hubId: string,
+  targetDay: string,
+  effectiveDate: Date,
+) => {
+  // Start and end of the effective date to match the day
+  const startOfDay = new Date(effectiveDate);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(effectiveDate);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  return await prisma.classNotice.updateMany({
+    where: {
+      hubId,
+      targetDay,
+      effectiveDate: {
+        gte: startOfDay,
+        lte: endOfDay,
+      },
+      isActive: true,
+    },
+    data: { isActive: false },
+  });
+};
+
+export const findClassNoticeById = async (noticeId: string) => {
+  return await prisma.classNotice.findUnique({
+    where: { id: noticeId },
+    include: {
+      author: { select: { id: true, name: true, role: true } },
+    },
+  });
+};
+
+export const deleteClassNoticeById = async (noticeId: string) => {
+  return await prisma.classNotice.update({
+    where: { id: noticeId },
+    data: { isActive: false },
+  });
+};
+

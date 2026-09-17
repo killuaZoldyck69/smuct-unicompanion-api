@@ -88,3 +88,26 @@ export type ToggleLiveClassPayload = z.infer<
   typeof toggleLiveClassSchema
 >["body"];
 export type ArchiveHubPayload = z.infer<typeof archiveHubSchema>["body"];
+
+export const createClassNoticeSchema = z.object({
+  body: z.object({
+    type: z.enum([
+      "CANCELLED",
+      "ROOM_CHANGE",
+      "TIME_CHANGE",
+      "ONLINE_CLASS",
+      "URGENT_NOTICE",
+    ]),
+    title: z.string().optional(),
+    message: z.string().optional().default(""),
+    targetDay: z.string().min(1, "Target day is required"),
+    effectiveDate: z.string().min(1, "Effective date is required"),
+    newRoom: z.string().optional(),
+    newTime: z.string().optional(),
+    meetUrl: z.string().optional(),
+  }),
+});
+
+export type CreateClassNoticePayload = z.infer<
+  typeof createClassNoticeSchema
+>["body"];

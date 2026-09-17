@@ -4,6 +4,7 @@ import {
   CreateHubPayload,
   UpdateHubPayload,
   UpdateMemberRolePayload,
+  CreateClassNoticePayload,
 } from "./hub.schema";
 
 // 🛡️ Centralized Authorization Helper
@@ -195,3 +196,65 @@ export const deleteHubService = async (userId: string, hubId: string) => {
 
   return await hubRepository.deleteHubById(hubId);
 };
+
+export const createClassNoticeService = async (
+  userId: string,
+  hubId: string,
+  data: CreateClassNoticePayload,
+) => {
+  // Only Teachers and CRs can post a notice for a class
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
+
+  const effectiveDate = new Date(data.effectiveDate);
+  if (isNaN(effectiveDate.getTime())) {
+    throw new AppError("Invalid effective date provided.", 400);
+  }
+
+  // Deactivate any existing active notice for this day & date
+  await hubRepository.deactivatePreviousNotices(
+    hubId,
+    data.targetDay,
+    effectiveDate,
+  );
+
+  let resolvedMessage = data.message?.trim();
+  if (!resolvedMessage) {
+    if (data.type === "CANCELLED") {
+      resolvedMessage = "Class is cancelled for today.";
+    } else if (data.type === "ROOM_CHANGE") {
+      resolvedMessage = data.newRoom
+        ? `Class will be held in Room ${data.newRoom}.`
+        : "Classroom has been changed for today.";
+    } else if (data.type === "ONLINE_CLASS") {
+      resolvedMessage = "Class will be held online today.";
+    } else if (data.type === "TIME_CHANGE") {
+      resolvedMessage = data.newTime
+        ? `Class rescheduled to ${data.newTime}.`
+        : "Class time has been rescheduled.";
+    } else {
+      resolvedMessage = "Class notice.";
+    }
+  }
+
+  return await hubRepository.createClassNotice(hubId, userId, {
+    ...data,
+    message: resolvedMessage,
+    effectiveDate,
+  });
+};
+
+export const deleteClassNoticeService = async (
+  userId: string,
+  hubId: string,
+  noticeId: string,
+) => {
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
+
+  const notice = await hubRepository.findClassNoticeById(noticeId);
+  if (!notice) {
+    throw new AppError("Class notice not found.", 404);
+  }
+
+  return await hubRepository.deleteClassNoticeById(noticeId);
+};
+

@@ -51,6 +51,7 @@ model CourseHub {
   reviews       CourseReview[]
   announcements HubAnnouncement[]
   discussions   HubDiscussion[]
+  classNotices  ClassNotice[]
 
   createdAt DateTime @default(now())
 }
@@ -210,4 +211,39 @@ model CourseReview {
 
   @@unique([hubId, studentId]) // One review per student per hub
   @@index([hubId])
+}
+
+// ==============================
+// CLASS ROUTINE NOTICES & ALERTS
+// ==============================
+
+enum ClassNoticeType {
+  CANCELLED
+  ROOM_CHANGE
+  TIME_CHANGE
+  ONLINE_CLASS
+  URGENT_NOTICE
+}
+
+model ClassNotice {
+  id            String          @id @default(uuid())
+  hubId         String
+  authorId      String
+  type          ClassNoticeType
+  title         String?
+  message       String
+  targetDay     String          // e.g. "Monday"
+  effectiveDate DateTime        // Specific date this notice applies to
+  newRoom       String?         // If ROOM_CHANGE
+  newTime       String?         // If TIME_CHANGE
+  meetUrl       String?         // If ONLINE_CLASS
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  hub           CourseHub       @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  author        User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([hubId])
+  @@index([effectiveDate])
 }

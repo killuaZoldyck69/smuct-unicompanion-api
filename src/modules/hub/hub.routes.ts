@@ -8,6 +8,7 @@ import {
   archiveHubSchema,
   updateHubSchema,
   toggleLiveClassSchema,
+  createClassNoticeSchema,
 } from "./hub.schema";
 import {
   createHub,
@@ -21,6 +22,8 @@ import {
   updateHub,
   deleteHub,
   toggleLiveClass,
+  createClassNotice,
+  deleteClassNotice,
 } from "./hub.controller";
 
 import { resourceRoutes } from "../hub/resources/resources.routes";
@@ -61,6 +64,19 @@ router.patch(
   requireAuth,
   validateRequest(archiveHubSchema),
   archiveHub,
+);
+
+// --- Class Routine Notices & Alerts ---
+router.post(
+  "/:id/class-notices",
+  requireAuth,
+  validateRequest(createClassNoticeSchema),
+  createClassNotice,
+);
+router.delete(
+  "/:id/class-notices/:noticeId",
+  requireAuth,
+  deleteClassNotice,
 );
 
 // Mount the Sub-Routes directly onto the Hub Router
