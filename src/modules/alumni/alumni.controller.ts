@@ -3,9 +3,23 @@ import { catchAsync } from "../../utils/catchAsync";
 import * as alumniService from "./alumni.service";
 
 export const getAllAlumni = catchAsync(async (req: Request, res: Response) => {
-  const alumni = await alumniService.getAllAlumniService();
-  res.status(200).json({ success: true, data: alumni });
+  const result = await alumniService.getAllAlumniService(req.query);
+  res.status(200).json({
+    success: true,
+    data: result.data,
+    meta: result.meta,
+  });
 });
+
+export const getAlumniDepartments = catchAsync(
+  async (_req: Request, res: Response) => {
+    const departments = await alumniService.getAlumniDepartmentsService();
+    res.status(200).json({
+      success: true,
+      data: departments,
+    });
+  },
+);
 
 export const createAlumni = catchAsync(async (req: Request, res: Response) => {
   const alumni = await alumniService.createAlumniService(req.body);

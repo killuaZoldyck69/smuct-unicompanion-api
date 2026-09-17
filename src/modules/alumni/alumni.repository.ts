@@ -1,11 +1,40 @@
 import { prisma } from "../../lib/prisma";
 import { CreateAlumniPayload, UpdateAlumniPayload } from "./alumni.schema";
 
-export const findAllAlumni = async (take = 100) => {
+export const findAllAlumni = async (
+  where: any = {},
+  skip = 0,
+  take = 20,
+  orderBy: any = [{ graduationYear: "desc" }, { createdAt: "desc" }],
+) => {
   return await prisma.alumni.findMany({
-    orderBy: { graduationYear: "desc" },
+    where,
+    skip,
     take,
+    orderBy,
   });
+};
+
+export const countAlumni = async (where: any = {}) => {
+  return await prisma.alumni.count({
+    where,
+  });
+};
+
+export const findAlumniDepartments = async () => {
+  const groups = await prisma.alumni.groupBy({
+    by: ["department"],
+    _count: {
+      department: true,
+    },
+    orderBy: {
+      department: "asc",
+    },
+  });
+  return groups.map((g) => ({
+    department: g.department,
+    count: g._count.department,
+  }));
 };
 
 export const createAlumni = async (data: CreateAlumniPayload) => {

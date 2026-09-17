@@ -9,6 +9,7 @@ import {
 } from "./alumni.schema";
 import {
   getAllAlumni,
+  getAlumniDepartments,
   createAlumni,
   bulkCreateAlumni,
   updateAlumni,
@@ -17,6 +18,7 @@ import {
 
 const router = Router();
 
+router.get("/departments", requireAuth, getAlumniDepartments);
 router.get("/", requireAuth, getAllAlumni);
 router.post(
   "/",
