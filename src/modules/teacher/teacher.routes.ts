@@ -3,8 +3,11 @@ import { requireAuth } from "../../middleware/auth.middleware";
 import { requireAdmin } from "../../middleware/admin.middleware";
 import { validateRequest } from "../../middleware/validateRequest";
 import {
+  singleUpload,
+  normalizeSingleFile,
+} from "../../middleware/upload.middleware";
+import {
   registerTeacherSchema,
-  updateTeacherImageSchema,
   updateTeacherProfileSchema,
 } from "./teacher.schema";
 import {
@@ -34,7 +37,8 @@ router.patch(
   "/profile/image",
   requireAuth,
   requireTeacher,
-  validateRequest(updateTeacherImageSchema),
+  singleUpload,
+  normalizeSingleFile,
   updateTeacherProfileImage,
 );
 

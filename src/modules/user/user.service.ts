@@ -1,6 +1,11 @@
 import { AppError } from "../../utils/AppError";
 import * as userRepository from "./user.repository";
 import { UpdateRolePayload } from "./user.schema";
+import {
+  uploadSingleImageService,
+  MulterFile,
+} from "../upload/upload.service";
+
 
 export const getAllUsersService = async (query?: {
   page?: number | string;
@@ -81,3 +86,40 @@ export const updateStudentRoleService = async (
   // Apply the update to the delegated StudentProfile
   return await userRepository.updateStudentProfileByUserId(id, updateData);
 };
+
+export const updateUserProfileImageService = async (
+  userId: string,
+  file?: MulterFile,
+  base64?: string,
+  imageUrl?: string,
+) => {
+  let finalImageUrl = imageUrl?.trim();
+
+  if (file || (base64 && base64.trim())) {
+    const uploadResult = await uploadSingleImageService(
+      file,
+      base64,
+      "unicompanion/profiles",
+    );
+    finalImageUrl = uploadResult.secureUrl;
+  }
+
+  if (!finalImageUrl) {
+    throw new AppError("No image file, base64 data, or image URL provided.", 400);
+  }
+
+  const updatedUser = await userRepository.updateUserImageById(
+    userId,
+    finalImageUrl,
+  );
+
+  if (!updatedUser) {
+    throw new AppError("User not found.", 404);
+  }
+
+  return {
+    imageUrl: finalImageUrl,
+    user: updatedUser,
+  };
+};
+

@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import * as studentService from "./student.service";
+import * as userService from "../user/user.service";
+import { MulterFile } from "../upload/upload.service";
 import { catchAsync } from "../../utils/catchAsync";
 import { AppError } from "../../utils/AppError";
 
@@ -19,17 +21,21 @@ export const onboardStudent = catchAsync(
 export const updateProfileImage = catchAsync(
   async (req: Request, res: Response) => {
     const userId = req.user.id;
-    const { imageUrl } = req.body;
+    const file = req.file as unknown as MulterFile | undefined;
+    const base64 = req.body?.image as string | undefined;
+    const imageUrl = req.body?.imageUrl as string | undefined;
 
-    const updatedUser = await studentService.updateProfileImageService(
+    const result = await userService.updateUserProfileImageService(
       userId,
+      file,
+      base64,
       imageUrl,
     );
 
     res.status(200).json({
       success: true,
       message: "Profile image updated successfully.",
-      data: updatedUser,
+      data: result.user,
     });
   },
 );

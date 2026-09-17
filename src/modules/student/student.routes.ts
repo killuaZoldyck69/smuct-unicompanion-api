@@ -2,8 +2,11 @@ import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.middleware";
 import { validateRequest } from "../../middleware/validateRequest";
 import {
+  singleUpload,
+  normalizeSingleFile,
+} from "../../middleware/upload.middleware";
+import {
   onboardStudentSchema,
-  updateProfileImageSchema,
   updateProfileSchema,
 } from "./student.schema";
 import {
@@ -25,7 +28,8 @@ router.post(
 router.patch(
   "/profile/image",
   requireAuth,
-  validateRequest(updateProfileImageSchema),
+  singleUpload,
+  normalizeSingleFile,
   updateProfileImage,
 );
 

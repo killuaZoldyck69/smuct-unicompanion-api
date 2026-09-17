@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../../utils/catchAsync";
 import * as userService from "./user.service";
+import { MulterFile } from "../upload/upload.service";
 
 export const getAllUsers = catchAsync(async (req: Request, res: Response) => {
   const result = await userService.getAllUsersService(req.query);
@@ -41,3 +42,26 @@ export const updateStudentRole = catchAsync(
     });
   },
 );
+
+export const updateUserProfileImage = catchAsync(
+  async (req: Request, res: Response) => {
+    const userId = req.user.id;
+    const file = req.file as unknown as MulterFile | undefined;
+    const base64 = req.body?.image as string | undefined;
+    const imageUrl = req.body?.imageUrl as string | undefined;
+
+    const result = await userService.updateUserProfileImageService(
+      userId,
+      file,
+      base64,
+      imageUrl,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Profile image updated successfully.",
+      data: result,
+    });
+  },
+);
+

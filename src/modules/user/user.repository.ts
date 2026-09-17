@@ -51,3 +51,18 @@ export const updateStudentProfileByUserId = async (
     data,
   });
 };
+
+export const updateUserImageById = async (id: string, image: string) => {
+  return await prisma.user.update({
+    where: { id },
+    data: { image },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      image: true,
+      role: true,
+    },
+  });
+};
+
