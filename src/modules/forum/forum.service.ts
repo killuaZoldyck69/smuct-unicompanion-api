@@ -4,6 +4,7 @@ import {
   CreatePostPayload,
   CreateResponsePayload,
   UpdatePostPayload,
+  UpdateResponsePayload,
 } from "./forum.schema";
 
 export const createPostService = async (
@@ -13,12 +14,15 @@ export const createPostService = async (
   return await forumRepository.createHelpPost(authorId, data);
 };
 
-export const getAllPostsService = async (query?: {
-  page?: number | string;
-  limit?: number | string;
-  filter?: string;
-  search?: string;
-}) => {
+export const getAllPostsService = async (
+  query?: {
+    page?: number | string;
+    limit?: number | string;
+    filter?: string;
+    search?: string;
+  },
+  userId?: string,
+) => {
   const page = Math.max(1, Number(query?.page) || 1);
   const limit = Math.max(1, Math.min(100, Number(query?.limit) || 25));
   const skip = (page - 1) * limit;
@@ -28,7 +32,10 @@ export const getAllPostsService = async (query?: {
     where.isResolved = false;
   } else if (query?.filter === "RESOLVED") {
     where.isResolved = true;
+  } else if (query?.filter === "MY_POSTS" && userId) {
+    where.authorId = userId;
   }
+
   if (query?.search) {
     where.OR = [
       { title: { contains: query.search, mode: "insensitive" } },
@@ -36,9 +43,10 @@ export const getAllPostsService = async (query?: {
     ];
   }
 
-  const [posts, total] = await Promise.all([
+  const [posts, total, counts] = await Promise.all([
     forumRepository.findHelpPosts(where, skip, limit),
     forumRepository.countHelpPosts(where),
+    forumRepository.getForumCounts(userId),
   ]);
 
   return {
@@ -48,6 +56,7 @@ export const getAllPostsService = async (query?: {
       limit,
       total,
       totalPages: Math.ceil(total / limit),
+      counts,
     },
   };
 };
@@ -139,4 +148,49 @@ export const deletePostService = async (
   }
 
   return await forumRepository.deleteHelpPostById(postId);
+};
+
+export const updateResponseService = async (
+  postId: string,
+  responseId: string,
+  userId: string,
+  role: string,
+  data: UpdateResponsePayload,
+) => {
+  const response = await forumRepository.findHelpResponseById(responseId);
+
+  if (!response || response.postId !== postId) {
+    throw new AppError("Response not found.", 404);
+  }
+
+  if (response.responderId !== userId && role !== "ADMIN") {
+    throw new AppError(
+      "You do not have permission to edit this response.",
+      403,
+    );
+  }
+
+  return await forumRepository.updateHelpResponse(responseId, data);
+};
+
+export const deleteResponseService = async (
+  postId: string,
+  responseId: string,
+  userId: string,
+  role: string,
+) => {
+  const response = await forumRepository.findHelpResponseById(responseId);
+
+  if (!response || response.postId !== postId) {
+    throw new AppError("Response not found.", 404);
+  }
+
+  if (response.responderId !== userId && role !== "ADMIN") {
+    throw new AppError(
+      "You do not have permission to delete this response.",
+      403,
+    );
+  }
+
+  return await forumRepository.deleteHelpResponseById(responseId);
 };

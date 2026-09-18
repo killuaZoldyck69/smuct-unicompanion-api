@@ -11,8 +11,11 @@ model HelpPost {
   author      User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
   responses   HelpResponse[]
   createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   @@index([authorId])
+  @@index([createdAt(sort: Desc)])
+  @@index([isResolved, createdAt(sort: Desc)])
 }
 
 model HelpResponse {
@@ -23,6 +26,10 @@ model HelpResponse {
   post        HelpPost @relation(fields: [postId], references: [id], onDelete: Cascade)
   responder   User     @relation(fields: [responderId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([postId])
+  @@index([responderId])
 }
 
 // ==============================

@@ -14,7 +14,8 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getFeed = catchAsync(async (req: Request, res: Response) => {
-  const result = await forumService.getAllPostsService(req.query);
+  const userId = req.user.id;
+  const result = await forumService.getAllPostsService(req.query, userId);
 
   res.status(200).json({
     success: true,
@@ -99,5 +100,42 @@ export const deletePost = catchAsync(async (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     message: "Forum post deleted successfully.",
+  });
+});
+
+// Update Response Controller
+export const updateResponse = catchAsync(async (req: Request, res: Response) => {
+  const postId = req.params.id as string;
+  const responseId = req.params.responseId as string;
+  const userId = req.user.id;
+  const role = req.user.role;
+
+  const updated = await forumService.updateResponseService(
+    postId,
+    responseId,
+    userId,
+    role,
+    req.body,
+  );
+
+  res.status(200).json({
+    success: true,
+    message: "Response updated successfully.",
+    data: updated,
+  });
+});
+
+// Delete Response Controller
+export const deleteResponse = catchAsync(async (req: Request, res: Response) => {
+  const postId = req.params.id as string;
+  const responseId = req.params.responseId as string;
+  const userId = req.user.id;
+  const role = req.user.role;
+
+  await forumService.deleteResponseService(postId, responseId, userId, role);
+
+  res.status(200).json({
+    success: true,
+    message: "Response deleted successfully.",
   });
 });

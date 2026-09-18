@@ -3,6 +3,7 @@ import {
   CreatePostPayload,
   CreateResponsePayload,
   UpdatePostPayload,
+  UpdateResponsePayload,
 } from "./forum.schema";
 
 export const createHelpPost = async (
@@ -37,6 +38,19 @@ export const findHelpPosts = async (
           name: true,
           image: true,
           role: true,
+          studentProfile: {
+            select: {
+              department: true,
+              currentSemester: true,
+              section: true,
+            },
+          },
+          teacherProfile: {
+            select: {
+              department: true,
+              designation: true,
+            },
+          },
         },
       },
       _count: {
@@ -48,6 +62,22 @@ export const findHelpPosts = async (
 
 export const countHelpPosts = async (where: Record<string, any>) => {
   return await prisma.helpPost.count({ where });
+};
+
+export const getForumCounts = async (userId?: string) => {
+  const [total, open, resolved, myPosts] = await Promise.all([
+    prisma.helpPost.count(),
+    prisma.helpPost.count({ where: { isResolved: false } }),
+    prisma.helpPost.count({ where: { isResolved: true } }),
+    userId ? prisma.helpPost.count({ where: { authorId: userId } }) : 0,
+  ]);
+
+  return {
+    total,
+    open,
+    resolved,
+    myPosts,
+  };
 };
 
 export const findHelpPostById = async (id: string) => {
@@ -64,6 +94,8 @@ export const findHelpPostWithDetails = async (id: string) => {
         select: {
           id: true,
           name: true,
+          email: true,
+          phoneNumber: true,
           image: true,
           role: true,
           studentProfile: true,
@@ -77,6 +109,8 @@ export const findHelpPostWithDetails = async (id: string) => {
             select: {
               id: true,
               name: true,
+              email: true,
+              phoneNumber: true,
               image: true,
               role: true,
               studentProfile: true,
@@ -115,6 +149,28 @@ export const updateHelpPost = async (
 
 export const deleteHelpPostById = async (id: string) => {
   return await prisma.helpPost.delete({
+    where: { id },
+  });
+};
+
+export const findHelpResponseById = async (id: string) => {
+  return await prisma.helpResponse.findUnique({
+    where: { id },
+  });
+};
+
+export const updateHelpResponse = async (
+  id: string,
+  data: UpdateResponsePayload,
+) => {
+  return await prisma.helpResponse.update({
+    where: { id },
+    data,
+  });
+};
+
+export const deleteHelpResponseById = async (id: string) => {
+  return await prisma.helpResponse.delete({
     where: { id },
   });
 };
