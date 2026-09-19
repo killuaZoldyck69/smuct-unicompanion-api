@@ -36,10 +36,11 @@ export const getAllPostsService = async (
     where.authorId = userId;
   }
 
-  if (query?.search) {
+  const searchKeyword = typeof query?.search === "string" ? query.search.trim() : undefined;
+  if (searchKeyword) {
     where.OR = [
-      { title: { contains: query.search, mode: "insensitive" } },
-      { description: { contains: query.search, mode: "insensitive" } },
+      { title: { contains: searchKeyword, mode: "insensitive" } },
+      { description: { contains: searchKeyword, mode: "insensitive" } },
     ];
   }
 
