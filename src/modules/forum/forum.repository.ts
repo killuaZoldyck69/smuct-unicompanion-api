@@ -139,7 +139,7 @@ export const createHelpResponse = async (
 
 export const updateHelpPost = async (
   id: string,
-  data: UpdatePostPayload | { isResolved: boolean },
+  data: UpdatePostPayload | { isResolved: boolean; updatedAt?: Date },
 ) => {
   return await prisma.helpPost.update({
     where: { id },

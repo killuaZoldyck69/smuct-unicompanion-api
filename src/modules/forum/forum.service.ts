@@ -105,7 +105,10 @@ export const resolvePostService = async (
     );
   }
 
-  return await forumRepository.updateHelpPost(postId, { isResolved: true });
+  return await forumRepository.updateHelpPost(postId, {
+    isResolved: true,
+    updatedAt: post.updatedAt,
+  });
 };
 
 // Update Post Service
@@ -158,7 +161,18 @@ export const updateResponseService = async (
   role: string,
   data: UpdateResponsePayload,
 ) => {
-  const response = await forumRepository.findHelpResponseById(responseId);
+  const [post, response] = await Promise.all([
+    forumRepository.findHelpPostById(postId),
+    forumRepository.findHelpResponseById(responseId),
+  ]);
+
+  if (!post) {
+    throw new AppError("Forum post not found.", 404);
+  }
+
+  if (post.isResolved) {
+    throw new AppError("Cannot edit responses on a resolved discussion.", 403);
+  }
 
   if (!response || response.postId !== postId) {
     throw new AppError("Response not found.", 404);
