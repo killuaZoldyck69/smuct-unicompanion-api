@@ -1,7 +1,11 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.middleware";
 import { validateRequest } from "../../middleware/validateRequest";
-import { createBloodPostSchema, respondBloodPostSchema } from "./blood.schema";
+import {
+  createBloodPostSchema,
+  respondBloodPostSchema,
+  getBloodFeedQuerySchema,
+} from "./blood.schema";
 import {
   createBloodPost,
   getBloodFeed,
@@ -22,7 +26,7 @@ router.post(
 );
 
 // GET /api/blood - Get All Blood Requests (Feed)
-router.get("/", requireAuth, getBloodFeed);
+router.get("/", requireAuth, validateRequest(getBloodFeedQuerySchema), getBloodFeed);
 
 // GET /api/blood/:id - Get Single Blood Request Details
 router.get("/:id", requireAuth, getBloodPostById);

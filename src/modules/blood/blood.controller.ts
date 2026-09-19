@@ -19,12 +19,14 @@ export const createBloodPost = catchAsync(
 );
 
 export const getBloodFeed = catchAsync(async (req: Request, res: Response) => {
-  const posts = await bloodService.getBloodFeedService();
+  const userId = req.user?.id;
+  const result = await bloodService.getBloodFeedService(req.query, userId);
 
   res.status(200).json({
     success: true,
     message: "Blood feed retrieved successfully.",
-    data: posts,
+    data: result.data,
+    meta: result.meta,
   });
 });
 

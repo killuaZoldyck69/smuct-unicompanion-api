@@ -13,21 +13,60 @@ export const createBloodPost = async (
   });
 };
 
-export const findBloodFeed = async (take = 100) => {
+export const findBloodFeed = async (
+  where: Record<string, any> = {},
+  skip = 0,
+  take = 25,
+) => {
   return await prisma.bloodPost.findMany({
+    where,
     orderBy: {
       createdAt: "desc",
     },
+    skip,
     take,
     include: {
       author: {
-        select: { id: true, name: true, image: true },
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          role: true,
+          studentProfile: {
+            select: { department: true },
+          },
+          teacherProfile: {
+            select: { department: true, designation: true },
+          },
+        },
       },
       _count: {
         select: { responses: true },
       },
     },
   });
+};
+
+export const countBloodPosts = async (where: Record<string, any> = {}) => {
+  return await prisma.bloodPost.count({ where });
+};
+
+export const getBloodCounts = async (userId?: string) => {
+  const [total, active, urgent, fulfilled, myPosts] = await Promise.all([
+    prisma.bloodPost.count(),
+    prisma.bloodPost.count({ where: { isFulfilled: false } }),
+    prisma.bloodPost.count({ where: { urgency: "High", isFulfilled: false } }),
+    prisma.bloodPost.count({ where: { isFulfilled: true } }),
+    userId ? prisma.bloodPost.count({ where: { authorId: userId } }) : 0,
+  ]);
+
+  return {
+    total,
+    active,
+    urgent,
+    fulfilled,
+    myPosts,
+  };
 };
 
 export const findBloodPostById = async (id: string) => {

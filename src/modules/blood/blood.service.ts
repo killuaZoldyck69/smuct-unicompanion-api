@@ -12,8 +12,66 @@ export const createBloodPostService = async (
   return await bloodRepository.createBloodPost(authorId, data);
 };
 
-export const getBloodFeedService = async () => {
-  return await bloodRepository.findBloodFeed(100);
+export const getBloodFeedService = async (
+  query?: {
+    page?: number | string;
+    limit?: number | string;
+    search?: string;
+    bloodGroup?: any;
+    urgency?: string;
+    isFulfilled?: string;
+    myPosts?: string;
+  },
+  userId?: string,
+) => {
+  const page = Math.max(1, Number(query?.page) || 1);
+  const limit = Math.max(1, Math.min(100, Number(query?.limit) || 20));
+  const skip = (page - 1) * limit;
+
+  const where: any = {};
+
+  if (query?.bloodGroup) {
+    where.bloodGroup = query.bloodGroup;
+  }
+
+  if (query?.urgency) {
+    where.urgency = query.urgency;
+  }
+
+  if (query?.isFulfilled !== undefined) {
+    where.isFulfilled = query.isFulfilled === "true";
+  }
+
+  if (query?.myPosts === "true" && userId) {
+    where.authorId = userId;
+  }
+
+  const searchKeyword =
+    typeof query?.search === "string" ? query.search.trim() : undefined;
+  if (searchKeyword) {
+    where.OR = [
+      { patientName: { contains: searchKeyword, mode: "insensitive" } },
+      { patientCondition: { contains: searchKeyword, mode: "insensitive" } },
+      { location: { contains: searchKeyword, mode: "insensitive" } },
+    ];
+  }
+
+  const [posts, total, counts] = await Promise.all([
+    bloodRepository.findBloodFeed(where, skip, limit),
+    bloodRepository.countBloodPosts(where),
+    bloodRepository.getBloodCounts(userId),
+  ]);
+
+  return {
+    data: posts,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      counts,
+    },
+  };
 };
 
 export const getBloodPostByIdService = async (id: string) => {

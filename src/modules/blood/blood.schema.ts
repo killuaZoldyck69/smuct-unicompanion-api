@@ -20,9 +20,24 @@ export const respondBloodPostSchema = z.object({
   }),
 });
 
+export const getBloodFeedQuerySchema = z.object({
+  query: z.object({
+    page: z.string().optional(),
+    limit: z.string().optional(),
+    search: z.string().optional(),
+    bloodGroup: z.enum(BLOOD_GROUP_VALUES).optional(),
+    urgency: z.string().optional(),
+    isFulfilled: z.enum(["true", "false"]).optional(),
+    myPosts: z.enum(["true", "false"]).optional(),
+  }).optional(),
+});
+
 export type CreateBloodPostPayload = z.infer<
   typeof createBloodPostSchema
 >["body"];
 export type RespondBloodPostPayload = z.infer<
   typeof respondBloodPostSchema
 >["body"];
+export type GetBloodFeedQueryParams = z.infer<
+  typeof getBloodFeedQuerySchema
+>["query"];
