@@ -62,6 +62,7 @@ model User {
   hubDiscussionReplies HubDiscussionReply[]
   announcementComments AnnouncementComment[]
   lostFoundPosts       LostFoundPost[]
+  lostFoundClaims      LostFoundClaim[]
   lostFoundComments    LostFoundComment[]
   marketplacePosts     MarketplacePost[]
   marketplaceComments  MarketplaceComment[]

@@ -1,23 +1,35 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.middleware";
 import { validateRequest } from "../../middleware/validateRequest";
+import { rateLimit } from "../../middleware/rateLimit.middleware";
 import {
-  createLostFoundCommentSchema,
+  createClaimSchema,
   createLostFoundSchema,
   updateLostFoundStatusSchema,
 } from "./lost-found.schema";
 import {
-  createComment,
+  acceptClaim,
   createPost,
-  deleteComment,
   deletePost,
+  getClaims,
   getFeed,
+  getPossibleMatches,
   getPostById,
+  rejectClaim,
+  submitClaim,
   updateStatus,
+  withdrawClaim,
 } from "./lost-found.controller";
 
 const router = Router();
 
+const claimRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 5,
+  message: "Too many claim attempts. Please try again in a few minutes.",
+});
+
+// Post routes
 router.post(
   "/",
   requireAuth,
@@ -29,15 +41,7 @@ router.get("/", requireAuth, getFeed);
 
 router.get("/:id", requireAuth, getPostById);
 
-router.patch(
-  "/:id/claim",
-  requireAuth,
-  (req, _res, next) => {
-    req.body = { status: "CLAIMED" };
-    next();
-  },
-  updateStatus
-);
+router.get("/:id/matches", requireAuth, getPossibleMatches);
 
 router.patch(
   "/:id/status",
@@ -48,13 +52,22 @@ router.patch(
 
 router.delete("/:id", requireAuth, deletePost);
 
+// Claim routes
 router.post(
-  "/:id/comments",
+  "/:id/claims",
   requireAuth,
-  validateRequest(createLostFoundCommentSchema),
-  createComment
+  claimRateLimiter,
+  validateRequest(createClaimSchema),
+  submitClaim
 );
 
-router.delete("/:id/comments/:commentId", requireAuth, deleteComment);
+router.get("/:id/claims", requireAuth, getClaims);
+
+router.patch("/:id/claims/:claimId/accept", requireAuth, acceptClaim);
+
+router.patch("/:id/claims/:claimId/reject", requireAuth, rejectClaim);
+
+router.delete("/:id/claims/:claimId", requireAuth, withdrawClaim);
 
 export const lostFoundRoutes = router;
+

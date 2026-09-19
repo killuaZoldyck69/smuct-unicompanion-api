@@ -11,6 +11,14 @@ enum LostFoundStatus {
   ACTIVE
   CLAIMED
   RESOLVED
+  CLOSED
+}
+
+enum LostFoundClaimStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
 }
 
 enum LostFoundCategory {
@@ -27,24 +35,48 @@ enum LostFoundCategory {
 // ==============================
 
 model LostFoundPost {
-  id          String            @id @default(uuid())
-  authorId    String
-  type        LostFoundType
-  title       String
-  description String
-  category    LostFoundCategory
-  location    String
-  status      LostFoundStatus   @default(ACTIVE)
-  images      String[]
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id                   String            @id @default(uuid())
+  authorId             String
+  type                 LostFoundType
+  title                String
+  description          String
+  category             LostFoundCategory
+  location             String
+  status               LostFoundStatus   @default(ACTIVE)
+  images               String[]
+  verificationQuestion String?
+  verificationAnswer   String?
+  resolvedClaimId      String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
   author   User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  claims   LostFoundClaim[]
   comments LostFoundComment[]
 
   @@index([authorId])
   @@index([status, type])
   @@map("lost_found_post")
+}
+
+model LostFoundClaim {
+  id         String               @id @default(uuid())
+  postId     String
+  claimantId String
+  status     LostFoundClaimStatus @default(PENDING)
+  message    String
+  answer     String?
+  proofImage String?
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  post     LostFoundPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  claimant User          @relation(fields: [claimantId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, claimantId])
+  @@index([postId, status])
+  @@index([claimantId])
+  @@map("lost_found_claim")
 }
 
 model LostFoundComment {
@@ -66,3 +98,4 @@ model LostFoundComment {
   @@index([parentId])
   @@map("lost_found_comment")
 }
+

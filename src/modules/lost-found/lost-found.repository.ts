@@ -1,22 +1,46 @@
 import { prisma } from "../../lib/prisma";
 import {
   LostFoundCategory,
+  LostFoundClaimStatus,
   LostFoundStatus,
   LostFoundType,
 } from "../../constants/enums";
 import {
-  CreateLostFoundCommentPayload,
+  CreateClaimPayload,
   CreateLostFoundPayload,
 } from "./lost-found.schema";
 
-const authorSelection = {
+export const publicAuthorSelection = {
+  id: true,
+  name: true,
+  image: true,
+  role: true,
+  studentProfile: {
+    select: {
+      studentId: true,
+      department: true,
+      batch: true,
+      currentSemester: true,
+      section: true,
+    },
+  },
+  teacherProfile: {
+    select: {
+      department: true,
+      designation: true,
+      officeRoom: true,
+      consultationHours: true,
+    },
+  },
+};
+
+export const privateContactSelection = {
   id: true,
   name: true,
   email: true,
+  phoneNumber: true,
   image: true,
   role: true,
-  phoneNumber: true,
-  bloodGroup: true,
   studentProfile: {
     select: {
       studentId: true,
@@ -41,6 +65,10 @@ export interface LostFoundFeedFilters {
   status?: LostFoundStatus;
   category?: LostFoundCategory;
   search?: string;
+  myPosts?: boolean;
+  viewerId?: string;
+  page?: number;
+  limit?: number;
 }
 
 export const createLostFoundPostInDb = async (
@@ -56,9 +84,12 @@ export const createLostFoundPostInDb = async (
       category: payload.category,
       location: payload.location,
       images: payload.images,
+      verificationQuestion: payload.verificationQuestion || null,
+      verificationAnswer: payload.verificationAnswer || null,
     },
     include: {
-      author: { select: authorSelection },
+      author: { select: publicAuthorSelection },
+      _count: { select: { claims: true } },
     },
   });
 };
@@ -66,6 +97,9 @@ export const createLostFoundPostInDb = async (
 export const findLostFoundFeedInDb = async (filters: LostFoundFeedFilters) => {
   const where: any = {};
 
+  if (filters.myPosts && filters.viewerId) {
+    where.authorId = filters.viewerId;
+  }
   if (filters.type) {
     where.type = filters.type;
   }
@@ -76,20 +110,98 @@ export const findLostFoundFeedInDb = async (filters: LostFoundFeedFilters) => {
     where.category = filters.category;
   }
   if (filters.search) {
-    where.OR = [
-      { title: { contains: filters.search, mode: "insensitive" } },
-      { description: { contains: filters.search, mode: "insensitive" } },
-      { location: { contains: filters.search, mode: "insensitive" } },
-    ];
+    const term = filters.search.trim();
+    if (term.length > 0) {
+      where.OR = [
+        { title: { contains: term, mode: "insensitive" } },
+        { description: { contains: term, mode: "insensitive" } },
+        { location: { contains: term, mode: "insensitive" } },
+      ];
+    }
   }
 
+  const page = Math.max(1, Number(filters.page) || 1);
+  const limit = Math.max(1, Math.min(100, Number(filters.limit) || 20));
+  const skip = (page - 1) * limit;
+
+  const [posts, total] = await Promise.all([
+    prisma.lostFoundPost.findMany({
+      where,
+      skip,
+      take: limit,
+      select: {
+        id: true,
+        authorId: true,
+        type: true,
+        title: true,
+        description: true,
+        category: true,
+        location: true,
+        status: true,
+        images: true,
+        verificationQuestion: true,
+        resolvedClaimId: true,
+        createdAt: true,
+        updatedAt: true,
+        author: { select: publicAuthorSelection },
+        _count: { select: { claims: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.lostFoundPost.count({ where }),
+  ]);
+
+  const sanitizedPosts = posts.map((post) => {
+    if (post.authorId !== filters.viewerId) {
+      const { _count, ...rest } = post;
+      return rest;
+    }
+    return post;
+  });
+
+  return {
+    data: sanitizedPosts,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasMore: page * limit < total,
+    },
+  };
+};
+
+export const findPossibleMatchesInDb = async (
+  postId: string,
+  category: LostFoundCategory,
+  location: string,
+  type: LostFoundType
+) => {
+  const counterpartType =
+    type === LostFoundType.LOST ? LostFoundType.FOUND : LostFoundType.LOST;
+
   return prisma.lostFoundPost.findMany({
-    where,
-    include: {
-      author: { select: authorSelection },
-      _count: { select: { comments: true } },
+    where: {
+      id: { not: postId },
+      type: counterpartType,
+      status: LostFoundStatus.ACTIVE,
+      category,
+    },
+    select: {
+      id: true,
+      authorId: true,
+      type: true,
+      title: true,
+      description: true,
+      category: true,
+      location: true,
+      status: true,
+      images: true,
+      createdAt: true,
+      author: { select: publicAuthorSelection },
     },
     orderBy: { createdAt: "desc" },
+    take: 2,
   });
 };
 
@@ -97,21 +209,14 @@ export const findLostFoundPostByIdInDb = async (id: string) => {
   return prisma.lostFoundPost.findUnique({
     where: { id },
     include: {
-      author: { select: authorSelection },
-      comments: {
-        where: { parentId: null },
+      author: { select: privateContactSelection },
+      claims: {
+        where: { status: LostFoundClaimStatus.ACCEPTED },
         include: {
-          author: { select: authorSelection },
-          replies: {
-            include: {
-              author: { select: authorSelection },
-            },
-            orderBy: { createdAt: "asc" },
-          },
+          claimant: { select: privateContactSelection },
         },
-        orderBy: { createdAt: "asc" },
       },
-      _count: { select: { comments: true } },
+      _count: { select: { claims: true } },
     },
   });
 };
@@ -124,7 +229,8 @@ export const updateLostFoundStatusInDb = async (
     where: { id },
     data: { status },
     include: {
-      author: { select: authorSelection },
+      author: { select: publicAuthorSelection },
+      _count: { select: { claims: true } },
     },
   });
 };
@@ -135,37 +241,129 @@ export const deleteLostFoundPostFromDb = async (id: string) => {
   });
 };
 
-export const createLostFoundCommentInDb = async (
+// ==============================
+// CLAIMS REPOSITORY
+// ==============================
+
+export const createClaimInDb = async (
   postId: string,
-  authorId: string,
-  payload: CreateLostFoundCommentPayload
+  claimantId: string,
+  payload: CreateClaimPayload
 ) => {
-  return prisma.lostFoundComment.create({
+  return prisma.lostFoundClaim.create({
     data: {
       postId,
-      authorId,
-      content: payload.content,
-      parentId: payload.parentId || null,
+      claimantId,
+      message: payload.message,
+      answer: payload.answer || null,
+      proofImage: payload.proofImage || null,
     },
     include: {
-      author: { select: authorSelection },
+      claimant: { select: publicAuthorSelection },
     },
   });
 };
 
-export const findLostFoundCommentByIdInDb = async (commentId: string) => {
-  return prisma.lostFoundComment.findUnique({
-    where: { id: commentId },
-    select: {
-      id: true,
-      authorId: true,
-      postId: true,
+export const findClaimByPostAndClaimantInDb = async (
+  postId: string,
+  claimantId: string
+) => {
+  return prisma.lostFoundClaim.findUnique({
+    where: {
+      postId_claimantId: { postId, claimantId },
+    },
+    include: {
+      claimant: { select: privateContactSelection },
     },
   });
 };
 
-export const deleteLostFoundCommentFromDb = async (commentId: string) => {
-  return prisma.lostFoundComment.delete({
-    where: { id: commentId },
+export const findClaimByIdInDb = async (claimId: string) => {
+  return prisma.lostFoundClaim.findUnique({
+    where: { id: claimId },
+    include: {
+      claimant: { select: privateContactSelection },
+      post: {
+        include: {
+          author: { select: privateContactSelection },
+        },
+      },
+    },
   });
 };
+
+export const findClaimsByPostIdInDb = async (postId: string) => {
+  return prisma.lostFoundClaim.findMany({
+    where: { postId },
+    include: {
+      claimant: { select: privateContactSelection },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+};
+
+export const countPendingClaimsByClaimantInDb = async (claimantId: string) => {
+  return prisma.lostFoundClaim.count({
+    where: {
+      claimantId,
+      status: LostFoundClaimStatus.PENDING,
+    },
+  });
+};
+
+export const acceptClaimAtomicInDb = async (
+  postId: string,
+  claimId: string
+) => {
+  return prisma.$transaction(async (tx) => {
+    // 1. Mark accepted claim
+    const acceptedClaim = await tx.lostFoundClaim.update({
+      where: { id: claimId },
+      data: { status: LostFoundClaimStatus.ACCEPTED },
+      include: {
+        claimant: { select: privateContactSelection },
+      },
+    });
+
+    // 2. Mark other pending claims for this post as REJECTED
+    await tx.lostFoundClaim.updateMany({
+      where: {
+        postId,
+        id: { not: claimId },
+        status: LostFoundClaimStatus.PENDING,
+      },
+      data: { status: LostFoundClaimStatus.REJECTED },
+    });
+
+    // 3. Mark post as RESOLVED with resolvedClaimId
+    const updatedPost = await tx.lostFoundPost.update({
+      where: { id: postId },
+      data: {
+        status: LostFoundStatus.RESOLVED,
+        resolvedClaimId: claimId,
+      },
+      include: {
+        author: { select: privateContactSelection },
+      },
+    });
+
+    return { post: updatedPost, acceptedClaim };
+  });
+};
+
+export const rejectClaimInDb = async (claimId: string) => {
+  return prisma.lostFoundClaim.update({
+    where: { id: claimId },
+    data: { status: LostFoundClaimStatus.REJECTED },
+    include: {
+      claimant: { select: publicAuthorSelection },
+    },
+  });
+};
+
+export const withdrawClaimInDb = async (claimId: string) => {
+  return prisma.lostFoundClaim.delete({
+    where: { id: claimId },
+  });
+};
+

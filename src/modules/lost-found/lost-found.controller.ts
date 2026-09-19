@@ -1,15 +1,23 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../../utils/catchAsync";
 import {
-  createCommentService,
+  acceptClaimService,
+  createClaimService,
   createPostService,
-  deleteCommentService,
   deletePostService,
+  getClaimsForPostService,
   getFeedService,
+  getPossibleMatchesService,
   getPostByIdService,
+  rejectClaimService,
   updateStatusService,
+  withdrawClaimService,
 } from "./lost-found.service";
-import { LostFoundCategory, LostFoundStatus, LostFoundType } from "../../constants/enums";
+import {
+  LostFoundCategory,
+  LostFoundStatus,
+  LostFoundType,
+} from "../../constants/enums";
 
 export const createPost = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user!.id;
@@ -23,14 +31,29 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getFeed = catchAsync(async (req: Request, res: Response) => {
-  const { type, status, category, search } = req.query;
+  const { type, status, category, search, myPosts, page, limit } = req.query;
+  const userId = req.user?.id;
 
   const result = await getFeedService({
     type: type as LostFoundType | undefined,
     status: status as LostFoundStatus | undefined,
     category: category as LostFoundCategory | undefined,
     search: typeof search === "string" ? search : undefined,
+    myPosts: myPosts === "true",
+    viewerId: userId,
+    page: page ? Number(page) : undefined,
+    limit: limit ? Number(limit) : undefined,
   });
+
+  res.status(200).json({
+    success: true,
+    data: result.data,
+    meta: result.meta,
+  });
+});
+
+export const getPossibleMatches = catchAsync(async (req: Request, res: Response) => {
+  const result = await getPossibleMatchesService(req.params.id as string);
 
   res.status(200).json({
     success: true,
@@ -39,7 +62,8 @@ export const getFeed = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getPostById = catchAsync(async (req: Request, res: Response) => {
-  const result = await getPostByIdService(req.params.id as string);
+  const userId = req.user!.id;
+  const result = await getPostByIdService(req.params.id as string, userId);
 
   res.status(200).json({
     success: true,
@@ -78,28 +102,74 @@ export const deletePost = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-export const createComment = catchAsync(async (req: Request, res: Response) => {
+// ==============================
+// CLAIMS CONTROLLERS
+// ==============================
+
+export const submitClaim = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user!.id;
   const postId = req.params.id as string;
 
-  const result = await createCommentService(postId, userId, req.body);
+  const result = await createClaimService(postId, userId, req.body);
 
   res.status(201).json({
     success: true,
-    message: "Comment added successfully",
+    message: "Claim submitted successfully",
     data: result,
   });
 });
 
-export const deleteComment = catchAsync(async (req: Request, res: Response) => {
+export const getClaims = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user!.id;
-  const userRole = req.user?.role;
-  const commentId = req.params.commentId as string;
+  const postId = req.params.id as string;
 
-  await deleteCommentService(commentId, userId, userRole);
+  const result = await getClaimsForPostService(postId, userId);
 
   res.status(200).json({
     success: true,
-    message: "Comment deleted successfully",
+    data: result,
   });
 });
+
+export const acceptClaim = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const postId = req.params.id as string;
+  const claimId = req.params.claimId as string;
+
+  const result = await acceptClaimService(postId, claimId, userId);
+
+  res.status(200).json({
+    success: true,
+    message: "Claim accepted and post resolved successfully",
+    data: result,
+  });
+});
+
+export const rejectClaim = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const postId = req.params.id as string;
+  const claimId = req.params.claimId as string;
+
+  const result = await rejectClaimService(postId, claimId, userId);
+
+  res.status(200).json({
+    success: true,
+    message: "Claim rejected successfully",
+    data: result,
+  });
+});
+
+export const withdrawClaim = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const postId = req.params.id as string;
+  const claimId = req.params.claimId as string;
+
+  const result = await withdrawClaimService(postId, claimId, userId);
+
+  res.status(200).json({
+    success: true,
+    message: "Claim withdrawn successfully",
+    data: result,
+  });
+});
+

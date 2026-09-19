@@ -17,6 +17,8 @@ export const createLostFoundSchema = z.object({
     }),
     location: z.string().min(2, "Location is required").max(150),
     images: z.array(z.string().url("Invalid image URL")).default([]),
+    verificationQuestion: z.string().max(200).optional().nullable(),
+    verificationAnswer: z.string().max(200).optional().nullable(),
   }),
 });
 
@@ -28,10 +30,14 @@ export const updateLostFoundStatusSchema = z.object({
   }),
 });
 
-export const createLostFoundCommentSchema = z.object({
+export const createClaimSchema = z.object({
   body: z.object({
-    content: z.string().min(1, "Comment content cannot be empty").max(1000),
-    parentId: z.string().optional().nullable(),
+    message: z
+      .string()
+      .min(5, "Message must be at least 5 characters")
+      .max(1000, "Message cannot exceed 1000 characters"),
+    answer: z.string().max(300).optional().nullable(),
+    proofImage: z.string().url("Invalid proof image URL").optional().nullable(),
   }),
 });
 
@@ -41,6 +47,5 @@ export type CreateLostFoundPayload = z.infer<
 export type UpdateLostFoundStatusPayload = z.infer<
   typeof updateLostFoundStatusSchema
 >["body"];
-export type CreateLostFoundCommentPayload = z.infer<
-  typeof createLostFoundCommentSchema
->["body"];
+export type CreateClaimPayload = z.infer<typeof createClaimSchema>["body"];
+

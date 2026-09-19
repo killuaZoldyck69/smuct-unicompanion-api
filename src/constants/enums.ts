@@ -8,6 +8,7 @@ import {
   BookingStatus,
   LostFoundType,
   LostFoundStatus,
+  LostFoundClaimStatus,
   LostFoundCategory,
   ListingType,
   ListingStatus,
@@ -25,6 +26,7 @@ export {
   BookingStatus,
   LostFoundType,
   LostFoundStatus,
+  LostFoundClaimStatus,
   LostFoundCategory,
   ListingType,
   ListingStatus,
@@ -88,6 +90,14 @@ export const LOST_FOUND_STATUS_VALUES = [
   LostFoundStatus.ACTIVE,
   LostFoundStatus.CLAIMED,
   LostFoundStatus.RESOLVED,
+  LostFoundStatus.CLOSED,
+] as const;
+
+export const LOST_FOUND_CLAIM_STATUS_VALUES = [
+  LostFoundClaimStatus.PENDING,
+  LostFoundClaimStatus.ACCEPTED,
+  LostFoundClaimStatus.REJECTED,
+  LostFoundClaimStatus.WITHDRAWN,
 ] as const;
 
 export const LOST_FOUND_CATEGORY_VALUES = [
