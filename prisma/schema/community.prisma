@@ -42,6 +42,7 @@ model BloodPost {
   patientName      String
   patientCondition String
   bloodGroup       BloodGroup
+  bagsNeeded       Int             @default(1)
   location         String
   urgency          String
   contactPhone     String

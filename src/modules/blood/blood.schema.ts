@@ -8,6 +8,13 @@ export const createBloodPostSchema = z.object({
     bloodGroup: z.enum(BLOOD_GROUP_VALUES, {
       message: "Valid blood group is required",
     }),
+    bagsNeeded: z
+      .coerce
+      .number()
+      .int()
+      .min(1, "At least 1 bag is required")
+      .default(1)
+      .optional(),
     location: z.string().min(1, "Location is required"),
     urgency: z.string().min(1, "Urgency is required"),
     contactPhone: z.string().min(1, "Contact phone is required"),
