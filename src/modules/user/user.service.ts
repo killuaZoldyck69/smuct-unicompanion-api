@@ -5,6 +5,7 @@ import {
   uploadSingleImageService,
   MulterFile,
 } from "../upload/upload.service";
+import { deleteImageFromCloudinary } from "../../lib/cloudinary";
 
 
 export const getAllUsersService = async (query?: {
@@ -52,7 +53,16 @@ export const deleteUserService = async (id: string) => {
   }
 
   // Cascades automatically to StudentProfile, TeacherProfile, Session, Account, etc.
-  return await userRepository.deleteUserById(id);
+  const result = await userRepository.deleteUserById(id);
+
+  // Storage cleanup optimization: delete user profile image from Cloudinary
+  if (existingUser.image) {
+    deleteImageFromCloudinary(existingUser.image).catch((err) =>
+      console.warn("[Cloudinary] Failed to clean up user image:", err)
+    );
+  }
+
+  return result;
 };
 
 export const updateStudentRoleService = async (
@@ -93,13 +103,19 @@ export const updateUserProfileImageService = async (
   base64?: string,
   imageUrl?: string,
 ) => {
+  const existingUser = await userRepository.findUserById(userId);
+  if (!existingUser) {
+    throw new AppError("User not found.", 404);
+  }
+  const previousImage = existingUser.image;
+
   let finalImageUrl = imageUrl?.trim();
 
   if (file || (base64 && base64.trim())) {
     const uploadResult = await uploadSingleImageService(
       file,
       base64,
-      "unicompanion/profiles",
+      "smuct-unicompanion/profiles",
     );
     finalImageUrl = uploadResult.secureUrl;
   }
@@ -115,6 +131,13 @@ export const updateUserProfileImageService = async (
 
   if (!updatedUser) {
     throw new AppError("User not found.", 404);
+  }
+
+  // Storage cleanup optimization: delete previous image from Cloudinary
+  if (previousImage && previousImage !== finalImageUrl) {
+    deleteImageFromCloudinary(previousImage).catch((err) =>
+      console.warn("[Cloudinary] Failed to clean up previous profile image:", err)
+    );
   }
 
   return {

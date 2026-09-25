@@ -1,6 +1,7 @@
 import { AppError } from "../../utils/AppError";
 import { LostFoundClaimStatus, LostFoundStatus } from "../../constants/enums";
 import { sendEmail } from "../../lib/email";
+import { deleteMultipleImagesFromCloudinary } from "../../lib/cloudinary";
 import {
   CreateClaimPayload,
   CreateLostFoundPayload,
@@ -160,7 +161,31 @@ export const deletePostService = async (
     );
   }
 
-  return deleteLostFoundPostFromDb(id);
+  // Collect post images and any claim proof images before deleting from DB
+  const imagesToDelete: string[] = [...(post.images || [])];
+  try {
+    const claims = await findClaimsByPostIdInDb(id);
+    if (Array.isArray(claims)) {
+      for (const claim of claims) {
+        if (claim.proofImage) {
+          imagesToDelete.push(claim.proofImage);
+        }
+      }
+    }
+  } catch {
+    // If fetching claims fails, proceed with deleting post images
+  }
+
+  const result = await deleteLostFoundPostFromDb(id);
+
+  // Storage cleanup optimization: delete associated images from Cloudinary
+  if (imagesToDelete.length > 0) {
+    deleteMultipleImagesFromCloudinary(imagesToDelete).catch((err) =>
+      console.warn("[Cloudinary] Failed to clean up lost-found post images:", err)
+    );
+  }
+
+  return result;
 };
 
 // ==============================

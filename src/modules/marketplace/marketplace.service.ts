@@ -1,5 +1,6 @@
 import { AppError } from "../../utils/AppError";
 import { ListingStatus } from "../../constants/enums";
+import { deleteMultipleImagesFromCloudinary } from "../../lib/cloudinary";
 import {
   CreateMarketplaceCommentPayload,
   CreateMarketplacePayload,
@@ -79,7 +80,16 @@ export const deletePostService = async (
     );
   }
 
-  return deleteMarketplacePostFromDb(id);
+  const result = await deleteMarketplacePostFromDb(id);
+
+  // Storage cleanup optimization: delete listing images from Cloudinary
+  if (post.images && post.images.length > 0) {
+    deleteMultipleImagesFromCloudinary(post.images).catch((err) =>
+      console.warn("[Cloudinary] Failed to clean up marketplace post images:", err)
+    );
+  }
+
+  return result;
 };
 
 export const createCommentService = async (

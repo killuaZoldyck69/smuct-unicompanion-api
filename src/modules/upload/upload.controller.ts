@@ -5,12 +5,13 @@ import {
   uploadMultipleImagesService,
   MulterFile,
 } from "./upload.service";
+import { PROJECT_ROOT_FOLDER } from "../../lib/cloudinary";
 
 export const uploadSingleImage = catchAsync(
   async (req: Request, res: Response) => {
     const file = req.file as unknown as MulterFile | undefined;
     const base64 = req.body?.image as string | undefined;
-    const folder = (req.body?.folder as string) || "unicompanion";
+    const folder = (req.body?.folder as string) || PROJECT_ROOT_FOLDER;
 
     const result = await uploadSingleImageService(file, base64, folder);
 
@@ -36,7 +37,7 @@ export const uploadMultipleImages = catchAsync(
       ? (req.body.images as string[])
       : [];
 
-    const folder = (req.body?.folder as string) || "unicompanion";
+    const folder = (req.body?.folder as string) || PROJECT_ROOT_FOLDER;
 
     const results = await uploadMultipleImagesService(files, base64List, folder);
 

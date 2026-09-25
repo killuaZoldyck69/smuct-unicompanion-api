@@ -1,5 +1,6 @@
 import { AppError } from "../../utils/AppError";
 import { MemeReactionType } from "../../constants/enums";
+import { deleteImageFromCloudinary } from "../../lib/cloudinary";
 import { CreateMemePayload, QueryMemesQuery } from "./meme.schema";
 import {
   createMemeInDb,
@@ -82,5 +83,14 @@ export const deleteMemeService = async (
     throw new AppError("You do not have permission to delete this meme", 403);
   }
 
-  return deleteMemeFromDb(memeId);
+  const deleted = await deleteMemeFromDb(memeId);
+
+  // Storage cleanup optimization: delete meme image from Cloudinary
+  if (meme.imageUrl) {
+    deleteImageFromCloudinary(meme.imageUrl).catch((err) =>
+      console.warn("[Cloudinary] Failed to clean up meme image:", err)
+    );
+  }
+
+  return deleted;
 };

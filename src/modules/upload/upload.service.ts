@@ -3,6 +3,7 @@ import {
   uploadBufferToCloudinary,
   uploadBase64ToCloudinary,
   UploadResult,
+  PROJECT_ROOT_FOLDER,
 } from "../../lib/cloudinary";
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -45,7 +46,7 @@ export function validateImageFile(file: MulterFile): void {
 export async function uploadSingleImageService(
   file?: MulterFile,
   base64?: string,
-  folder: string = "unicompanion"
+  folder: string = PROJECT_ROOT_FOLDER
 ): Promise<UploadResult> {
   if (file) {
     validateImageFile(file);
@@ -62,7 +63,7 @@ export async function uploadSingleImageService(
 export async function uploadMultipleImagesService(
   files: MulterFile[] = [],
   base64List: string[] = [],
-  folder: string = "unicompanion"
+  folder: string = PROJECT_ROOT_FOLDER
 ): Promise<UploadResult[]> {
   const uploadPromises: Promise<UploadResult>[] = [];
 
