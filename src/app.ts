@@ -20,6 +20,7 @@ import { hubRoutes } from "./modules/hub/hub.routes";
 import { uploadRoutes } from "./modules/upload/upload.routes";
 import { lostFoundRoutes } from "./modules/lost-found/lost-found.routes";
 import { marketplaceRoutes } from "./modules/marketplace/marketplace.routes";
+import { memeRoutes } from "./modules/meme/meme.routes";
 
 import { envConfig } from "./config/env";
 import { globalLimiter, authLimiter } from "./middleware/rateLimit.middleware";
@@ -115,6 +116,7 @@ app.use("/api/upload", uploadRoutes);
 // 4. MOUNT CAMPUS HUB COMMUNITY ROUTES
 app.use("/api/lost-found", lostFoundRoutes);
 app.use("/api/marketplace", marketplaceRoutes);
+app.use("/api/memes", memeRoutes);
 
 // Global Error Handler
 app.use(globalErrorHandler);

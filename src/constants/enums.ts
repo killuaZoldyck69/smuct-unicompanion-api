@@ -14,6 +14,7 @@ import {
   ListingStatus,
   ItemCondition,
   MarketplaceCategory,
+  MemeReactionType,
 } from "../../generated/prisma/enums";
 
 export {
@@ -32,6 +33,7 @@ export {
   ListingStatus,
   ItemCondition,
   MarketplaceCategory,
+  MemeReactionType,
 };
 
 export const BLOOD_GROUP_VALUES = [

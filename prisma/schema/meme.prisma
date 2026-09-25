@@ -1,0 +1,45 @@
+// ==============================
+// MEME ENUMS
+// ==============================
+
+enum MemeReactionType {
+  LIKE
+  DISLIKE
+}
+
+// ==============================
+// MEME MODULE
+// ==============================
+
+model Meme {
+  id        String          @id @default(uuid())
+  authorId  String
+  caption   String?
+  imageUrl  String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  author    User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  reactions MemeReaction[]
+
+  @@index([authorId])
+  @@index([createdAt(sort: Desc)])
+  @@map("meme")
+}
+
+model MemeReaction {
+  id        String           @id @default(uuid())
+  memeId    String
+  userId    String
+  type      MemeReactionType
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  meme      Meme             @relation(fields: [memeId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([memeId, userId])
+  @@index([memeId, type])
+  @@index([userId])
+  @@map("meme_reaction")
+}

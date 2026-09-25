@@ -67,6 +67,8 @@ model User {
   marketplacePosts     MarketplacePost[]
   marketplaceComments  MarketplaceComment[]
   classNotices         ClassNotice[]
+  memes                Meme[]
+  memeReactions        MemeReaction[]
 
   @@map("user")
 }
