@@ -10,6 +10,7 @@ import {
   getPossibleMatchesService,
   getPostByIdService,
   rejectClaimService,
+  updatePostService,
   updateStatusService,
   withdrawClaimService,
 } from "./lost-found.service";
@@ -67,6 +68,20 @@ export const getPostById = catchAsync(async (req: Request, res: Response) => {
 
   res.status(200).json({
     success: true,
+    data: result,
+  });
+});
+
+export const updatePost = catchAsync(async (req: Request, res: Response) => {
+  const result = await updatePostService(
+    req.params.id as string,
+    req.user!.id,
+    req.user?.role,
+    req.body
+  );
+  res.status(200).json({
+    success: true,
+    message: "Post updated successfully",
     data: result,
   });
 });

@@ -20,6 +20,7 @@ import {
   findPossibleMatchesInDb,
   LostFoundFeedFilters,
   rejectClaimInDb,
+  updateLostFoundPostInDb,
   updateLostFoundStatusInDb,
   withdrawClaimInDb,
 } from "./lost-found.repository";
@@ -29,6 +30,30 @@ export const createPostService = async (
   payload: CreateLostFoundPayload
 ) => {
   return createLostFoundPostInDb(userId, payload);
+};
+
+export const updatePostService = async (
+  id: string,
+  userId: string,
+  userRole: string | undefined,
+  payload: Partial<CreateLostFoundPayload>
+) => {
+  const post = await findLostFoundPostByIdInDb(id);
+  if (!post) {
+    throw new AppError("Lost & Found post not found", 404);
+  }
+
+  const isAuthor = post.authorId === userId;
+  const isAdmin = userRole === "ADMIN";
+
+  if (!isAuthor && !isAdmin) {
+    throw new AppError(
+      "Unauthorized: You do not have permission to modify this post",
+      403
+    );
+  }
+
+  return updateLostFoundPostInDb(id, payload);
 };
 
 export const getFeedService = async (filters: LostFoundFeedFilters) => {

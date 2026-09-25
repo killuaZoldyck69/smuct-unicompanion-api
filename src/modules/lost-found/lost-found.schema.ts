@@ -22,6 +22,23 @@ export const createLostFoundSchema = z.object({
   }),
 });
 
+export const updateLostFoundSchema = z.object({
+  body: z.object({
+    type: z.enum(LOST_FOUND_TYPE_VALUES, {
+      message: "Type must be LOST or FOUND",
+    }).optional(),
+    title: z.string().min(2, "Title must be at least 2 characters").max(150).optional(),
+    description: z.string().min(5, "Description must be at least 5 characters").optional(),
+    category: z.enum(LOST_FOUND_CATEGORY_VALUES, {
+      message: "Invalid category selected",
+    }).optional(),
+    location: z.string().min(2, "Location is required").max(150).optional(),
+    images: z.array(z.string().url("Invalid image URL")).optional(),
+    verificationQuestion: z.string().max(200).optional().nullable(),
+    verificationAnswer: z.string().max(200).optional().nullable(),
+  }),
+});
+
 export const updateLostFoundStatusSchema = z.object({
   body: z.object({
     status: z.enum(LOST_FOUND_STATUS_VALUES, {
@@ -43,6 +60,9 @@ export const createClaimSchema = z.object({
 
 export type CreateLostFoundPayload = z.infer<
   typeof createLostFoundSchema
+>["body"];
+export type UpdateLostFoundPayload = z.infer<
+  typeof updateLostFoundSchema
 >["body"];
 export type UpdateLostFoundStatusPayload = z.infer<
   typeof updateLostFoundStatusSchema

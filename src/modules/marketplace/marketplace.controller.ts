@@ -60,7 +60,7 @@ export const getFeed = catchAsync(async (req: Request, res: Response) => {
 // Single post
 // ---------------------------------------------------------------------------
 export const getPostById = catchAsync(async (req: Request, res: Response) => {
-  const result = await getPostByIdService(req.params.id);
+  const result = await getPostByIdService(req.params.id as string);
   res.status(200).json({ success: true, data: result });
 });
 
@@ -81,7 +81,7 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 export const updatePost = catchAsync(async (req: Request, res: Response) => {
   const result = await updatePostService(
-    req.params.id,
+    req.params.id as string,
     req.user!.id,
     req.user?.role,
     req.body
@@ -98,7 +98,7 @@ export const updatePost = catchAsync(async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 export const updateStatus = catchAsync(async (req: Request, res: Response) => {
   const result = await updateStatusService(
-    req.params.id,
+    req.params.id as string,
     req.user!.id,
     req.user?.role,
     req.body.status
@@ -114,7 +114,7 @@ export const updateStatus = catchAsync(async (req: Request, res: Response) => {
 // Delete
 // ---------------------------------------------------------------------------
 export const deletePost = catchAsync(async (req: Request, res: Response) => {
-  await deletePostService(req.params.id, req.user!.id, req.user?.role);
+  await deletePostService(req.params.id as string, req.user!.id, req.user?.role);
   res.status(200).json({ success: true, message: "Listing deleted successfully" });
 });
 
@@ -123,7 +123,7 @@ export const deletePost = catchAsync(async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 export const createComment = catchAsync(async (req: Request, res: Response) => {
   const result = await createCommentService(
-    req.params.id,
+    req.params.id as string,
     req.user!.id,
     req.body
   );
@@ -136,7 +136,7 @@ export const createComment = catchAsync(async (req: Request, res: Response) => {
 
 export const deleteComment = catchAsync(async (req: Request, res: Response) => {
   await deleteCommentService(
-    req.params.commentId,
+    req.params.commentId as string,
     req.user!.id,
     req.user?.role
   );

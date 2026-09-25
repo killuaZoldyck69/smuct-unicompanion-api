@@ -94,6 +94,20 @@ export const createLostFoundPostInDb = async (
   });
 };
 
+export const updateLostFoundPostInDb = async (
+  id: string,
+  data: Partial<CreateLostFoundPayload>
+) => {
+  return prisma.lostFoundPost.update({
+    where: { id },
+    data,
+    include: {
+      author: { select: publicAuthorSelection },
+      _count: { select: { claims: true } },
+    },
+  });
+};
+
 export const findLostFoundFeedInDb = async (filters: LostFoundFeedFilters) => {
   const where: any = {};
 

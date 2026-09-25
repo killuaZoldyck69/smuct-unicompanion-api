@@ -5,6 +5,7 @@ import { rateLimit } from "../../middleware/rateLimit.middleware";
 import {
   createClaimSchema,
   createLostFoundSchema,
+  updateLostFoundSchema,
   updateLostFoundStatusSchema,
 } from "./lost-found.schema";
 import {
@@ -17,6 +18,7 @@ import {
   getPostById,
   rejectClaim,
   submitClaim,
+  updatePost,
   updateStatus,
   withdrawClaim,
 } from "./lost-found.controller";
@@ -42,6 +44,13 @@ router.get("/", requireAuth, getFeed);
 router.get("/:id", requireAuth, getPostById);
 
 router.get("/:id/matches", requireAuth, getPossibleMatches);
+
+router.patch(
+  "/:id",
+  requireAuth,
+  validateRequest(updateLostFoundSchema),
+  updatePost
+);
 
 router.patch(
   "/:id/status",
