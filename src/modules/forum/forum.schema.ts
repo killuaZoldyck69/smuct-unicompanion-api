@@ -40,6 +40,7 @@ export const createResponseSchema = z.object({
       .trim()
       .min(1, "Response content cannot be empty")
       .max(2000, "Response cannot exceed 2,000 characters"),
+    parentId: z.string().uuid("Invalid parent response ID").optional().nullable(),
   }),
 });
 

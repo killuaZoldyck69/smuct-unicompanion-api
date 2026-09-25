@@ -19,17 +19,21 @@ model HelpPost {
 }
 
 model HelpResponse {
-  id          String   @id @default(uuid())
+  id          String         @id @default(uuid())
   postId      String
   responderId String
+  parentId    String?
   content     String
-  post        HelpPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  responder   User     @relation(fields: [responderId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  post        HelpPost       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  responder   User           @relation(fields: [responderId], references: [id], onDelete: Cascade)
+  parent      HelpResponse?  @relation("HelpResponseReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies     HelpResponse[] @relation("HelpResponseReplies")
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   @@index([postId])
   @@index([responderId])
+  @@index([parentId])
 }
 
 // ==============================

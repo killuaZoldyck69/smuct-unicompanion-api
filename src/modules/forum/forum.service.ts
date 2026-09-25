@@ -83,7 +83,22 @@ export const createResponseService = async (
     throw new AppError("Forum post not found.", 404);
   }
 
-  return await forumRepository.createHelpResponse(postId, responderId, data);
+  let finalParentId = data.parentId ?? null;
+  if (finalParentId) {
+    const parentResponse = await forumRepository.findHelpResponseById(finalParentId);
+    if (!parentResponse || parentResponse.postId !== postId) {
+      throw new AppError("Parent response not found.", 404);
+    }
+    // Flatten if replying to a reply
+    if (parentResponse.parentId) {
+      finalParentId = parentResponse.parentId;
+    }
+  }
+
+  return await forumRepository.createHelpResponse(postId, responderId, {
+    ...data,
+    parentId: finalParentId,
+  });
 };
 
 export const resolvePostService = async (

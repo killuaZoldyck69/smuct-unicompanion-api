@@ -86,6 +86,17 @@ export const findHelpPostById = async (id: string) => {
   });
 };
 
+const responderSelect = {
+  id: true,
+  name: true,
+  email: true,
+  phoneNumber: true,
+  image: true,
+  role: true,
+  studentProfile: true,
+  teacherProfile: true,
+};
+
 export const findHelpPostWithDetails = async (id: string) => {
   return await prisma.helpPost.findUnique({
     where: { id },
@@ -103,18 +114,18 @@ export const findHelpPostWithDetails = async (id: string) => {
         },
       },
       responses: {
+        where: { parentId: null },
         orderBy: { createdAt: "asc" },
         include: {
           responder: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              phoneNumber: true,
-              image: true,
-              role: true,
-              studentProfile: true,
-              teacherProfile: true,
+            select: responderSelect,
+          },
+          replies: {
+            orderBy: { createdAt: "asc" },
+            include: {
+              responder: {
+                select: responderSelect,
+              },
             },
           },
         },
@@ -131,8 +142,14 @@ export const createHelpResponse = async (
   return await prisma.helpResponse.create({
     data: {
       content: data.content,
+      parentId: data.parentId ?? null,
       postId,
       responderId,
+    },
+    include: {
+      responder: {
+        select: responderSelect,
+      },
     },
   });
 };
