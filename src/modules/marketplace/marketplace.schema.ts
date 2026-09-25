@@ -51,6 +51,12 @@ export const createMarketplaceCommentSchema = z.object({
   }),
 });
 
+export const updateMarketplaceCommentSchema = z.object({
+  body: z.object({
+    content: z.string().min(1, "Comment content cannot be empty").max(1000),
+  }),
+});
+
 export type CreateMarketplacePayload = z.infer<
   typeof createMarketplaceSchema
 >["body"];
@@ -62,4 +68,7 @@ export type UpdateMarketplaceStatusPayload = z.infer<
 >["body"];
 export type CreateMarketplaceCommentPayload = z.infer<
   typeof createMarketplaceCommentSchema
+>["body"];
+export type UpdateMarketplaceCommentPayload = z.infer<
+  typeof updateMarketplaceCommentSchema
 >["body"];

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { catchAsync } from "../../utils/catchAsync";
 import {
   createCommentService,
+  updateCommentService,
   createPostService,
   deleteCommentService,
   deletePostService,
@@ -130,6 +131,20 @@ export const createComment = catchAsync(async (req: Request, res: Response) => {
   res.status(201).json({
     success: true,
     message: "Comment added successfully",
+    data: result,
+  });
+});
+
+export const updateComment = catchAsync(async (req: Request, res: Response) => {
+  const result = await updateCommentService(
+    req.params.commentId as string,
+    req.user!.id,
+    req.user?.role,
+    req.body.content
+  );
+  res.status(200).json({
+    success: true,
+    message: "Comment updated successfully",
     data: result,
   });
 });

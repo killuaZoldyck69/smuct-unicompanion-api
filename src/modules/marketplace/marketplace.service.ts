@@ -15,6 +15,7 @@ import {
   findMarketplacePostByIdInDb,
   MarketplaceFeedFilters,
   PaginationParams,
+  updateMarketplaceCommentInDb,
   updateMarketplacePostInDb,
   updateMarketplaceStatusInDb,
 } from "./marketplace.repository";
@@ -129,6 +130,20 @@ export const createCommentService = async (
   }
 
   return createMarketplaceCommentInDb(postId, userId, payload);
+};
+
+export const updateCommentService = async (
+  commentId: string,
+  userId: string,
+  userRole: string | undefined,
+  content: string
+) => {
+  const comment = await findMarketplaceCommentByIdInDb(commentId);
+  if (!comment) throw new AppError("Comment not found", 404);
+
+  assertOwnership(comment.authorId === userId, userRole === "ADMIN", "edit this comment");
+
+  return updateMarketplaceCommentInDb(commentId, content);
 };
 
 export const deleteCommentService = async (

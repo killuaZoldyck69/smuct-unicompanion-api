@@ -4,6 +4,7 @@ import { validateRequest } from "../../middleware/validateRequest";
 import {
   createMarketplaceCommentSchema,
   createMarketplaceSchema,
+  updateMarketplaceCommentSchema,
   updateMarketplaceSchema,
   updateMarketplaceStatusSchema,
 } from "./marketplace.schema";
@@ -14,6 +15,7 @@ import {
   deletePost,
   getFeed,
   getPostById,
+  updateComment,
   updatePost,
   updateStatus,
 } from "./marketplace.controller";
@@ -62,6 +64,13 @@ router.post(
   requireAuth,
   validateRequest(createMarketplaceCommentSchema),
   createComment
+);
+
+router.patch(
+  "/:id/comments/:commentId",
+  requireAuth,
+  validateRequest(updateMarketplaceCommentSchema),
+  updateComment
 );
 
 router.delete("/:id/comments/:commentId", requireAuth, deleteComment);

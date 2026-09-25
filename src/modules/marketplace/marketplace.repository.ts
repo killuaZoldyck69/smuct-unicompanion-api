@@ -221,6 +221,17 @@ export const findMarketplaceCommentByIdInDb = async (commentId: string) => {
   });
 };
 
+export const updateMarketplaceCommentInDb = async (
+  commentId: string,
+  content: string
+) => {
+  return prisma.marketplaceComment.update({
+    where: { id: commentId },
+    data: { content },
+    include: { author: { select: authorSelect } },
+  });
+};
+
 export const deleteMarketplaceCommentFromDb = async (commentId: string) => {
   return prisma.marketplaceComment.delete({ where: { id: commentId } });
 };
