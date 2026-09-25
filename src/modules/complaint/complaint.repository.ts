@@ -1,6 +1,8 @@
 import { prisma } from "../../lib/prisma";
+import type { ComplaintStatus } from "../../../generated/prisma/enums";
 import {
   CreateComplaintPayload,
+  UpdateComplaintPayload,
   UpdateComplaintStatusPayload,
 } from "./complaint.schema";
 
@@ -9,19 +11,81 @@ export const createComplaint = async (
   data: CreateComplaintPayload,
 ) => {
   return await prisma.complaint.create({
-    data: { ...data, userId },
+    data: {
+      userId,
+      title: data.title,
+      description: data.description,
+      category: data.category,
+      isAnonymous: data.isAnonymous ?? false,
+    },
   });
 };
 
+export const updateComplaint = async (
+  id: string,
+  data: UpdateComplaintPayload,
+) => {
+  return await prisma.complaint.update({
+    where: { id },
+    data: {
+      ...(data.title !== undefined && { title: data.title }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.category !== undefined && { category: data.category }),
+      ...(data.isAnonymous !== undefined && { isAnonymous: data.isAnonymous }),
+    },
+  });
+};
+
+export interface FindComplaintsQueryOptions {
+  status?: ComplaintStatus;
+  page?: number;
+  limit?: number;
+}
+
 export const findComplaintsByUserId = async (
   userId: string,
-  take = 100,
+  options?: FindComplaintsQueryOptions,
 ) => {
-  return await prisma.complaint.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    take,
-  });
+  const page = Math.max(1, options?.page ?? 1);
+  const limit = Math.min(100, Math.max(1, options?.limit ?? 50));
+  const skip = (page - 1) * limit;
+
+  const where: any = { userId };
+  if (options?.status) {
+    where.status = options.status;
+  }
+
+  const [items, total] = await Promise.all([
+    prisma.complaint.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.complaint.count({ where }),
+  ]);
+
+  return {
+    items,
+    pagination: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      hasMore: skip + items.length < total,
+    },
+  };
+};
+
+export const getComplaintStatsByUserId = async (userId: string) => {
+  const [all, pending, resolved, rejected] = await Promise.all([
+    prisma.complaint.count({ where: { userId } }),
+    prisma.complaint.count({ where: { userId, status: "PENDING" } }),
+    prisma.complaint.count({ where: { userId, status: "RESOLVED" } }),
+    prisma.complaint.count({ where: { userId, status: "REJECTED" } }),
+  ]);
+
+  return { all, pending, resolved, rejected };
 };
 
 export const findAllComplaints = async (take = 100) => {
@@ -43,10 +107,14 @@ export const findComplaintById = async (id: string) => {
 export const updateComplaintStatus = async (
   id: string,
   status: UpdateComplaintStatusPayload["status"],
+  adminRemarks?: string | null,
 ) => {
   return await prisma.complaint.update({
     where: { id },
-    data: { status },
+    data: {
+      status,
+      ...(adminRemarks !== undefined && { adminRemarks }),
+    },
   });
 };
 
