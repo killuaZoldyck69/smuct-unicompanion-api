@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import {
   ListingStatus,
@@ -9,7 +10,11 @@ import {
   CreateMarketplacePayload,
 } from "./marketplace.schema";
 
-const authorSelection = {
+// ---------------------------------------------------------------------------
+// Shared selector — defined once, reused everywhere to keep the query surface
+// minimal and consistent.
+// ---------------------------------------------------------------------------
+const authorSelect = {
   id: true,
   name: true,
   email: true,
@@ -34,8 +39,11 @@ const authorSelection = {
       consultationHours: true,
     },
   },
-};
+} satisfies Prisma.UserSelect;
 
+// ---------------------------------------------------------------------------
+// Public types
+// ---------------------------------------------------------------------------
 export interface MarketplaceFeedFilters {
   type?: ListingType;
   status?: ListingStatus;
@@ -43,6 +51,101 @@ export interface MarketplaceFeedFilters {
   search?: string;
 }
 
+export interface PaginationParams {
+  /** cursor is the `id` of the last item returned on the previous page */
+  cursor?: string;
+  limit: number;
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  nextCursor: string | null;
+  total: number;
+}
+
+// ---------------------------------------------------------------------------
+// Feed — cursor-based pagination
+// ---------------------------------------------------------------------------
+export const findMarketplaceFeedInDb = async (
+  filters: MarketplaceFeedFilters,
+  pagination: PaginationParams
+): Promise<PaginatedResult<Prisma.MarketplacePostGetPayload<typeof feedQuery>>> => {
+  const { cursor, limit } = pagination;
+
+  const where: Prisma.MarketplacePostWhereInput = {
+    ...(filters.type && { type: filters.type }),
+    ...(filters.status && { status: filters.status }),
+    ...(filters.category && { category: filters.category }),
+    ...(filters.search && {
+      OR: [
+        { title: { contains: filters.search, mode: "insensitive" } },
+        { description: { contains: filters.search, mode: "insensitive" } },
+      ],
+    }),
+  };
+
+  // Fetch one extra item to determine if there is a next page
+  const take = limit + 1;
+
+  const [items, total] = await Promise.all([
+    prisma.marketplacePost.findMany({
+      where,
+      take,
+      ...(cursor && {
+        cursor: { id: cursor },
+        skip: 1, // skip the cursor item itself
+      }),
+      include: feedQuery.include,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.marketplacePost.count({ where }),
+  ]);
+
+  const hasNextPage = items.length > limit;
+  if (hasNextPage) items.pop(); // remove the extra lookahead item
+
+  const nextCursor =
+    hasNextPage && items.length > 0 ? items[items.length - 1].id : null;
+
+  return { items, nextCursor, total };
+};
+
+// The `include` shape used for feed queries (extracted so it can be reused
+// in the `Prisma.MarketplacePostGetPayload` generic above).
+const feedQuery = {
+  include: {
+    author: { select: authorSelect },
+    _count: { select: { comments: true } },
+  },
+} as const;
+
+// ---------------------------------------------------------------------------
+// Single post
+// ---------------------------------------------------------------------------
+export const findMarketplacePostByIdInDb = async (id: string) => {
+  return prisma.marketplacePost.findUnique({
+    where: { id },
+    include: {
+      author: { select: authorSelect },
+      comments: {
+        where: { parentId: null },
+        include: {
+          author: { select: authorSelect },
+          replies: {
+            include: { author: { select: authorSelect } },
+            orderBy: { createdAt: "asc" },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+      _count: { select: { comments: true } },
+    },
+  });
+};
+
+// ---------------------------------------------------------------------------
+// Create / Update / Delete posts
+// ---------------------------------------------------------------------------
 export const createMarketplacePostInDb = async (
   authorId: string,
   payload: CreateMarketplacePayload
@@ -59,61 +162,19 @@ export const createMarketplacePostInDb = async (
       images: payload.images,
       contactPhone: payload.contactPhone ?? null,
     },
-    include: {
-      author: { select: authorSelection },
-    },
+    include: { author: { select: authorSelect } },
   });
 };
 
-export const findMarketplaceFeedInDb = async (
-  filters: MarketplaceFeedFilters
+export const updateMarketplacePostInDb = async (
+  id: string,
+  data: Partial<CreateMarketplacePayload>
 ) => {
-  const where: any = {};
-
-  if (filters.type) {
-    where.type = filters.type;
-  }
-  if (filters.status) {
-    where.status = filters.status;
-  }
-  if (filters.category) {
-    where.category = filters.category;
-  }
-  if (filters.search) {
-    where.OR = [
-      { title: { contains: filters.search, mode: "insensitive" } },
-      { description: { contains: filters.search, mode: "insensitive" } },
-    ];
-  }
-
-  return prisma.marketplacePost.findMany({
-    where,
-    include: {
-      author: { select: authorSelection },
-      _count: { select: { comments: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-};
-
-export const findMarketplacePostByIdInDb = async (id: string) => {
-  return prisma.marketplacePost.findUnique({
+  return prisma.marketplacePost.update({
     where: { id },
+    data,
     include: {
-      author: { select: authorSelection },
-      comments: {
-        where: { parentId: null },
-        include: {
-          author: { select: authorSelection },
-          replies: {
-            include: {
-              author: { select: authorSelection },
-            },
-            orderBy: { createdAt: "asc" },
-          },
-        },
-        orderBy: { createdAt: "asc" },
-      },
+      author: { select: authorSelect },
       _count: { select: { comments: true } },
     },
   });
@@ -126,18 +187,17 @@ export const updateMarketplaceStatusInDb = async (
   return prisma.marketplacePost.update({
     where: { id },
     data: { status },
-    include: {
-      author: { select: authorSelection },
-    },
+    include: { author: { select: authorSelect } },
   });
 };
 
 export const deleteMarketplacePostFromDb = async (id: string) => {
-  return prisma.marketplacePost.delete({
-    where: { id },
-  });
+  return prisma.marketplacePost.delete({ where: { id } });
 };
 
+// ---------------------------------------------------------------------------
+// Comments
+// ---------------------------------------------------------------------------
 export const createMarketplaceCommentInDb = async (
   postId: string,
   authorId: string,
@@ -148,27 +208,19 @@ export const createMarketplaceCommentInDb = async (
       postId,
       authorId,
       content: payload.content,
-      parentId: payload.parentId || null,
+      parentId: payload.parentId ?? null,
     },
-    include: {
-      author: { select: authorSelection },
-    },
+    include: { author: { select: authorSelect } },
   });
 };
 
 export const findMarketplaceCommentByIdInDb = async (commentId: string) => {
   return prisma.marketplaceComment.findUnique({
     where: { id: commentId },
-    select: {
-      id: true,
-      authorId: true,
-      postId: true,
-    },
+    select: { id: true, authorId: true, postId: true },
   });
 };
 
 export const deleteMarketplaceCommentFromDb = async (commentId: string) => {
-  return prisma.marketplaceComment.delete({
-    where: { id: commentId },
-  });
+  return prisma.marketplaceComment.delete({ where: { id: commentId } });
 };

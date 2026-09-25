@@ -4,6 +4,7 @@ import { validateRequest } from "../../middleware/validateRequest";
 import {
   createMarketplaceCommentSchema,
   createMarketplaceSchema,
+  updateMarketplaceSchema,
   updateMarketplaceStatusSchema,
 } from "./marketplace.schema";
 import {
@@ -13,6 +14,7 @@ import {
   deletePost,
   getFeed,
   getPostById,
+  updatePost,
   updateStatus,
 } from "./marketplace.controller";
 
@@ -28,6 +30,13 @@ router.post(
 router.get("/", requireAuth, getFeed);
 
 router.get("/:id", requireAuth, getPostById);
+
+router.patch(
+  "/:id",
+  requireAuth,
+  validateRequest(updateMarketplaceSchema),
+  updatePost
+);
 
 router.patch(
   "/:id/sold",

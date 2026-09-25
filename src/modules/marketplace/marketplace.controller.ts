@@ -7,6 +7,7 @@ import {
   deletePostService,
   getFeedService,
   getPostByIdService,
+  updatePostService,
   updateStatusService,
 } from "./marketplace.service";
 import {
@@ -15,10 +16,59 @@ import {
   MarketplaceCategory,
 } from "../../constants/enums";
 
-export const createPost = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const result = await createPostService(userId, req.body);
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+const DEFAULT_PAGE_LIMIT = 20;
+const MAX_PAGE_LIMIT = 50;
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+const parseLimit = (raw: unknown): number => {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_PAGE_LIMIT;
+  return Math.min(n, MAX_PAGE_LIMIT);
+};
+
+const parseCursor = (raw: unknown): string | undefined =>
+  typeof raw === "string" && raw.length > 0 ? raw : undefined;
+
+// ---------------------------------------------------------------------------
+// Feed — GET /marketplace?type=&status=&category=&search=&limit=&cursor=
+// ---------------------------------------------------------------------------
+export const getFeed = catchAsync(async (req: Request, res: Response) => {
+  const { type, status, category, search, limit, cursor } = req.query;
+
+  const result = await getFeedService(
+    {
+      type: type as ListingType | undefined,
+      status: status as ListingStatus | undefined,
+      category: category as MarketplaceCategory | undefined,
+      search: typeof search === "string" ? search.trim() : undefined,
+    },
+    {
+      limit: parseLimit(limit),
+      cursor: parseCursor(cursor),
+    }
+  );
+
+  res.status(200).json({ success: true, data: result });
+});
+
+// ---------------------------------------------------------------------------
+// Single post
+// ---------------------------------------------------------------------------
+export const getPostById = catchAsync(async (req: Request, res: Response) => {
+  const result = await getPostByIdService(req.params.id);
+  res.status(200).json({ success: true, data: result });
+});
+
+// ---------------------------------------------------------------------------
+// Create
+// ---------------------------------------------------------------------------
+export const createPost = catchAsync(async (req: Request, res: Response) => {
+  const result = await createPostService(req.user!.id, req.body);
   res.status(201).json({
     success: true,
     message: "Listing created successfully",
@@ -26,43 +76,33 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-export const getFeed = catchAsync(async (req: Request, res: Response) => {
-  const { type, status, category, search } = req.query;
-
-  const result = await getFeedService({
-    type: type as ListingType | undefined,
-    status: status as ListingStatus | undefined,
-    category: category as MarketplaceCategory | undefined,
-    search: typeof search === "string" ? search : undefined,
-  });
-
-  res.status(200).json({
-    success: true,
-    data: result,
-  });
-});
-
-export const getPostById = catchAsync(async (req: Request, res: Response) => {
-  const result = await getPostByIdService(req.params.id as string);
-
-  res.status(200).json({
-    success: true,
-    data: result,
-  });
-});
-
-export const updateStatus = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const userRole = req.user?.role;
-  const { status } = req.body;
-
-  const result = await updateStatusService(
-    req.params.id as string,
-    userId,
-    userRole,
-    status
+// ---------------------------------------------------------------------------
+// Update
+// ---------------------------------------------------------------------------
+export const updatePost = catchAsync(async (req: Request, res: Response) => {
+  const result = await updatePostService(
+    req.params.id,
+    req.user!.id,
+    req.user?.role,
+    req.body
   );
+  res.status(200).json({
+    success: true,
+    message: "Listing updated successfully",
+    data: result,
+  });
+});
 
+// ---------------------------------------------------------------------------
+// Status
+// ---------------------------------------------------------------------------
+export const updateStatus = catchAsync(async (req: Request, res: Response) => {
+  const result = await updateStatusService(
+    req.params.id,
+    req.user!.id,
+    req.user?.role,
+    req.body.status
+  );
   res.status(200).json({
     success: true,
     message: "Status updated successfully",
@@ -70,24 +110,23 @@ export const updateStatus = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Delete
+// ---------------------------------------------------------------------------
 export const deletePost = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const userRole = req.user?.role;
-
-  await deletePostService(req.params.id as string, userId, userRole);
-
-  res.status(200).json({
-    success: true,
-    message: "Listing deleted successfully",
-  });
+  await deletePostService(req.params.id, req.user!.id, req.user?.role);
+  res.status(200).json({ success: true, message: "Listing deleted successfully" });
 });
 
+// ---------------------------------------------------------------------------
+// Comments
+// ---------------------------------------------------------------------------
 export const createComment = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const postId = req.params.id as string;
-
-  const result = await createCommentService(postId, userId, req.body);
-
+  const result = await createCommentService(
+    req.params.id,
+    req.user!.id,
+    req.body
+  );
   res.status(201).json({
     success: true,
     message: "Comment added successfully",
@@ -96,14 +135,10 @@ export const createComment = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const deleteComment = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const userRole = req.user?.role;
-  const commentId = req.params.commentId as string;
-
-  await deleteCommentService(commentId, userId, userRole);
-
-  res.status(200).json({
-    success: true,
-    message: "Comment deleted successfully",
-  });
+  await deleteCommentService(
+    req.params.commentId,
+    req.user!.id,
+    req.user?.role
+  );
+  res.status(200).json({ success: true, message: "Comment deleted successfully" });
 });
