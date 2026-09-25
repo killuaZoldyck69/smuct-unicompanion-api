@@ -1,13 +1,14 @@
 import { AppError } from "../../utils/AppError";
 import { MemeReactionType } from "../../constants/enums";
 import { deleteImageFromCloudinary } from "../../lib/cloudinary";
-import { CreateMemePayload, QueryMemesQuery } from "./meme.schema";
+import { CreateMemePayload, QueryMemesQuery, UpdateMemePayload } from "./meme.schema";
 import {
   createMemeInDb,
   deleteMemeFromDb,
   findMemeByIdInDb,
   findMemesFeedInDb,
   toggleMemeReactionInDb,
+  updateMemeInDb,
 } from "./meme.repository";
 
 export const createMemeService = async (
@@ -93,4 +94,21 @@ export const deleteMemeService = async (
   }
 
   return deleted;
+};
+
+export const updateMemeService = async (
+  memeId: string,
+  userId: string,
+  payload: UpdateMemePayload
+) => {
+  const meme = await findMemeByIdInDb(memeId);
+  if (!meme) {
+    throw new AppError("Meme not found", 404);
+  }
+
+  if (meme.authorId !== userId) {
+    throw new AppError("You do not have permission to edit this meme", 403);
+  }
+
+  return updateMemeInDb(memeId, payload);
 };

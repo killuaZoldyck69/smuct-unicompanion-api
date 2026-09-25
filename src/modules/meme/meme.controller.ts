@@ -6,6 +6,7 @@ import {
   getMemeByIdService,
   getMemesFeedService,
   reactMemeService,
+  updateMemeService,
 } from "./meme.service";
 import { MemeReactionType } from "../../constants/enums";
 
@@ -76,5 +77,18 @@ export const deleteMeme = catchAsync(async (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     message: "Meme deleted successfully",
+  });
+});
+
+export const updateMeme = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const memeId = req.params.id as string;
+
+  const result = await updateMemeService(memeId, userId, req.body);
+
+  res.status(200).json({
+    success: true,
+    message: "Meme updated successfully",
+    data: result,
   });
 });

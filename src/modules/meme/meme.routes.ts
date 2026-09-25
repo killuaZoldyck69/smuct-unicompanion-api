@@ -5,6 +5,7 @@ import {
   createMemeSchema,
   queryMemesSchema,
   reactMemeSchema,
+  updateMemeSchema,
 } from "./meme.schema";
 import {
   createMeme,
@@ -12,6 +13,7 @@ import {
   getFeed,
   getMemeById,
   reactMeme,
+  updateMeme,
 } from "./meme.controller";
 
 const router = Router();
@@ -37,6 +39,13 @@ router.post(
   requireAuth,
   validateRequest(reactMemeSchema),
   reactMeme
+);
+
+router.patch(
+  "/:id",
+  requireAuth,
+  validateRequest(updateMemeSchema),
+  updateMeme
 );
 
 router.delete("/:id", requireAuth, deleteMeme);

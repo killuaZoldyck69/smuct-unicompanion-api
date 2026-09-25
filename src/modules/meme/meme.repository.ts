@@ -52,6 +52,42 @@ export const createMemeInDb = async (
   };
 };
 
+export const updateMemeInDb = async (
+  id: string,
+  payload: { caption?: string | null; imageUrl?: string }
+) => {
+  const meme = await prisma.meme.update({
+    where: { id },
+    data: {
+      ...(payload.caption !== undefined ? { caption: payload.caption } : {}),
+      ...(payload.imageUrl ? { imageUrl: payload.imageUrl } : {}),
+    },
+    include: {
+      author: { select: authorSelection },
+      reactions: {
+        select: {
+          type: true,
+          userId: true,
+        },
+      },
+    },
+  });
+
+  let likesCount = 0;
+  let dislikesCount = 0;
+  for (const r of meme.reactions) {
+    if (r.type === "LIKE") likesCount++;
+    else if (r.type === "DISLIKE") dislikesCount++;
+  }
+
+  const { reactions, ...rest } = meme;
+  return {
+    ...rest,
+    likesCount,
+    dislikesCount,
+  };
+};
+
 export const findMemesFeedInDb = async (
   currentUserId: string,
   filter: "latest" | "popular" | "mine",
