@@ -1,4 +1,5 @@
 import { AppError } from "../../utils/AppError";
+import { HubRole } from "../../constants/enums";
 import * as hubRepository from "./hub.repository";
 import {
   CreateHubPayload,
@@ -14,13 +15,30 @@ export const verifyHubRole = async (
   allowedRoles: string[],
 ) => {
   const member = await hubRepository.findHubMember(userId, hubId);
-  if (!member || !allowedRoles.includes(member.role)) {
+  if (!member) {
     throw new AppError(
       "You do not have permission to perform this action in this hub.",
       403,
     );
   }
-  return member;
+
+  let effectiveRole: string = member.role;
+  if (effectiveRole === "STUDENT") {
+    const user = await hubRepository.findUserWithStudentProfile(userId);
+    if (user?.role === "TEACHER") {
+      effectiveRole = "TEACHER";
+    } else if (user?.studentProfile?.isCR) {
+      effectiveRole = "CR";
+    }
+  }
+
+  if (!allowedRoles.includes(effectiveRole)) {
+    throw new AppError(
+      "You do not have permission to perform this action in this hub.",
+      403,
+    );
+  }
+  return { ...member, role: effectiveRole as any };
 };
 
 export const getUserHubRole = async (userId: string, hubId: string) => {
@@ -77,8 +95,16 @@ export const joinHubService = async (userId: string, joinCode: string) => {
   const hub = await hubRepository.findHubByJoinCode(joinCode);
   if (!hub) throw new AppError("Invalid join code.", 404);
 
+  const user = await hubRepository.findUserWithStudentProfile(userId);
+  let role: HubRole = "STUDENT";
+  if (user?.role === "TEACHER") {
+    role = "TEACHER";
+  } else if (user?.studentProfile?.isCR) {
+    role = "CR";
+  }
+
   // Prisma will throw a unique constraint error if they are already a member
-  return await hubRepository.createHubMember(userId, hub.id, "STUDENT");
+  return await hubRepository.createHubMember(userId, hub.id, role);
 };
 
 export const getMyHubsService = async (userId: string) => {

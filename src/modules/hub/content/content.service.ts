@@ -12,7 +12,7 @@ export const createAnnouncement = async (
   hubId: string,
   data: CreateAnnouncementPayload,
 ) => {
-  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
   return await contentRepository.createHubAnnouncement(userId, hubId, data);
 };
 
