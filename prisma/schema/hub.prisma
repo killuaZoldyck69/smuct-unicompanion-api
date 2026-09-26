@@ -82,7 +82,10 @@ model HubAnnouncement {
   content           String
   attachedLinkUrl   String?
   attachedLinkTitle String?
+  attachments       Json?
+  links             Json?
   createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
 
   hub      CourseHub             @relation(fields: [hubId], references: [id], onDelete: Cascade)
   creator  User                  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
@@ -144,29 +147,41 @@ model Assessment {
   description    String?
   type           AssessmentType
   submissionType SubmissionType?
+  status         String          @default("PUBLISHED")
   deadline       DateTime
+  startDate      DateTime?
   totalMarks     Float
+  attachments    Json?
+  links          Json?
 
   hub         CourseHub    @relation(fields: [hubId], references: [id], onDelete: Cascade)
   creator     User?        @relation("CreatedAssessments", fields: [creatorId], references: [id], onDelete: SetNull)
   submissions Submission[]
   createdAt   DateTime     @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
 
   @@index([hubId])
 }
 
 model Submission {
-  id           String  @id @default(uuid())
+  id           String   @id @default(uuid())
   assessmentId String
   studentId    String
   submittedUrl String?
+  content      String?
+  attachments  Json?
+  links        Json?
+  feedback     String?
   marks        Float?
+  status       String   @default("SUBMITTED")
+  isLate       Boolean  @default(false)
   gradedById   String?
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   student    User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
   gradedBy   User?      @relation("GradedSubmissions", fields: [gradedById], references: [id])
   createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @default(now()) @updatedAt
 
   @@unique([assessmentId, studentId])
   @@index([assessmentId])
@@ -177,17 +192,24 @@ model Submission {
 // ==============================
 
 model Resource {
-  id            String  @id @default(uuid())
+  id            String   @id @default(uuid())
   title         String
+  description   String?
+  fileType      String?
+  fileSize      Int?
+  category      String?
   driveUrl      String
+  attachments   Json?
+  links         Json?
   uploaderId    String
   hubId         String? // If Null -> Global Vault. If present -> Local Hub
-  isStudentNote Boolean @default(false)
-  rating        Float   @default(0) // Vault Promotion Threshold
+  isStudentNote Boolean  @default(false)
+  rating        Float    @default(0) // Vault Promotion Threshold
 
   uploader  User       @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
   hub       CourseHub? @relation(fields: [hubId], references: [id], onDelete: Cascade)
   createdAt DateTime   @default(now())
+  updatedAt DateTime   @default(now()) @updatedAt
 
   @@index([hubId])
 }
@@ -197,17 +219,18 @@ model Resource {
 // ==============================
 
 model CourseReview {
-  id          String  @id @default(uuid())
+  id          String   @id @default(uuid())
   hubId       String
   studentId   String
   rating      Int
   comment     String?
-  isAnonymous Boolean @default(true)
+  isAnonymous Boolean  @default(true)
   answers     Json?
 
   hub       CourseHub @relation(fields: [hubId], references: [id], onDelete: Cascade)
   student   User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
   createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
 
   @@unique([hubId, studentId]) // One review per student per hub
   @@index([hubId])

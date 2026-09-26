@@ -91,23 +91,29 @@ export function buildOptimizedUrl(publicId: string, cloudName?: string): string 
 export async function uploadBufferToCloudinary(
   buffer: Buffer,
   folder: string = PROJECT_ROOT_FOLDER,
-  filename?: string
+  filename?: string,
+  resourceType: "image" | "auto" | "raw" = "image"
 ): Promise<UploadResult> {
   ensureConfigured();
 
   const targetFolder = resolveCloudinaryFolder(folder);
 
   return new Promise((resolve, reject) => {
+    const uploadOptions: any = {
+      folder: targetFolder,
+      resource_type: resourceType,
+    };
+
+    if (resourceType === "image") {
+      uploadOptions.transformation = [
+        { width: 1080, crop: "limit" },
+        { quality: "auto:good" },
+        { fetch_format: "auto" },
+      ];
+    }
+
     const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: targetFolder,
-        resource_type: "image",
-        transformation: [
-          { width: 1080, crop: "limit" },
-          { quality: "auto:good" },
-          { fetch_format: "auto" },
-        ],
-      },
+      uploadOptions,
       (error?: any, result?: UploadApiResponse) => {
         if (error || !result) {
           return reject(
@@ -119,7 +125,10 @@ export async function uploadBufferToCloudinary(
         }
 
         resolve({
-          secureUrl: buildOptimizedUrl(result.public_id),
+          secureUrl:
+            resourceType === "image"
+              ? buildOptimizedUrl(result.public_id)
+              : result.secure_url,
           publicId: result.public_id,
         });
       }
@@ -245,6 +254,42 @@ export async function deleteImageFromCloudinary(
     return result.result === "ok" || result.result === "not found";
   } catch (error) {
     console.warn(`[Cloudinary] Failed to delete image (${publicId}):`, error);
+    return false;
+  }
+}
+
+export async function deleteFileFromCloudinary(
+  urlOrPublicId: string,
+  resourceType: "image" | "raw" | "video" = "image"
+): Promise<boolean> {
+  const publicId = extractPublicIdFromUrl(urlOrPublicId);
+  if (!publicId) return false;
+
+  const cloudName = envConfig.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = envConfig.CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY;
+  const apiSecret = envConfig.CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET;
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    return false;
+  }
+
+  try {
+    const result = await cloudinary.uploader.destroy(publicId, {
+      invalidate: true,
+      resource_type: resourceType,
+    });
+    if (result.result === "ok" || result.result === "not found") {
+      return true;
+    }
+    if (resourceType === "image") {
+      const rawResult = await cloudinary.uploader.destroy(publicId, {
+        invalidate: true,
+        resource_type: "raw",
+      });
+      return rawResult.result === "ok" || rawResult.result === "not found";
+    }
+    return false;
+  } catch (error) {
     return false;
   }
 }

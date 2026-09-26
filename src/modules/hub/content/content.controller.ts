@@ -30,8 +30,48 @@ export const createAnnouncement = catchAsync(
 
 export const getAnnouncements = catchAsync(
   async (req: Request, res: Response) => {
-    const data = await contentService.getAnnouncements(req.params.id as string);
-    res.status(200).json({ success: true, data });
+    const page = req.query.page ? Number(req.query.page) : undefined;
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const result = await contentService.getAnnouncements(
+      req.params.id as string,
+      { page, limit },
+    );
+    // Backward compatibility: if not paginated, result.announcements is returned, else both data & meta
+    res.status(200).json({
+      success: true,
+      data: result.announcements,
+      meta: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    });
+  },
+);
+
+export const updateAnnouncement = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await contentService.updateAnnouncement(
+      req.user.id,
+      req.params.id as string,
+      req.params.announcementId as string,
+      req.body,
+    );
+    res
+      .status(200)
+      .json({ success: true, message: "Announcement updated", data });
+  },
+);
+
+export const deleteAnnouncement = catchAsync(
+  async (req: Request, res: Response) => {
+    await contentService.deleteAnnouncement(
+      req.user.id,
+      req.params.id as string,
+      req.params.announcementId as string,
+    );
+    res.status(200).json({ success: true, message: "Announcement deleted" });
   },
 );
 

@@ -1,7 +1,12 @@
 import { Router, Request, Response, NextFunction } from "express";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.middleware";
-import { uploadSingleImage, uploadMultipleImages } from "./upload.controller";
+import {
+  uploadSingleImage,
+  uploadMultipleImages,
+  uploadSingleFile,
+  uploadMultipleFiles,
+} from "./upload.controller";
 
 const storage = multer.memoryStorage();
 
@@ -72,6 +77,24 @@ router.post(
   multipleUpload,
   normalizeMultipleFiles,
   uploadMultipleImages
+);
+
+// POST /api/upload/file - Upload single file/document
+router.post(
+  "/file",
+  requireAuth,
+  singleUpload,
+  normalizeSingleFile,
+  uploadSingleFile
+);
+
+// POST /api/upload/files - Upload up to 6 files/documents
+router.post(
+  "/files",
+  requireAuth,
+  multipleUpload,
+  normalizeMultipleFiles,
+  uploadMultipleFiles
 );
 
 export const uploadRoutes = router;

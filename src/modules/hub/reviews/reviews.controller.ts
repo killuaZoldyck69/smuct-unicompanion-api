@@ -25,6 +25,9 @@ export const submitReview = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getReviews = catchAsync(async (req: Request, res: Response) => {
-  const data = await reviewService.getReviews(req.params.id as string);
+  const data = await reviewService.getReviews(
+    req.params.id as string,
+    req.user?.id,
+  );
   res.status(200).json({ success: true, data });
 });

@@ -17,8 +17,13 @@ export const createAssessment = catchAsync(
 
 export const getAssessments = catchAsync(
   async (req: Request, res: Response) => {
+    const filters = {
+      type: req.query.type as string | undefined,
+      status: req.query.status as string | undefined,
+    };
     const data = await assessmentService.getAssessments(
       req.params.id as string,
+      filters,
     );
     res.status(200).json({ success: true, data });
   },
@@ -29,7 +34,7 @@ export const submitAssessment = catchAsync(
     const data = await assessmentService.submitAssessment(
       req.user.id,
       req.params.assessmentId as string,
-      req.body.submittedUrl,
+      req.body,
     );
     res
       .status(200)
@@ -42,7 +47,7 @@ export const gradeSubmission = catchAsync(
     const data = await assessmentService.gradeSubmission(
       req.user.id,
       req.params.submissionId as string,
-      req.body.marks,
+      req.body,
     );
     res.status(200).json({ success: true, message: "Submission graded", data });
   },

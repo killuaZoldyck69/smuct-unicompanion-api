@@ -86,5 +86,98 @@ export async function uploadMultipleImagesService(
     throw new AppError("No image files provided for upload", 400);
   }
 
+  return await Promise.all(uploadPromises);
+}
+
+const ALLOWED_FILE_MIME_TYPES = new Set([
+  ...ALLOWED_MIME_TYPES,
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/plain",
+  "application/zip",
+  "application/x-zip-compressed",
+  "application/octet-stream",
+]);
+
+const MAX_DOCUMENT_FILE_SIZE = 25 * 1024 * 1024; // 25MB
+
+export function validateGenericFile(file: MulterFile): void {
+  const mime = file.mimetype.toLowerCase();
+  const ext = file.originalname.split(".").pop()?.toLowerCase();
+  const allowedExtensions = new Set([
+    "pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "txt", "zip", "rar",
+    "jpg", "jpeg", "png", "webp", "gif", "heic"
+  ]);
+
+  if (!ALLOWED_FILE_MIME_TYPES.has(mime) && (!ext || !allowedExtensions.has(ext))) {
+    throw new AppError(
+      `Unsupported file type: ${file.mimetype}. Allowed types include PDF, Word, PowerPoint, Excel, text, zip, and images.`,
+      400
+    );
+  }
+
+  if (file.size > MAX_DOCUMENT_FILE_SIZE) {
+    throw new AppError(
+      `File size exceeds limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Max allowed is 25MB.`,
+      400
+    );
+  }
+}
+
+export async function uploadSingleFileService(
+  file?: MulterFile,
+  folder: string = PROJECT_ROOT_FOLDER
+): Promise<UploadResult & { originalName: string; size: number; mimeType: string }> {
+  if (!file) {
+    throw new AppError("No file provided", 400);
+  }
+
+  validateGenericFile(file);
+  const isImage = ALLOWED_MIME_TYPES.has(file.mimetype.toLowerCase());
+  const res = await uploadBufferToCloudinary(
+    file.buffer,
+    folder,
+    file.originalname,
+    isImage ? "image" : "auto"
+  );
+
+  return {
+    ...res,
+    originalName: file.originalname,
+    size: file.size,
+    mimeType: file.mimetype,
+  };
+}
+
+export async function uploadMultipleFilesService(
+  files: MulterFile[] = [],
+  folder: string = PROJECT_ROOT_FOLDER
+): Promise<(UploadResult & { originalName: string; size: number; mimeType: string })[]> {
+  if (!files || files.length === 0) {
+    throw new AppError("No files provided for upload", 400);
+  }
+
+  const uploadPromises = files.map(async (file) => {
+    validateGenericFile(file);
+    const isImage = ALLOWED_MIME_TYPES.has(file.mimetype.toLowerCase());
+    const res = await uploadBufferToCloudinary(
+      file.buffer,
+      folder,
+      file.originalname,
+      isImage ? "image" : "auto"
+    );
+    return {
+      ...res,
+      originalName: file.originalname,
+      size: file.size,
+      mimeType: file.mimetype,
+    };
+  });
+
   return Promise.all(uploadPromises);
 }

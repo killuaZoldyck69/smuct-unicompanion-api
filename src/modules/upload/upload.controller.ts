@@ -48,3 +48,42 @@ export const uploadMultipleImages = catchAsync(
     });
   }
 );
+
+export const uploadSingleFile = catchAsync(
+  async (req: Request, res: Response) => {
+    const file = req.file as unknown as MulterFile | undefined;
+    const folder = (req.body?.folder as string) || PROJECT_ROOT_FOLDER;
+
+    const { uploadSingleFileService } = await import("./upload.service");
+    const result = await uploadSingleFileService(file, folder);
+
+    res.status(200).json({
+      success: true,
+      message: "File uploaded successfully",
+      data: result,
+    });
+  }
+);
+
+export const uploadMultipleFiles = catchAsync(
+  async (req: Request, res: Response) => {
+    let files: MulterFile[] = [];
+
+    if (Array.isArray(req.files)) {
+      files = req.files as unknown as MulterFile[];
+    } else if (req.files && typeof req.files === "object") {
+      files = Object.values(req.files).flat() as unknown as MulterFile[];
+    }
+
+    const folder = (req.body?.folder as string) || PROJECT_ROOT_FOLDER;
+
+    const { uploadMultipleFilesService } = await import("./upload.service");
+    const results = await uploadMultipleFilesService(files, folder);
+
+    res.status(200).json({
+      success: true,
+      message: "Files uploaded successfully",
+      data: results,
+    });
+  }
+);

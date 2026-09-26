@@ -47,26 +47,38 @@ export const submitReview = async (
   return await reviewsRepository.createCourseReview(hubId, userId, data);
 };
 
-export const getReviews = async (hubId: string) => {
+export const getReviews = async (hubId: string, currentUserId?: string) => {
+  const hub = await reviewsRepository.findHubById(hubId);
   const reviews = await reviewsRepository.findReviewsByHubId(hubId);
 
   const totalReviews = reviews.length;
   const averageRating =
     totalReviews > 0
-      ? (
-          reviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews
-        ).toFixed(1)
+      ? Number((reviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews).toFixed(1))
       : 0;
+
+  const ratingDistribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  reviews.forEach((r) => {
+    if (r.rating >= 1 && r.rating <= 5) {
+      ratingDistribution[r.rating] = (ratingDistribution[r.rating] || 0) + 1;
+    }
+  });
+
+  const myReview = currentUserId
+    ? reviews.find((r) => r.studentId === currentUserId)
+    : null;
+  const hasSubmitted = !!myReview;
 
   // Sanitize identifying information if anonymous
   const sanitizedReviews = reviews.map((review) => {
     if (review.isAnonymous) {
       return {
         ...review,
+        studentId: undefined,
         student: {
-          id: "HIDDEN",
+          id: undefined,
           name: "Anonymous Student",
-          email: "HIDDEN",
+          email: undefined,
           image: null,
           studentProfile: null,
         },
@@ -79,5 +91,19 @@ export const getReviews = async (hubId: string) => {
     reviews: sanitizedReviews,
     totalReviews,
     averageRating,
+    ratingDistribution,
+    isReviewOpen: hub?.isReviewOpen || false,
+    reviewQuestions: (hub?.reviewQuestions as string[]) || [],
+    hasSubmitted,
+    myReview: myReview
+      ? {
+          id: myReview.id,
+          rating: myReview.rating,
+          comment: myReview.comment,
+          isAnonymous: myReview.isAnonymous,
+          answers: myReview.answers,
+          createdAt: myReview.createdAt,
+        }
+      : null,
   };
 };

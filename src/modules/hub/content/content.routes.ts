@@ -4,11 +4,14 @@ import { validateRequest } from "../../../middleware/validateRequest";
 import {
   commentAnnouncementSchema,
   createAnnouncementSchema,
+  updateAnnouncementSchema,
   createDiscussionSchema,
   replyDiscussionSchema,
 } from "./content.schema";
 import {
   createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
   getAnnouncements,
   createDiscussion,
   replyDiscussion,
@@ -24,6 +27,23 @@ router.post(
   requireAuth,
   validateRequest(createAnnouncementSchema),
   createAnnouncement,
+);
+router.patch(
+  [
+    "/:id/announcements/:announcementId",
+    "/:id/content/announcements/:announcementId",
+  ],
+  requireAuth,
+  validateRequest(updateAnnouncementSchema),
+  updateAnnouncement,
+);
+router.delete(
+  [
+    "/:id/announcements/:announcementId",
+    "/:id/content/announcements/:announcementId",
+  ],
+  requireAuth,
+  deleteAnnouncement,
 );
 router.get(
   ["/:id/announcements", "/:id/content/announcements"],

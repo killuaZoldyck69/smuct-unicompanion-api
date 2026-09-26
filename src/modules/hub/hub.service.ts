@@ -23,6 +23,11 @@ export const verifyHubRole = async (
   return member;
 };
 
+export const getUserHubRole = async (userId: string, hubId: string) => {
+  const member = await hubRepository.findHubMember(userId, hubId);
+  return member?.role || null;
+};
+
 export const getAvailableTeachersService = async (
   query?: hubRepository.FindAvailableTeachersQuery,
 ) => {

@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+export const attachmentSchema = z.object({
+  url: z.string().url("Attachment must have a valid URL"),
+  name: z.string().optional().default("Attachment"),
+  type: z.string().optional(),
+  size: z.number().optional(),
+});
+
+export const linkSchema = z.object({
+  url: z.string().url("Must be a valid URL"),
+  title: z.string().optional().nullable(),
+});
+
 export const createAnnouncementSchema = z.object({
   body: z.object({
     content: z.string().min(1, "Announcement content cannot be empty"),
@@ -10,6 +22,23 @@ export const createAnnouncementSchema = z.object({
       .or(z.literal(""))
       .nullable(),
     attachedLinkTitle: z.string().optional().nullable(),
+    attachments: z.array(attachmentSchema).optional().nullable(),
+    links: z.array(linkSchema).optional().nullable(),
+  }),
+});
+
+export const updateAnnouncementSchema = z.object({
+  body: z.object({
+    content: z.string().min(1, "Announcement content cannot be empty").optional(),
+    attachedLinkUrl: z
+      .string()
+      .url("Must be a valid URL")
+      .optional()
+      .or(z.literal(""))
+      .nullable(),
+    attachedLinkTitle: z.string().optional().nullable(),
+    attachments: z.array(attachmentSchema).optional().nullable(),
+    links: z.array(linkSchema).optional().nullable(),
   }),
 });
 
@@ -40,6 +69,9 @@ export const commentAnnouncementSchema = z.object({
 
 export type CreateAnnouncementPayload = z.infer<
   typeof createAnnouncementSchema
+>["body"];
+export type UpdateAnnouncementPayload = z.infer<
+  typeof updateAnnouncementSchema
 >["body"];
 export type CreateAnnouncementCommentPayload = z.infer<
   typeof createAnnouncementCommentSchema

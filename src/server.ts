@@ -10,7 +10,7 @@ const startServer = async () => {
     await prisma.$connect();
     console.log("✅ PostgreSQL Database connected successfully via Prisma.");
 
-    server = app.listen(envConfig.PORT, () => {
+    server = app.listen(envConfig.PORT, "0.0.0.0", () => {
       console.log(
         `🚀 SMUCT UniCompanion Backend running on http://localhost:${envConfig.PORT}`,
       );
