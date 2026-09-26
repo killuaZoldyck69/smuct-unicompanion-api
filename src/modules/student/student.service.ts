@@ -44,6 +44,8 @@ export const updateStudentProfileData = async (
   if (data.currentSemester)
     profileUpdateData.currentSemester = data.currentSemester;
   if (data.section !== undefined) profileUpdateData.section = data.section;
+  if (data.currentTerm !== undefined)
+    profileUpdateData.currentTerm = data.currentTerm;
   if (data.skills !== undefined) profileUpdateData.skills = data.skills;
   if (data.linkedInUrl !== undefined)
     profileUpdateData.linkedInUrl = data.linkedInUrl;

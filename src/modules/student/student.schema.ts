@@ -13,6 +13,7 @@ export const onboardStudentSchema = z.object({
       .min(1)
       .max(12, "Semester must be between 1 and 12"),
     section: z.string().min(1, "Section is required"),
+    currentTerm: z.string().optional(),
   }),
 });
 
@@ -29,6 +30,7 @@ export const updateProfileSchema = z.object({
     batch: z.string().optional(),
     currentSemester: z.number().min(1).max(12).optional(),
     section: z.string().optional(),
+    currentTerm: z.string().optional(),
     bloodGroup: z.enum(BLOOD_GROUP_VALUES).optional(),
     faculty: z.string().optional(),
     program: z.string().optional(),

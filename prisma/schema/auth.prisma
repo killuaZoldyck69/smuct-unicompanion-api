@@ -135,6 +135,7 @@ model StudentProfile {
   batch           String
   currentSemester Int
   section         String
+  currentTerm     String? // e.g. "Fall 2026"
 
   isCR Boolean @default(false)
   isTA Boolean @default(false)
