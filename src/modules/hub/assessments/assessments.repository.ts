@@ -21,6 +21,7 @@ export const createAssessment = async (
       deadline: data.deadline,
       startDate: data.startDate,
       totalMarks: data.totalMarks,
+      allowLateSubmission: data.allowLateSubmission ?? false,
       attachments: data.attachments ? (data.attachments as any) : undefined,
       links: data.links ? (data.links as any) : undefined,
     },
@@ -254,6 +255,9 @@ export const updateAssessment = async (
       ...(data.deadline !== undefined && { deadline: data.deadline }),
       ...(data.startDate !== undefined && { startDate: data.startDate }),
       ...(data.totalMarks !== undefined && { totalMarks: data.totalMarks }),
+      ...(data.allowLateSubmission !== undefined && {
+        allowLateSubmission: data.allowLateSubmission,
+      }),
       ...(data.attachments !== undefined && {
         attachments: data.attachments as any,
       }),

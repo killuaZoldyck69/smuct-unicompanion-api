@@ -151,6 +151,7 @@ model Assessment {
   deadline       DateTime
   startDate      DateTime?
   totalMarks     Float
+  allowLateSubmission Boolean @default(false)
   attachments    Json?
   links          Json?
 

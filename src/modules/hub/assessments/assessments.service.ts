@@ -48,7 +48,18 @@ export const submitAssessment = async (
   await verifyHubRole(userId, assessment.hubId, ["STUDENT", "CR", "TA"]);
 
   const isLate = new Date() > new Date(assessment.deadline);
-  const status = isLate ? "LATE" : "SUBMITTED";
+
+  if (isLate && !assessment.allowLateSubmission) {
+    throw new AppError(
+      "Submissions are closed for this coursework. Late submissions are not allowed.",
+      400,
+    );
+  }
+
+  const status =
+    payload.status === "HAND_SUBMISSION"
+      ? (isLate ? "LATE_HAND_SUBMISSION" : "HAND_SUBMISSION")
+      : (isLate ? "LATE" : "SUBMITTED");
 
   return await assessmentsRepository.upsertSubmission(
     assessmentId,

@@ -38,6 +38,7 @@ export const createAssessmentSchema = z.object({
     deadline: datePreprocess,
     startDate: datePreprocess.optional(),
     totalMarks: z.number().positive("Total marks must be greater than zero"),
+    allowLateSubmission: z.boolean().optional().default(false),
     attachments: z.array(classworkAttachmentSchema).optional().nullable(),
     links: z.array(classworkLinkSchema).optional().nullable(),
   }),
@@ -58,6 +59,7 @@ export const updateAssessmentSchema = z.object({
       .number()
       .positive("Total marks must be greater than zero")
       .optional(),
+    allowLateSubmission: z.boolean().optional(),
     attachments: z.array(classworkAttachmentSchema).optional().nullable(),
     links: z.array(classworkLinkSchema).optional().nullable(),
   }),
@@ -69,6 +71,8 @@ export const submitAssessmentSchema = z.object({
     content: z.string().optional().nullable(),
     attachments: z.array(classworkAttachmentSchema).optional().nullable(),
     links: z.array(classworkLinkSchema).optional().nullable(),
+    status: z.string().optional(),
+    isLate: z.boolean().optional(),
   }),
 });
 
