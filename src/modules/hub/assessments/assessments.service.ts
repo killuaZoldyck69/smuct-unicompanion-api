@@ -32,7 +32,7 @@ export const getAssessmentSubmissions = async (
   const assessment = await assessmentsRepository.findAssessmentById(assessmentId);
   if (!assessment) throw new AppError("Assessment not found", 404);
 
-  await verifyHubRole(userId, assessment.hubId, ["TEACHER", "CR", "TA"]);
+  await verifyHubRole(userId, assessment.hubId, ["TEACHER"]);
 
   return await assessmentsRepository.findAssessmentSubmissions(assessmentId);
 };
@@ -72,7 +72,7 @@ export const gradeSubmission = async (
   const submission = await assessmentsRepository.findSubmissionById(submissionId);
   if (!submission) throw new AppError("Submission not found", 404);
 
-  await verifyHubRole(userId, submission.assessment.hubId, ["TEACHER", "CR", "TA"]);
+  await verifyHubRole(userId, submission.assessment.hubId, ["TEACHER"]);
 
   if (data.marks < 0) {
     throw new AppError("Marks cannot be negative", 400);
@@ -100,7 +100,7 @@ export const bulkGrade = async (
   const assessment = await assessmentsRepository.findAssessmentById(assessmentId);
   if (!assessment) throw new AppError("Assessment not found", 404);
 
-  await verifyHubRole(userId, assessment.hubId, ["TEACHER", "CR", "TA"]);
+  await verifyHubRole(userId, assessment.hubId, ["TEACHER"]);
 
   for (const grade of grades) {
     if (grade.marks < 0) {
