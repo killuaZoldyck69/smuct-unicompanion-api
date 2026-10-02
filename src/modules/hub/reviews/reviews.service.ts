@@ -34,6 +34,7 @@ export const submitReview = async (
     );
   }
 
+  // Validate that student has not already submitted a review
   const existingReview = await reviewsRepository.findExistingReview(
     hubId,
     userId,
@@ -46,7 +47,17 @@ export const submitReview = async (
     );
   }
 
-  return await reviewsRepository.createCourseReview(hubId, userId, data);
+  try {
+    return await reviewsRepository.createCourseReview(hubId, userId, data);
+  } catch (error: any) {
+    if (error.code === "P2002") {
+      throw new AppError(
+        "You have already submitted a review for this course.",
+        409,
+      );
+    }
+    throw error;
+  }
 };
 
 export const editReview = async (
@@ -105,7 +116,7 @@ export const getReviews = async (hubId: string, currentUserId?: string) => {
   });
 
   const myReview = currentUserId
-    ? reviews.find((r) => r.studentId === currentUserId)
+    ? await reviewsRepository.findExistingReview(hubId, currentUserId)
     : null;
   const hasSubmitted = !!myReview;
 
