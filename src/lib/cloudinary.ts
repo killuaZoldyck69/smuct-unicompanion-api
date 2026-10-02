@@ -273,22 +273,48 @@ export async function deleteFileFromCloudinary(
     return false;
   }
 
+  // Also extract publicId with extension in case Cloudinary stored it as raw with extension
+  let rawPublicId = publicId;
+  if (urlOrPublicId.includes("/upload/")) {
+    const uploadIdx = urlOrPublicId.indexOf("/upload/");
+    const after = urlOrPublicId.substring(uploadIdx + "/upload/".length).split("?")[0].split("#")[0];
+    const parts = after.split("/");
+    let s = 0;
+    while (s < parts.length && (/^v\d+$/.test(parts[s]) || parts[s].includes(","))) {
+      s++;
+    }
+    if (s < parts.length) {
+      rawPublicId = parts.slice(s).join("/");
+    }
+  }
+
   try {
-    const result = await cloudinary.uploader.destroy(publicId, {
+    // 1. Try with the primary publicId and resourceType
+    let result = await cloudinary.uploader.destroy(publicId, {
       invalidate: true,
       resource_type: resourceType,
     });
-    if (result.result === "ok" || result.result === "not found") {
-      return true;
-    }
-    if (resourceType === "image") {
-      const rawResult = await cloudinary.uploader.destroy(publicId, {
+    if (result.result === "ok") return true;
+
+    // 2. If rawPublicId has extension, try destroying as raw
+    if (rawPublicId !== publicId) {
+      const rawRes = await cloudinary.uploader.destroy(rawPublicId, {
         invalidate: true,
         resource_type: "raw",
       });
-      return rawResult.result === "ok" || rawResult.result === "not found";
+      if (rawRes.result === "ok") return true;
     }
-    return false;
+
+    // 3. Fallback: try raw if was image
+    if (resourceType === "image") {
+      const fallbackRes = await cloudinary.uploader.destroy(rawPublicId, {
+        invalidate: true,
+        resource_type: "raw",
+      });
+      if (fallbackRes.result === "ok") return true;
+    }
+
+    return result.result === "ok" || result.result === "not found";
   } catch (error) {
     return false;
   }

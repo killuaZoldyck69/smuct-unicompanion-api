@@ -6,6 +6,7 @@ import {
   uploadMultipleImages,
   uploadSingleFile,
   uploadMultipleFiles,
+  deleteUploadedFile,
 } from "./upload.controller";
 
 const storage = multer.memoryStorage();
@@ -95,6 +96,13 @@ router.post(
   multipleUpload,
   normalizeMultipleFiles,
   uploadMultipleFiles
+);
+
+// POST /api/upload/delete - Delete file/document or image from Cloudinary
+router.post(
+  "/delete",
+  requireAuth,
+  deleteUploadedFile
 );
 
 export const uploadRoutes = router;

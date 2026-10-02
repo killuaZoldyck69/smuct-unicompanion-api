@@ -87,3 +87,24 @@ export const uploadMultipleFiles = catchAsync(
     });
   }
 );
+
+export const deleteUploadedFile = catchAsync(
+  async (req: Request, res: Response) => {
+    const url = (req.body?.url || req.query?.url) as string | undefined;
+    const resourceType = (req.body?.resourceType as "image" | "raw" | "video") || "image";
+
+    if (!url) {
+      const { AppError } = await import("../../utils/AppError");
+      throw new AppError("File URL or public ID is required", 400);
+    }
+
+    const { deleteFileFromCloudinary } = await import("../../lib/cloudinary");
+    const success = await deleteFileFromCloudinary(url, resourceType);
+
+    res.status(200).json({
+      success: true,
+      message: success ? "File deleted from Cloudinary successfully" : "File not found or already deleted",
+      data: { success },
+    });
+  }
+);
