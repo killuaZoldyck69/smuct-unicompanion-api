@@ -4,10 +4,13 @@ import { validateRequest } from "../../../middleware/validateRequest";
 import {
   updateReviewSettingsSchema,
   submitReviewSchema,
+  editReviewSchema,
 } from "./reviews.schema";
 import {
   updateReviewSettings,
   submitReview,
+  editReview,
+  deleteReview,
   getReviews,
 } from "./reviews.controller";
 
@@ -25,6 +28,14 @@ router.post(
   validateRequest(submitReviewSchema),
   submitReview,
 );
+router.patch(
+  "/:id/reviews",
+  requireAuth,
+  validateRequest(editReviewSchema),
+  editReview,
+);
+router.delete("/:id/reviews", requireAuth, deleteReview);
 router.get("/:id/reviews", requireAuth, getReviews);
 
 export const reviewRoutes = router;
+

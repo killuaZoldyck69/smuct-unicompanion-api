@@ -1,5 +1,9 @@
 import { prisma } from "../../../lib/prisma";
-import { SubmitReviewPayload, UpdateReviewSettingsPayload } from "./reviews.schema";
+import {
+  SubmitReviewPayload,
+  UpdateReviewSettingsPayload,
+  EditReviewPayload,
+} from "./reviews.schema";
 
 export const updateHubReviewSettings = async (
   hubId: string,
@@ -46,6 +50,30 @@ export const createCourseReview = async (
   });
 };
 
+export const updateCourseReview = async (
+  hubId: string,
+  studentId: string,
+  data: EditReviewPayload,
+) => {
+  return await prisma.courseReview.update({
+    where: { hubId_studentId: { hubId, studentId } },
+    data: {
+      ...(data.rating !== undefined ? { rating: data.rating } : {}),
+      ...(data.comment !== undefined ? { comment: data.comment } : {}),
+      ...(data.answers !== undefined ? { answers: data.answers } : {}),
+    },
+  });
+};
+
+export const deleteCourseReview = async (
+  hubId: string,
+  studentId: string,
+) => {
+  return await prisma.courseReview.delete({
+    where: { hubId_studentId: { hubId, studentId } },
+  });
+};
+
 export const findReviewsByHubId = async (hubId: string) => {
   return await prisma.courseReview.findMany({
     where: { hubId },
@@ -60,6 +88,6 @@ export const findReviewsByHubId = async (hubId: string) => {
         },
       },
     },
-    orderBy: { createdAt: "desc" },
   });
 };
+

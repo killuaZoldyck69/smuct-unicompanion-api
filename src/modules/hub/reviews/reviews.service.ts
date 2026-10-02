@@ -4,6 +4,7 @@ import * as reviewsRepository from "./reviews.repository";
 import {
   SubmitReviewPayload,
   UpdateReviewSettingsPayload,
+  EditReviewPayload,
 } from "./reviews.schema";
 
 export const updateReviewSettings = async (
@@ -11,7 +12,8 @@ export const updateReviewSettings = async (
   hubId: string,
   data: UpdateReviewSettingsPayload,
 ) => {
-  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
+  // Only TEACHER can active reviews and add optional questions
+  await verifyHubRole(userId, hubId, ["TEACHER"]);
   return await reviewsRepository.updateHubReviewSettings(hubId, data);
 };
 
@@ -47,6 +49,44 @@ export const submitReview = async (
   return await reviewsRepository.createCourseReview(hubId, userId, data);
 };
 
+export const editReview = async (
+  userId: string,
+  hubId: string,
+  data: EditReviewPayload,
+) => {
+  await verifyHubRole(userId, hubId, ["STUDENT", "CR", "TA"]);
+
+  const existingReview = await reviewsRepository.findExistingReview(
+    hubId,
+    userId,
+  );
+
+  if (!existingReview) {
+    throw new AppError("Review not found or you have not submitted a review yet.", 404);
+  }
+
+  return await reviewsRepository.updateCourseReview(hubId, userId, data);
+};
+
+export const deleteReview = async (
+  userId: string,
+  hubId: string,
+) => {
+  await verifyHubRole(userId, hubId, ["STUDENT", "CR", "TA"]);
+
+  const existingReview = await reviewsRepository.findExistingReview(
+    hubId,
+    userId,
+  );
+
+  if (!existingReview) {
+    throw new AppError("Review not found.", 404);
+  }
+
+  await reviewsRepository.deleteCourseReview(hubId, userId);
+  return { success: true, message: "Review deleted successfully." };
+};
+
 export const getReviews = async (hubId: string, currentUserId?: string) => {
   const hub = await reviewsRepository.findHubById(hubId);
   const reviews = await reviewsRepository.findReviewsByHubId(hubId);
@@ -69,26 +109,35 @@ export const getReviews = async (hubId: string, currentUserId?: string) => {
     : null;
   const hasSubmitted = !!myReview;
 
-  // Sanitize identifying information if anonymous
+  // Sanitize all reviews to be completely Anonymous for both teachers and peers
   const sanitizedReviews = reviews.map((review) => {
-    if (review.isAnonymous) {
-      return {
-        ...review,
-        studentId: undefined,
-        student: {
-          id: undefined,
-          name: "Anonymous Student",
-          email: undefined,
-          image: null,
-          studentProfile: null,
-        },
-      };
-    }
-    return review;
+    return {
+      id: review.id,
+      rating: review.rating,
+      comment: review.comment,
+      isAnonymous: true,
+      answers: review.answers,
+      createdAt: review.createdAt,
+      studentId: undefined,
+      student: {
+        id: undefined,
+        name: "Anonymous Student",
+        email: undefined,
+        image: null,
+        studentProfile: null,
+      },
+    };
   });
 
+  // Randomize reviews order (Fisher-Yates shuffle) so order is completely anonymous
+  const shuffledReviews = [...sanitizedReviews];
+  for (let i = shuffledReviews.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffledReviews[i], shuffledReviews[j]] = [shuffledReviews[j], shuffledReviews[i]];
+  }
+
   return {
-    reviews: sanitizedReviews,
+    reviews: shuffledReviews,
     totalReviews,
     averageRating,
     ratingDistribution,
@@ -103,7 +152,9 @@ export const getReviews = async (hubId: string, currentUserId?: string) => {
           isAnonymous: myReview.isAnonymous,
           answers: myReview.answers,
           createdAt: myReview.createdAt,
+          updatedAt: myReview.updatedAt,
         }
       : null,
   };
 };
+

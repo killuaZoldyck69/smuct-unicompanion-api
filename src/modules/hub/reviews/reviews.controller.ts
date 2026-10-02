@@ -24,6 +24,23 @@ export const submitReview = catchAsync(async (req: Request, res: Response) => {
   res.status(201).json({ success: true, message: "Review submitted.", data });
 });
 
+export const editReview = catchAsync(async (req: Request, res: Response) => {
+  const data = await reviewService.editReview(
+    req.user.id,
+    req.params.id as string,
+    req.body,
+  );
+  res.status(200).json({ success: true, message: "Review updated successfully.", data });
+});
+
+export const deleteReview = catchAsync(async (req: Request, res: Response) => {
+  const data = await reviewService.deleteReview(
+    req.user.id,
+    req.params.id as string,
+  );
+  res.status(200).json({ success: true, message: "Review deleted successfully.", data });
+});
+
 export const getReviews = catchAsync(async (req: Request, res: Response) => {
   const data = await reviewService.getReviews(
     req.params.id as string,
@@ -31,3 +48,4 @@ export const getReviews = catchAsync(async (req: Request, res: Response) => {
   );
   res.status(200).json({ success: true, data });
 });
+
