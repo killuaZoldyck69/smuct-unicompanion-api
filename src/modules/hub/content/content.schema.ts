@@ -45,8 +45,25 @@ export const updateAnnouncementSchema = z.object({
 export const createAnnouncementCommentSchema = z.object({
   body: z.object({
     content: z.string().min(1, "Comment cannot be empty"),
+    parentId: z.string().uuid("Invalid parent comment ID").optional().nullable(),
   }),
 });
+
+export const commentAnnouncementSchema = z.object({
+  body: z.object({
+    content: z.string().min(1, "Comment content cannot be empty"),
+    parentId: z.string().uuid("Invalid parent comment ID").optional().nullable(),
+  }),
+});
+
+export const updateAnnouncementCommentSchema = z.object({
+  body: z.object({
+    content: z.string().min(1, "Comment content cannot be empty"),
+  }),
+});
+export type UpdateAnnouncementCommentPayload = z.infer<
+  typeof updateAnnouncementCommentSchema
+>["body"];
 
 export const createDiscussionSchema = z.object({
   body: z.object({
@@ -58,12 +75,6 @@ export const createDiscussionSchema = z.object({
 export const replyDiscussionSchema = z.object({
   body: z.object({
     content: z.string().min(1, "Reply content cannot be empty"),
-  }),
-});
-
-export const commentAnnouncementSchema = z.object({
-  body: z.object({
-    content: z.string().min(1, "Comment content cannot be empty"),
   }),
 });
 

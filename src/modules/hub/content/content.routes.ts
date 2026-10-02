@@ -3,6 +3,7 @@ import { requireAuth } from "../../../middleware/auth.middleware";
 import { validateRequest } from "../../../middleware/validateRequest";
 import {
   commentAnnouncementSchema,
+  updateAnnouncementCommentSchema,
   createAnnouncementSchema,
   updateAnnouncementSchema,
   createDiscussionSchema,
@@ -17,6 +18,8 @@ import {
   replyDiscussion,
   getDiscussions,
   commentAnnouncement,
+  updateAnnouncementComment,
+  deleteAnnouncementComment,
 } from "./content.controller";
 
 const router = Router({ mergeParams: true });
@@ -81,6 +84,25 @@ router.post(
   requireAuth,
   validateRequest(commentAnnouncementSchema),
   commentAnnouncement,
+);
+
+router.patch(
+  [
+    "/:id/announcements/:announcementId/comments/:commentId",
+    "/:id/content/announcements/:announcementId/comments/:commentId",
+  ],
+  requireAuth,
+  validateRequest(updateAnnouncementCommentSchema),
+  updateAnnouncementComment,
+);
+
+router.delete(
+  [
+    "/:id/announcements/:announcementId/comments/:commentId",
+    "/:id/content/announcements/:announcementId/comments/:commentId",
+  ],
+  requireAuth,
+  deleteAnnouncementComment,
 );
 
 export const contentRoutes = router;

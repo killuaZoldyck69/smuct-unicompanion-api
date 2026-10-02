@@ -5,6 +5,42 @@ import {
   CreateDiscussionPayload,
 } from "./content.schema";
 
+const getCommentsInclude = (hubId: string) => ({
+  where: { parentId: null },
+  include: {
+    author: {
+      select: {
+        id: true,
+        name: true,
+        image: true,
+        role: true,
+        hubs: {
+          where: { hubId },
+          select: { role: true },
+        },
+      },
+    },
+    replies: {
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            role: true,
+            hubs: {
+              where: { hubId },
+              select: { role: true },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" as const },
+    },
+  },
+  orderBy: { createdAt: "asc" as const },
+});
+
 export const createHubAnnouncement = async (
   userId: string,
   hubId: string,
@@ -33,10 +69,7 @@ export const createHubAnnouncement = async (
           },
         },
       },
-      comments: {
-        include: { author: { select: { id: true, name: true, image: true } } },
-        orderBy: { createdAt: "asc" },
-      },
+      comments: getCommentsInclude(hubId),
     },
   });
 };
@@ -54,6 +87,13 @@ export const updateHubAnnouncement = async (
   announcementId: string,
   data: UpdateAnnouncementPayload,
 ) => {
+  const existing = await prisma.hubAnnouncement.findUnique({
+    where: { id: announcementId },
+    select: { hubId: true },
+  });
+
+  const hubId = existing?.hubId || "";
+
   return await prisma.hubAnnouncement.update({
     where: { id: announcementId },
     data: {
@@ -71,10 +111,7 @@ export const updateHubAnnouncement = async (
     },
     include: {
       creator: { select: { id: true, name: true, image: true } },
-      comments: {
-        include: { author: { select: { id: true, name: true, image: true } } },
-        orderBy: { createdAt: "asc" },
-      },
+      comments: getCommentsInclude(hubId),
     },
   });
 };
@@ -111,12 +148,7 @@ export const findAnnouncementsByHubId = async (
             },
           },
         },
-        comments: {
-          include: {
-            author: { select: { id: true, name: true, image: true } },
-          },
-          orderBy: { createdAt: "asc" },
-        },
+        comments: getCommentsInclude(hubId),
       },
       orderBy: { createdAt: "desc" },
       ...(skip !== undefined && { skip }),
@@ -138,9 +170,57 @@ export const createAnnouncementComment = async (
   userId: string,
   announcementId: string,
   content: string,
+  parentId?: string | null,
 ) => {
   return await prisma.announcementComment.create({
-    data: { announcementId, authorId: userId, content },
+    data: {
+      announcementId,
+      authorId: userId,
+      content,
+      parentId: parentId || null,
+    },
+    include: {
+      author: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          role: true,
+        },
+      },
+    },
+  });
+};
+
+export const findCommentById = async (commentId: string) => {
+  return await prisma.announcementComment.findUnique({
+    where: { id: commentId },
+  });
+};
+
+export const updateAnnouncementComment = async (
+  commentId: string,
+  content: string,
+) => {
+  return await prisma.announcementComment.update({
+    where: { id: commentId },
+    data: { content },
+    include: {
+      author: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          role: true,
+        },
+      },
+    },
+  });
+};
+
+export const deleteAnnouncementComment = async (commentId: string) => {
+  return await prisma.announcementComment.delete({
+    where: { id: commentId },
   });
 };
 

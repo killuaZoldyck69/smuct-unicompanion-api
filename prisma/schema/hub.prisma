@@ -99,12 +99,17 @@ model AnnouncementComment {
   content        String
   announcementId String
   authorId       String
+  parentId       String?
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
 
-  announcement HubAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
-  author       User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  announcement HubAnnouncement       @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  author       User                  @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent       AnnouncementComment?  @relation("AnnouncementCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies      AnnouncementComment[] @relation("AnnouncementCommentReplies")
 
   @@index([announcementId])
+  @@index([parentId])
 }
 
 model HubDiscussion {

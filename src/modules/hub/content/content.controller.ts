@@ -112,7 +112,44 @@ export const commentAnnouncement = catchAsync(
       req.params.id as string,
       req.params.announcementId as string,
       req.body.content,
+      req.body.parentId,
     );
-    res.status(201).json({ success: true, message: "Comment posted", data });
+    res.status(201).json({
+      success: true,
+      message: req.body.parentId ? "Reply posted" : "Comment posted",
+      data,
+    });
+  },
+);
+
+export const updateAnnouncementComment = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await contentService.editAnnouncementComment(
+      req.user.id,
+      req.params.id as string,
+      req.params.announcementId as string,
+      req.params.commentId as string,
+      req.body.content,
+    );
+    res.status(200).json({
+      success: true,
+      message: "Comment updated",
+      data,
+    });
+  },
+);
+
+export const deleteAnnouncementComment = catchAsync(
+  async (req: Request, res: Response) => {
+    await contentService.removeAnnouncementComment(
+      req.user.id,
+      req.params.id as string,
+      req.params.announcementId as string,
+      req.params.commentId as string,
+    );
+    res.status(200).json({
+      success: true,
+      message: "Comment deleted",
+    });
   },
 );

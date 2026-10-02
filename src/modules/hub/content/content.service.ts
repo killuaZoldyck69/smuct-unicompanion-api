@@ -6,6 +6,7 @@ import {
   UpdateAnnouncementPayload,
   CreateDiscussionPayload,
 } from "./content.schema";
+import { appCache } from "../../../lib/cache";
 
 export const createAnnouncement = async (
   userId: string,
@@ -63,8 +64,8 @@ export const deleteAnnouncement = async (
   }
 
   const isCreator = announcement.creatorId === userId;
-  const canModerate = ["TEACHER", "CR"].includes(member.role);
-  if (!isCreator && !canModerate) {
+  const isTeacher = member.role === "TEACHER";
+  if (!isCreator && !isTeacher) {
     throw new AppError(
       "You do not have permission to delete this announcement",
       403,
@@ -127,12 +128,81 @@ export const commentOnAnnouncement = async (
   hubId: string,
   announcementId: string,
   content: string,
+  parentId?: string | null,
 ) => {
-  // All hub members can comment on announcements
-  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
-  return await contentRepository.createAnnouncementComment(
+  if (parentId) {
+    await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
+
+    const parentComment = await contentRepository.findCommentById(parentId);
+    if (!parentComment || parentComment.announcementId !== announcementId) {
+      throw new AppError("Parent comment not found for this announcement", 404);
+    }
+
+    if (parentComment.parentId) {
+      throw new AppError("Replies can only be made to top-level comments", 400);
+    }
+  } else {
+    await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
+  }
+
+  const comment = await contentRepository.createAnnouncementComment(
     userId,
     announcementId,
     content,
+    parentId,
   );
+
+  appCache.delPattern(new RegExp(`^hub:${hubId}`));
+
+  return comment;
+};
+
+export const editAnnouncementComment = async (
+  userId: string,
+  hubId: string,
+  announcementId: string,
+  commentId: string,
+  content: string,
+) => {
+  const comment = await contentRepository.findCommentById(commentId);
+  if (!comment || comment.announcementId !== announcementId) {
+    throw new AppError("Comment not found for this announcement", 404);
+  }
+
+  if (comment.authorId !== userId) {
+    throw new AppError("You can only edit your own comments", 403);
+  }
+
+  const updated = await contentRepository.updateAnnouncementComment(
+    commentId,
+    content,
+  );
+
+  appCache.delPattern(new RegExp(`^hub:${hubId}`));
+
+  return updated;
+};
+
+export const removeAnnouncementComment = async (
+  userId: string,
+  hubId: string,
+  announcementId: string,
+  commentId: string,
+) => {
+  const comment = await contentRepository.findCommentById(commentId);
+  if (!comment || comment.announcementId !== announcementId) {
+    throw new AppError("Comment not found for this announcement", 404);
+  }
+
+  const isAuthor = comment.authorId === userId;
+  if (!isAuthor) {
+    // Hub teachers can moderate and delete any comment
+    await verifyHubRole(userId, hubId, ["TEACHER"]);
+  }
+
+  await contentRepository.deleteAnnouncementComment(commentId);
+
+  appCache.delPattern(new RegExp(`^hub:${hubId}`));
+
+  return { success: true };
 };
