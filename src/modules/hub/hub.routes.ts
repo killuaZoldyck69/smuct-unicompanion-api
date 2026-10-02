@@ -4,7 +4,6 @@ import { validateRequest } from "../../middleware/validateRequest";
 import {
   createHubSchema,
   joinHubSchema,
-  updateMemberRoleSchema,
   archiveHubSchema,
   updateHubSchema,
   toggleLiveClassSchema,
@@ -15,8 +14,6 @@ import {
   joinHub,
   getMyHubs,
   getHubDetails,
-  updateMemberRole,
-  removeMember, // 👈 Import new controller
   archiveHub,
   getAvailableTeachers,
   updateHub,
@@ -26,6 +23,7 @@ import {
   deleteClassNotice,
 } from "./hub.controller";
 
+import { memberRoutes } from "./members/members.routes";
 import { resourceRoutes } from "../hub/resources/resources.routes";
 import { contentRoutes } from "../hub/content/content.routes";
 import { assessmentRoutes } from "./assessments/assessments.routes";
@@ -48,15 +46,6 @@ router.patch(
   validateRequest(toggleLiveClassSchema),
   toggleLiveClass,
 );
-router.patch(
-  "/:id/members/:memberId/role",
-  requireAuth,
-  validateRequest(updateMemberRoleSchema),
-  updateMemberRole,
-);
-
-// 👈 NEW: Add DELETE route for members
-router.delete("/:id/members/:memberId", requireAuth, removeMember);
 router.delete("/:id", requireAuth, deleteHub);
 
 router.patch(
@@ -80,6 +69,7 @@ router.delete(
 );
 
 // Mount the Sub-Routes directly onto the Hub Router
+router.use("/", memberRoutes);
 router.use("/", resourceRoutes);
 router.use("/", contentRoutes);
 router.use("/", assessmentRoutes);

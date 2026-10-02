@@ -7,6 +7,11 @@ import {
   UpdateMemberRolePayload,
   CreateClassNoticePayload,
 } from "./hub.schema";
+import { appCache } from "../../lib/cache";
+import {
+  updateMemberRoleService as memberUpdateRoleService,
+  removeMemberService as memberRemoveService,
+} from "./members/members.service";
 
 // 🛡️ Centralized Authorization Helper
 export const verifyHubRole = async (
@@ -103,8 +108,9 @@ export const joinHubService = async (userId: string, joinCode: string) => {
     role = "CR";
   }
 
-  // Prisma will throw a unique constraint error if they are already a member
-  return await hubRepository.createHubMember(userId, hub.id, role);
+  const membership = await hubRepository.createHubMember(userId, hub.id, role);
+  appCache.delPattern(new RegExp(`^hub:${hub.id}`));
+  return membership;
 };
 
 export const getMyHubsService = async (userId: string) => {
@@ -112,9 +118,15 @@ export const getMyHubsService = async (userId: string) => {
 };
 
 export const getHubDetailsService = async (hubId: string) => {
-  const hub = await hubRepository.findHubWithMembersAndDetails(hubId);
-  if (!hub) throw new AppError("Hub not found", 404);
-  return hub;
+  return await appCache.getOrSet(
+    `hub:${hubId}:details`,
+    async () => {
+      const hub = await hubRepository.findHubWithMembersAndDetails(hubId);
+      if (!hub) throw new AppError("Hub not found", 404);
+      return hub;
+    },
+    60,
+  );
 };
 
 export const updateMemberRoleService = async (
@@ -123,38 +135,7 @@ export const updateMemberRoleService = async (
   memberId: string,
   newRole: UpdateMemberRolePayload["role"],
 ) => {
-  const requesterMember = await verifyHubRole(userId, hubId, [
-    "TEACHER",
-    "CR",
-    "TA",
-  ]);
-
-  const targetMember = await hubRepository.findHubMemberById(memberId);
-
-  if (!targetMember) throw new AppError("Member not found.", 404);
-
-  // Prevent both CRs AND TAs from modifying Teacher roles
-  if (
-    (requesterMember.role === "CR" || requesterMember.role === "TA") &&
-    targetMember.role === "TEACHER"
-  ) {
-    throw new AppError(
-      "Class Representatives and TAs cannot modify Teacher roles.",
-      403,
-    );
-  }
-
-  if (
-    (requesterMember.role === "CR" || requesterMember.role === "TA") &&
-    newRole === "TEACHER"
-  ) {
-    throw new AppError(
-      "Class Representatives and TAs cannot assign Teacher roles.",
-      403,
-    );
-  }
-
-  return await hubRepository.updateHubMemberRole(memberId, newRole);
+  return await memberUpdateRoleService(userId, hubId, memberId, newRole);
 };
 
 export const removeMemberService = async (
@@ -162,34 +143,7 @@ export const removeMemberService = async (
   hubId: string,
   memberId: string,
 ) => {
-  const targetMember = await hubRepository.findHubMemberById(memberId);
-
-  if (!targetMember) throw new AppError("Member not found.", 404);
-
-  // Allow users to remove themselves ("Leave Hub")
-  if (targetMember.userId === userId) {
-    return await hubRepository.deleteHubMemberById(memberId);
-  }
-
-  // Allow TAs to kick students, but verify their role first
-  const requesterMember = await verifyHubRole(userId, hubId, [
-    "TEACHER",
-    "CR",
-    "TA",
-  ]);
-
-  // Security Check - CR and TA cannot kick a TEACHER
-  if (
-    (requesterMember.role === "CR" || requesterMember.role === "TA") &&
-    targetMember.role === "TEACHER"
-  ) {
-    throw new AppError(
-      "Class Representatives and TAs cannot remove Teachers from the hub.",
-      403,
-    );
-  }
-
-  return await hubRepository.deleteHubMemberById(memberId);
+  return await memberRemoveService(userId, hubId, memberId);
 };
 
 export const updateHubService = async (
@@ -198,8 +152,9 @@ export const updateHubService = async (
   data: UpdateHubPayload,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
-
-  return await hubRepository.updateHub(hubId, data);
+  const updated = await hubRepository.updateHub(hubId, data);
+  appCache.delPattern(new RegExp(`^hub:${hubId}`));
+  return updated;
 };
 
 export const archiveHubService = async (
@@ -208,7 +163,9 @@ export const archiveHubService = async (
   isArchived: boolean,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
-  return await hubRepository.updateHubArchiveStatus(hubId, isArchived);
+  const updated = await hubRepository.updateHubArchiveStatus(hubId, isArchived);
+  appCache.delPattern(new RegExp(`^hub:${hubId}`));
+  return updated;
 };
 
 export const toggleLiveClassService = async (
@@ -218,14 +175,16 @@ export const toggleLiveClassService = async (
   meetUrl?: string | null,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
-  return await hubRepository.updateHubLiveClass(hubId, isClassLive, meetUrl);
+  const updated = await hubRepository.updateHubLiveClass(hubId, isClassLive, meetUrl);
+  appCache.delPattern(new RegExp(`^hub:${hubId}`));
+  return updated;
 };
 
 export const deleteHubService = async (userId: string, hubId: string) => {
-  // Only Teachers and CRs can delete a hub
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
-
-  return await hubRepository.deleteHubById(hubId);
+  const deleted = await hubRepository.deleteHubById(hubId);
+  appCache.delPattern(new RegExp(`^hub:${hubId}`));
+  return deleted;
 };
 
 export const createClassNoticeService = async (
