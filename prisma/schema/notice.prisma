@@ -21,8 +21,30 @@ model CampusEvent {
   title       String
   description String?
   location    String?
+  organizer   String?
   eventDate   DateTime
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  interested EventInterested[]
+
+  @@index([eventDate])
+  @@index([createdAt])
 }
+
+model EventInterested {
+  id        String   @id @default(uuid())
+  eventId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  event CampusEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+  @@map("event_interested")
+}
+
