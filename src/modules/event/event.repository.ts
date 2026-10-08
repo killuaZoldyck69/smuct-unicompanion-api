@@ -65,32 +65,84 @@ export const findPaginatedCampusEvents = async (params: FindEventsParams) => {
     ...searchFilter,
   };
 
-  // Run queries in parallel via transaction
-  const [events, totalFiltered, countsUpcoming, countsToday, countsPast, countsAll, nextEventRaw] =
+  const includeClause = {
+    _count: {
+      select: {
+        interested: true,
+      },
+    },
+    ...(currentUserId
+      ? {
+          interested: {
+            where: { userId: currentUserId },
+            select: { id: true },
+          },
+        }
+      : {}),
+  };
+
+  // Optimization: For infinite scroll (page > 1), run a single indexed query with lookahead (limit + 1)
+  // to avoid running 7 redundant queries on every single scroll page!
+  if (page > 1) {
+    const rawEvents = await prisma.campusEvent.findMany({
+      where: whereClause,
+      orderBy: {
+        [sortBy]: sortOrder,
+      },
+      skip,
+      take: limit + 1,
+      include: includeClause,
+    });
+
+    const hasNextPage = rawEvents.length > limit;
+    const paginatedEvents = hasNextPage ? rawEvents.slice(0, limit) : rawEvents;
+
+    const items = paginatedEvents.map((ev) => ({
+      id: ev.id,
+      title: ev.title,
+      description: ev.description,
+      location: ev.location,
+      organizer: ev.organizer,
+      eventDate: ev.eventDate,
+      createdAt: ev.createdAt,
+      updatedAt: ev.updatedAt,
+      interestedCount: ev._count?.interested || 0,
+      isInterested: currentUserId ? (ev as any).interested?.length > 0 : false,
+    }));
+
+    return {
+      items,
+      pagination: {
+        page,
+        limit,
+        totalCount: skip + items.length + (hasNextPage ? 1 : 0),
+        totalPages: page + (hasNextPage ? 1 : 0),
+        hasNextPage,
+        hasPrevPage: true,
+        nextPage: hasNextPage ? page + 1 : null,
+      },
+      counts: {
+        upcoming: 0,
+        today: 0,
+        past: 0,
+        all: 0,
+      },
+      nextUpcomingEvent: null,
+    };
+  }
+
+  // Page 1: Run query with tab counts and hero event
+  const [rawEvents, totalFiltered, countsUpcoming, countsToday, countsPast, countsAll, nextEventRaw] =
     await prisma.$transaction([
-      // 1. Paginated Items
+      // 1. Paginated Items (with 1 item lookahead)
       prisma.campusEvent.findMany({
         where: whereClause,
         orderBy: {
           [sortBy]: sortOrder,
         },
-        skip,
-        take: limit,
-        include: {
-          _count: {
-            select: {
-              interested: true,
-            },
-          },
-          ...(currentUserId
-            ? {
-                interested: {
-                  where: { userId: currentUserId },
-                  select: { id: true },
-                },
-              }
-            : {}),
-        },
+        skip: 0,
+        take: limit + 1,
+        include: includeClause,
       }),
 
       // 2. Total count for this query
@@ -135,25 +187,14 @@ export const findPaginatedCampusEvents = async (params: FindEventsParams) => {
         orderBy: {
           eventDate: "asc",
         },
-        include: {
-          _count: {
-            select: {
-              interested: true,
-            },
-          },
-          ...(currentUserId
-            ? {
-                interested: {
-                  where: { userId: currentUserId },
-                  select: { id: true },
-                },
-              }
-            : {}),
-        },
+        include: includeClause,
       }),
     ]);
 
-  const items = events.map((ev) => ({
+  const hasNextPage = rawEvents.length > limit;
+  const paginatedEvents = hasNextPage ? rawEvents.slice(0, limit) : rawEvents;
+
+  const items = paginatedEvents.map((ev) => ({
     id: ev.id,
     title: ev.title,
     description: ev.description,
@@ -167,7 +208,6 @@ export const findPaginatedCampusEvents = async (params: FindEventsParams) => {
   }));
 
   const totalPages = Math.ceil(totalFiltered / limit) || 1;
-  const hasNextPage = page < totalPages;
   const hasPrevPage = page > 1;
 
   const nextUpcomingEvent = nextEventRaw

@@ -13,24 +13,31 @@ export const getAllEventsService = async (
   query?: GetEventsQuery,
   currentUserId?: string
 ) => {
-  const cacheKey = `events:${currentUserId || "anon"}:${JSON.stringify(query || {})}`;
+  const page = query?.page || 1;
+  const limit = query?.limit || 10;
+  const tab = query?.tab || "upcoming";
+  const search = query?.search?.trim() || "";
+  const sortBy = query?.sortBy || "eventDate";
+  const sortOrder = query?.sortOrder || (tab === "past" ? "desc" : "asc");
+
+  const cacheKey = `events:${currentUserId || "anon"}:${tab}:${search}:${page}:${limit}:${sortBy}:${sortOrder}`;
   const cached = eventCache.get<any>(cacheKey);
   if (cached) {
     return cached;
   }
 
   const result = await eventRepository.findPaginatedCampusEvents({
-    page: query?.page,
-    limit: query?.limit,
-    tab: query?.tab,
-    search: query?.search,
-    sortBy: query?.sortBy,
-    sortOrder: query?.sortOrder,
+    page,
+    limit,
+    tab,
+    search,
+    sortBy,
+    sortOrder,
     currentUserId,
   });
 
-  // Cache for 45 seconds (high read throughput)
-  eventCache.set(cacheKey, result, 45);
+  // Cache for 60 seconds (high read throughput)
+  eventCache.set(cacheKey, result, 60);
   return result;
 };
 
