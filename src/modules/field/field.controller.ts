@@ -62,3 +62,12 @@ export const updateBookingStatus = catchAsync(
       });
   },
 );
+
+export const deleteBooking = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  await fieldService.deleteBookingService(id, req.user!.id, req.user?.role);
+  res.status(200).json({
+    success: true,
+    message: "Booking deleted successfully",
+  });
+});

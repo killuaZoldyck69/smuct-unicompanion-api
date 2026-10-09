@@ -92,3 +92,24 @@ export const updateBookingStatusService = async (
 
   return await fieldRepository.updateBookingStatus(id, status);
 };
+
+export const deleteBookingService = async (
+  id: string,
+  userId: string,
+  userRole?: string,
+) => {
+  const booking = await fieldRepository.findBookingById(id);
+  if (!booking) throw new AppError("Booking not found", 404);
+
+  const isAuthor = booking.userId === userId;
+  const isAdmin = userRole === "ADMIN" || userRole === "SUPER_ADMIN";
+
+  if (!isAuthor && !isAdmin) {
+    throw new AppError(
+      "Unauthorized: You can only delete your own bookings",
+      403,
+    );
+  }
+
+  return await fieldRepository.deleteBooking(id);
+};

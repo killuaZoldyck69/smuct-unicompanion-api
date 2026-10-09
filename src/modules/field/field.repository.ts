@@ -100,3 +100,9 @@ export const updateBookingStatus = async (
     data: { status },
   });
 };
+
+export const deleteBooking = async (id: string) => {
+  return await prisma.fieldBooking.delete({
+    where: { id },
+  });
+};

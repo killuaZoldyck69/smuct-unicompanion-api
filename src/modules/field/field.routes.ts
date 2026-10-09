@@ -15,6 +15,7 @@ import {
   getAllBookings,
   getApprovedSchedule, // NEW
   updateBookingStatus,
+  deleteBooking,
 } from "./field.controller";
 
 const router = Router();
@@ -33,6 +34,8 @@ router.get("/schedule", requireAuth, getApprovedSchedule);
 
 router.post("/book", requireAuth, validateRequest(bookFieldSchema), bookField);
 router.get("/my-bookings", requireAuth, getMyBookings);
+
+router.delete("/bookings/:id", requireAuth, deleteBooking);
 
 router.get("/bookings", requireAuth, requireAdmin, getAllBookings);
 router.patch(
