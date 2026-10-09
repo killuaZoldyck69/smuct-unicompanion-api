@@ -6,6 +6,9 @@ import {
   updateFieldSettingsSchema,
   bookFieldSchema,
   updateBookingStatusSchema,
+  getAllBookingsQuerySchema,
+  getMyBookingsQuerySchema,
+  getScheduleQuerySchema,
 } from "./field.schema";
 import {
   getFieldSettings,
@@ -29,15 +32,31 @@ router.patch(
   updateFieldSettings,
 );
 
-// NEW: Public Schedule Route
-router.get("/schedule", requireAuth, getApprovedSchedule);
+// Public Schedule Route
+router.get(
+  "/schedule",
+  requireAuth,
+  validateRequest(getScheduleQuerySchema),
+  getApprovedSchedule,
+);
 
 router.post("/book", requireAuth, validateRequest(bookFieldSchema), bookField);
-router.get("/my-bookings", requireAuth, getMyBookings);
+router.get(
+  "/my-bookings",
+  requireAuth,
+  validateRequest(getMyBookingsQuerySchema),
+  getMyBookings,
+);
 
 router.delete("/bookings/:id", requireAuth, deleteBooking);
 
-router.get("/bookings", requireAuth, requireAdmin, getAllBookings);
+router.get(
+  "/bookings",
+  requireAuth,
+  requireAdmin,
+  validateRequest(getAllBookingsQuerySchema),
+  getAllBookings,
+);
 router.patch(
   "/bookings/:id/status",
   requireAuth,
