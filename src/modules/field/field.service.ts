@@ -58,11 +58,7 @@ export const getAllBookingsService = async () => {
 };
 
 export const getApprovedScheduleService = async () => {
-  // Start of the current day to filter out past dates
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  return await fieldRepository.findApprovedFutureSchedule(today, 100);
+  return await fieldRepository.findApprovedSchedule(500);
 };
 
 export const updateBookingStatusService = async (

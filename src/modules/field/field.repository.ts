@@ -60,30 +60,82 @@ export const findAllBookings = async (take = 100) => {
   return await prisma.fieldBooking.findMany({
     orderBy: { bookingDate: "desc" },
     include: {
-      user: { select: { id: true, name: true, email: true, image: true } },
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+          role: true,
+          phoneNumber: true,
+          studentProfile: {
+            select: {
+              studentId: true,
+              department: true,
+              program: true,
+              batch: true,
+              currentSemester: true,
+              section: true,
+            },
+          },
+          teacherProfile: {
+            select: {
+              teacherId: true,
+              designation: true,
+              department: true,
+              faculty: true,
+              officeRoom: true,
+            },
+          },
+        },
+      },
     },
     take,
   });
 };
 
-export const findApprovedFutureSchedule = async (
-  today: Date,
-  take = 100,
-) => {
+export const findApprovedSchedule = async (take = 500) => {
   return await prisma.fieldBooking.findMany({
     where: {
       status: "APPROVED",
-      bookingDate: {
-        gte: today,
-      },
     },
     include: {
-      user: { select: { name: true } },
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+          role: true,
+          phoneNumber: true,
+          studentProfile: {
+            select: {
+              studentId: true,
+              department: true,
+              program: true,
+              batch: true,
+              currentSemester: true,
+              section: true,
+            },
+          },
+          teacherProfile: {
+            select: {
+              teacherId: true,
+              designation: true,
+              department: true,
+              faculty: true,
+              officeRoom: true,
+            },
+          },
+        },
+      },
     },
     orderBy: [{ bookingDate: "asc" }, { startTime: "asc" }],
     take,
   });
 };
+
+export const findApprovedFutureSchedule = findApprovedSchedule;
 
 export const findBookingById = async (id: string) => {
   return await prisma.fieldBooking.findUnique({
