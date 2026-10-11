@@ -132,7 +132,7 @@ export function validateGenericFile(file: MulterFile): void {
 export async function uploadSingleFileService(
   file?: MulterFile,
   folder: string = PROJECT_ROOT_FOLDER
-): Promise<UploadResult & { originalName: string; size: number; mimeType: string }> {
+): Promise<UploadResult & { originalName: string; size: number; mimeType: string; format?: string }> {
   if (!file) {
     throw new AppError("No file provided", 400);
   }
@@ -151,13 +151,14 @@ export async function uploadSingleFileService(
     originalName: file.originalname,
     size: file.size,
     mimeType: file.mimetype,
+    format: res.format || file.originalname.split(".").pop()?.toLowerCase(),
   };
 }
 
 export async function uploadMultipleFilesService(
   files: MulterFile[] = [],
   folder: string = PROJECT_ROOT_FOLDER
-): Promise<(UploadResult & { originalName: string; size: number; mimeType: string })[]> {
+): Promise<(UploadResult & { originalName: string; size: number; mimeType: string; format?: string })[]> {
   if (!files || files.length === 0) {
     throw new AppError("No files provided for upload", 400);
   }
@@ -176,6 +177,7 @@ export async function uploadMultipleFilesService(
       originalName: file.originalname,
       size: file.size,
       mimeType: file.mimetype,
+      format: res.format || file.originalname.split(".").pop()?.toLowerCase(),
     };
   });
 

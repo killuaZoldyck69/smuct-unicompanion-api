@@ -1,28 +1,28 @@
 import { z } from "zod";
 
 export const resourceAttachmentSchema = z.object({
-  url: z.string().url("Attachment must have a valid URL"),
-  name: z.string().optional().default("Attachment"),
-  type: z.string().optional(),
-  size: z.number().optional(),
+  url: z.string().min(1, "Attachment must have a valid URL"),
+  name: z.string().nullish().default("Attachment"),
+  type: z.string().nullish(),
+  size: z.number().nullish(),
 });
 
 export const resourceLinkSchema = z.object({
-  url: z.string().url("Must be a valid URL"),
-  title: z.string().optional().nullable(),
+  url: z.string().min(1, "Must be a valid URL"),
+  title: z.string().nullish(),
 });
 
 export const createResourceSchema = z.object({
   body: z.object({
     title: z.string().min(1, "Title is required"),
-    driveUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")).default("https://drive.google.com"),
-    description: z.string().optional().nullable(),
-    category: z.string().optional().nullable(),
-    fileType: z.string().optional().nullable(),
-    fileSize: z.number().optional().nullable(),
+    driveUrl: z.string().min(1, "Must be a valid URL").optional().or(z.literal("")).default("https://drive.google.com"),
+    description: z.string().nullish(),
+    category: z.string().nullish(),
+    fileType: z.string().nullish(),
+    fileSize: z.number().nullish(),
     isStudentNote: z.boolean().default(false),
-    attachments: z.array(resourceAttachmentSchema).optional().nullable(),
-    links: z.array(resourceLinkSchema).optional().nullable(),
+    attachments: z.array(resourceAttachmentSchema).nullish(),
+    links: z.array(resourceLinkSchema).nullish(),
   }),
 });
 

@@ -12,6 +12,10 @@ cloudinary.config({
 export interface UploadResult {
   secureUrl: string;
   publicId: string;
+  format?: string;
+  bytes?: number;
+  originalFilename?: string;
+  resourceType?: string;
 }
 
 function ensureConfigured(): void {
@@ -104,6 +108,12 @@ export async function uploadBufferToCloudinary(
       resource_type: resourceType,
     };
 
+    if (filename) {
+      uploadOptions.filename_override = filename;
+      uploadOptions.use_filename = true;
+      uploadOptions.unique_filename = true;
+    }
+
     if (resourceType === "image") {
       uploadOptions.transformation = [
         { width: 1080, crop: "limit" },
@@ -130,6 +140,10 @@ export async function uploadBufferToCloudinary(
               ? buildOptimizedUrl(result.public_id)
               : result.secure_url,
           publicId: result.public_id,
+          format: result.format,
+          bytes: result.bytes,
+          originalFilename: result.original_filename,
+          resourceType: result.resource_type,
         });
       }
     );

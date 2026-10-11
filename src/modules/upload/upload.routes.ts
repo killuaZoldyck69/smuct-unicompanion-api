@@ -14,8 +14,8 @@ const storage = multer.memoryStorage();
 const upload = multer({
   storage,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB
-    files: 6,
+    fileSize: 25 * 1024 * 1024, // 25MB
+    files: 15,
   },
 });
 
@@ -41,8 +41,8 @@ const normalizeSingleFile = (
 };
 
 const multipleUpload = upload.fields([
-  { name: "images", maxCount: 6 },
-  { name: "files", maxCount: 6 },
+  { name: "images", maxCount: 15 },
+  { name: "files", maxCount: 15 },
 ]);
 
 const normalizeMultipleFiles = (
