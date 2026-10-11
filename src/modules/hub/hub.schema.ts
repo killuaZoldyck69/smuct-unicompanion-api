@@ -41,10 +41,13 @@ export const updateMemberRoleSchema = z.object({
 
 export const updateHubSchema = z.object({
   body: z.object({
+    courseCode: z.string().optional(),
     courseName: z.string().optional(),
+    credit: z.number().positive().optional(),
     department: z.string().optional(),
     batch: z.string().optional(),
     section: z.string().optional(),
+    semesterNumber: z.number().int().positive().optional(),
     termOffer: z.string().optional(),
     weeklyClassSchedule: z.any().optional(),
     isReviewOpen: z.boolean().optional(),
