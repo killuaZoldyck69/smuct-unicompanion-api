@@ -331,7 +331,6 @@ export const createClassNotice = async (
   authorId: string,
   data: {
     type: any;
-    title?: string;
     message: string;
     targetDay: string;
     effectiveDate: Date;
@@ -345,7 +344,6 @@ export const createClassNotice = async (
       hubId,
       authorId,
       type: data.type,
-      title: data.title,
       message: data.message,
       targetDay: data.targetDay,
       effectiveDate: data.effectiveDate,

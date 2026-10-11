@@ -101,7 +101,6 @@ export const createClassNoticeSchema = z.object({
       "ONLINE_CLASS",
       "URGENT_NOTICE",
     ]),
-    title: z.string().optional(),
     message: z.string().optional().default(""),
     targetDay: z.string().min(1, "Target day is required"),
     effectiveDate: z.string().min(1, "Effective date is required"),

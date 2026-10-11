@@ -259,7 +259,6 @@ model ClassNotice {
   hubId         String
   authorId      String
   type          ClassNoticeType
-  title         String?
   message       String
   targetDay     String          // e.g. "Monday"
   effectiveDate DateTime        // Specific date this notice applies to
