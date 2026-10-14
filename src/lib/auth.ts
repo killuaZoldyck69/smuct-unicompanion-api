@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma";
-import { bearer } from "better-auth/plugins";
+import { bearer, emailOTP } from "better-auth/plugins";
 import { createAuthMiddleware, APIError } from "better-auth/api";
 import { sendEmail } from "./email";
 import { envConfig } from "../config/env";
@@ -33,60 +33,28 @@ export const auth = betterAuth({
     enabled: true,
     minPasswordLength: 8,
     requireEmailVerification: true,
-    sendResetPassword: async ({ user, url, token }) => {
-      // Point to the redirector URL, pass 'reset-password' as the 'type'
-      const resetLink = `${envConfig.FRONTEND_URL}?token=${encodeURIComponent(token)}&type=reset-password`;
-
-      await sendEmail({
-        to: user.email,
-        subject: "Reset Your Password - SMUCT UniCompanion",
-        html: `
-      <h2>Password Reset Request</h2>
-      <a href="${resetLink}" style="...">Reset Password</a>
-    `,
-      });
-    },
   },
 
   emailVerification: {
-    sendOnSignUp: true,
-    sendVerificationEmail: async ({ user, url, token }) => {
-      if ((user as any).role === "TEACHER") return;
-
-      // Defense-in-depth: Never send verification email if user already exists and is verified
-      const existingUser = await prisma.user.findFirst({
-        where: {
-          email: {
-            equals: user.email.toLowerCase().trim(),
-            mode: "insensitive",
-          },
-        },
-      });
-      if (existingUser && existingUser.emailVerified) {
-        return;
-      }
-
-      // Point to the redirector URL, pass 'verify-email' as the 'type'
-      const verificationLink = `${envConfig.FRONTEND_URL}?token=${encodeURIComponent(token)}&type=verify-email`;
-
-      await sendEmail({
-        to: user.email,
-        subject: "Welcome to SMUCT UniCompanion! Verify your email",
-        html: `
-      <h2>Welcome aboard! 🚀</h2>
-      <a href="${verificationLink}" style="...">Verify My Email</a>
-    `,
-      });
-    },
+    sendOnSignUp: false, // Managed by emailOTP plugin
+    autoSignInAfterVerification: true, // Seamlessly logs user in so they route straight to Onboard screen
   },
+
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
-      // 1. Strict duplicate account check: prevent duplicate user creation and fake verification emails
+      // 1. Sign-up defense: strip role injection & enforce completed-profile duplicate policy
       if (
         ctx.path === "/sign-up/email" ||
         ctx.path.endsWith("/sign-up/email")
       ) {
         const body = ctx.body as Record<string, any> | undefined;
+
+        // PRIVILEGE ESCALATION DEFENSE:
+        // Strip client-supplied role so public callers can never self-assign ADMIN or TEACHER roles
+        if (body && typeof body === "object") {
+          delete body.role;
+        }
+
         const email = body?.email;
         if (email && typeof email === "string") {
           const normalizedEmail = email.toLowerCase().trim();
@@ -97,21 +65,43 @@ export const auth = betterAuth({
                 mode: "insensitive",
               },
             },
+            include: {
+              studentProfile: true,
+              teacherProfile: true,
+            },
           });
+
           if (existingUser) {
-            throw new APIError("BAD_REQUEST", {
-              message:
-                "An account with this email address already exists. Please log in instead.",
+            // An email is strictly taken ONLY after full completion of profile
+            const isProfileComplete =
+              existingUser.studentProfile !== null ||
+              existingUser.teacherProfile !== null ||
+              existingUser.role === "TEACHER" ||
+              existingUser.role === "ADMIN";
+
+            if (isProfileComplete) {
+              throw new APIError("BAD_REQUEST", {
+                message:
+                  "An account with this email address already exists. Please log in instead.",
+              });
+            }
+
+            // If account was abandoned before verification or onboarding completion,
+            // clean up stale row to allow fresh registration & fresh OTP dispatch
+            await prisma.user.delete({
+              where: { id: existingUser.id },
             });
           }
         }
       }
 
-      // 2. Password complexity validation for sign-up, reset-password, and change-password
+      // 2. Password complexity validation for sign-up, reset-password, and email-otp reset
       if (
         ctx.path === "/sign-up/email" ||
         ctx.path === "/reset-password" ||
-        ctx.path === "/change-password"
+        ctx.path === "/change-password" ||
+        ctx.path === "/email-otp/reset-password" ||
+        ctx.path.endsWith("/reset-password")
       ) {
         const body = ctx.body as Record<string, any> | undefined;
         const passwordToValidate = body?.password || body?.newPassword;
@@ -128,5 +118,80 @@ export const auth = betterAuth({
       }
     }),
   },
-  plugins: [bearer()],
+
+  plugins: [
+    bearer(),
+    emailOTP({
+      expiresIn: 180, // 3 minutes validity
+      sendVerificationOnSignUp: true,
+      async sendVerificationOTP({ email, otp, type }) {
+        const normalizedEmail = email.toLowerCase().trim();
+
+        // Defense-in-depth: Never send verification OTP if user is verified TEACHER
+        const existingUser = await prisma.user.findFirst({
+          where: {
+            email: { equals: normalizedEmail, mode: "insensitive" },
+          },
+        });
+        if (existingUser?.role === "TEACHER" && existingUser.emailVerified) {
+          return;
+        }
+
+        if (type === "email-verification") {
+          await sendEmail({
+            to: normalizedEmail,
+            subject: "Your SMUCT UniCompanion Verification Code 🚀",
+            html: `
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0;">
+                <div style="text-align: center; margin-bottom: 24px;">
+                  <h1 style="color: #131b2e; font-size: 24px; font-weight: 800; margin: 0 0 8px;">SMUCT UniCompanion</h1>
+                  <p style="color: #64748b; font-size: 15px; margin: 0;">Verify your academic account</p>
+                </div>
+                <div style="background: #f8fafc; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px; border: 1px solid #e2e8f0;">
+                  <p style="color: #475569; font-size: 14px; margin: 0 0 12px;">Here is your 6-digit verification code:</p>
+                  <div style="font-size: 38px; font-weight: 800; letter-spacing: 8px; color: #131b2e; font-family: monospace; padding: 8px 0;">
+                    ${otp}
+                  </div>
+                  <p style="color: #94a3b8; font-size: 13px; margin: 12px 0 0;">Expires in 3 minutes</p>
+                </div>
+                <p style="color: #64748b; font-size: 13px; line-height: 1.6; margin: 0 0 8px;">
+                  Enter this code in your mobile application to verify your account and proceed to onboarding.
+                </p>
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">
+                  If you did not request this verification code, please ignore this email.
+                </p>
+              </div>
+            `,
+          });
+        } else if (type === "forget-password") {
+          await sendEmail({
+            to: normalizedEmail,
+            subject: "Reset Your Password - SMUCT UniCompanion 🔒",
+            html: `
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0;">
+                <div style="text-align: center; margin-bottom: 24px;">
+                  <h1 style="color: #131b2e; font-size: 24px; font-weight: 800; margin: 0 0 8px;">SMUCT UniCompanion</h1>
+                  <p style="color: #64748b; font-size: 15px; margin: 0;">Password Reset Code</p>
+                </div>
+                <div style="background: #f8fafc; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px; border: 1px solid #e2e8f0;">
+                  <p style="color: #475569; font-size: 14px; margin: 0 0 12px;">Use the following 6-digit code to reset your password:</p>
+                  <div style="font-size: 38px; font-weight: 800; letter-spacing: 8px; color: #131b2e; font-family: monospace; padding: 8px 0;">
+                    ${otp}
+                  </div>
+                  <p style="color: #94a3b8; font-size: 13px; margin: 12px 0 0;">Expires in 3 minutes</p>
+                </div>
+                <p style="color: #64748b; font-size: 13px; line-height: 1.6; margin: 0 0 8px;">
+                  Enter this code along with your new password in the mobile app.
+                </p>
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">
+                  If you did not request a password reset, your account remains secure and you can safely ignore this email.
+                </p>
+              </div>
+            `,
+          });
+        }
+      },
+    }),
+  ],
 });
+

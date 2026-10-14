@@ -32,7 +32,6 @@ export const registerTeacherService = async (data: RegisterTeacherPayload) => {
         email: data.email,
         password: data.password,
         name: data.name,
-        role: "TEACHER",
       },
     });
   } catch (error: any) {

@@ -113,8 +113,51 @@ export const globalLimiter = rateLimit({
 });
 
 /**
- * Strict Auth Rate Limiter:
- * 10 requests per 15 minutes per IP address on /api/auth endpoints.
+ * Strict Auth Actions Rate Limiter (Login & Register):
+ * 10 requests per 15 minutes per IP address.
+ */
+export const authActionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 10,
+  message: {
+    success: false,
+    message:
+      "Too many login or registration attempts. Please try again after 15 minutes.",
+  },
+});
+
+/**
+ * Onboard Rate Limiter:
+ * 10 requests per 15 minutes per IP address.
+ */
+export const onboardLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 10,
+  message: {
+    success: false,
+    message:
+      "Too many onboarding attempts. Please try again after 15 minutes.",
+  },
+});
+
+/**
+ * Strict OTP Email Dispatch Rate Limiter:
+ * Max 3 email OTP send/resend attempts per 15 minutes per IP address.
+ * Protects email verification and password reset code dispatch.
+ */
+export const otpEmailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 3,
+  message: {
+    success: false,
+    message:
+      "Too many email verification attempts. You can only request up to 3 codes every 15 minutes. Please try again later.",
+  },
+});
+
+/**
+ * Baseline Auth Rate Limiter:
+ * 100 requests per 15 minutes per IP address on /api/auth endpoints for non-sensitive operations (sessions, sign-out).
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes

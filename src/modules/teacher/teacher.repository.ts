@@ -36,7 +36,7 @@ export const updateUserEmailVerified = async (
 ) => {
   return await prisma.user.update({
     where: { id: userId },
-    data: { emailVerified },
+    data: { emailVerified, role: "TEACHER" },
   });
 };
 

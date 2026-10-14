@@ -23,7 +23,12 @@ import { marketplaceRoutes } from "./modules/marketplace/marketplace.routes";
 import { memeRoutes } from "./modules/meme/meme.routes";
 
 import { envConfig } from "./config/env";
-import { globalLimiter, authLimiter } from "./middleware/rateLimit.middleware";
+import {
+  globalLimiter,
+  authLimiter,
+  authActionLimiter,
+  otpEmailLimiter,
+} from "./middleware/rateLimit.middleware";
 
 const app: Application = express();
 
@@ -54,9 +59,24 @@ app.use(
   }),
 );
 
-// Apply Rate Limiters
-// app.use(globalLimiter);
-// app.use("/api/auth", authLimiter);
+// Apply Targeted Rate Limiters
+// 1. Strict OTP Email Dispatch Limiter (Max 3 requests per 15 minutes window)
+app.use(
+  [
+    "/api/auth/email-otp/send-verification-otp",
+    "/api/auth/email-otp/request-password-reset",
+  ],
+  otpEmailLimiter,
+);
+
+// 2. Auth Actions Limiter for Login & Register (Max 10 requests per 15 minutes window)
+app.use(
+  ["/api/auth/sign-in/email", "/api/auth/sign-up/email"],
+  authActionLimiter,
+);
+
+// 3. Baseline Limiter for General Auth Routes (sessions, tokens, sign-out)
+app.use("/api/auth", authLimiter);
 
 app.all("/api/auth/{*any}", toNodeHandler(auth));
 
