@@ -78,7 +78,7 @@ export function resolveCloudinaryFolder(folder?: string): string {
 }
 
 /**
- * Builds an optimized delivery URL using Cloudinary transformations (q_auto, f_auto, w_1000, c_limit)
+ * Builds an optimized delivery URL using Cloudinary transformations
  */
 export function buildOptimizedUrl(publicId: string, cloudName?: string): string {
   const cName =
@@ -86,7 +86,12 @@ export function buildOptimizedUrl(publicId: string, cloudName?: string): string 
     envConfig.CLOUDINARY_CLOUD_NAME ||
     process.env.CLOUDINARY_CLOUD_NAME ||
     "";
-  return `https://res.cloudinary.com/${cName}/image/upload/q_auto,f_auto,w_1000,c_limit/${publicId}`;
+  const isProfile = publicId.toLowerCase().includes("profile");
+  const transformation = isProfile
+    ? "q_auto:eco,f_auto,w_400,h_400,c_fill,g_face"
+    : "q_auto,f_auto,w_1000,c_limit";
+
+  return `https://res.cloudinary.com/${cName}/image/upload/${transformation}/${publicId}`;
 }
 
 /**
@@ -101,6 +106,7 @@ export async function uploadBufferToCloudinary(
   ensureConfigured();
 
   const targetFolder = resolveCloudinaryFolder(folder);
+  const isProfile = targetFolder.toLowerCase().includes("profile");
 
   return new Promise((resolve, reject) => {
     const uploadOptions: any = {
@@ -115,11 +121,21 @@ export async function uploadBufferToCloudinary(
     }
 
     if (resourceType === "image") {
-      uploadOptions.transformation = [
-        { width: 1080, crop: "limit" },
-        { quality: "auto:good" },
-        { fetch_format: "auto" },
-      ];
+      if (isProfile) {
+        // High-efficiency avatar compression: 500x500 crop centered on face, WebP format, eco quality
+        uploadOptions.transformation = [
+          { width: 500, height: 500, crop: "fill", gravity: "face" },
+          { quality: "auto:eco" },
+          { fetch_format: "auto" },
+        ];
+        uploadOptions.format = "webp";
+      } else {
+        uploadOptions.transformation = [
+          { width: 1080, crop: "limit" },
+          { quality: "auto:good" },
+          { fetch_format: "auto" },
+        ];
+      }
     }
 
     const uploadStream = cloudinary.uploader.upload_stream(
@@ -162,17 +178,32 @@ export async function uploadBase64ToCloudinary(
   ensureConfigured();
 
   const targetFolder = resolveCloudinaryFolder(folder);
+  const isProfile = targetFolder.toLowerCase().includes("profile");
 
   try {
-    const result = await cloudinary.uploader.upload(base64Data, {
+    const uploadOptions: any = {
       folder: targetFolder,
       resource_type: "image",
-      transformation: [{ quality: "auto", fetch_format: "auto" }],
-    });
+    };
+
+    if (isProfile) {
+      uploadOptions.transformation = [
+        { width: 500, height: 500, crop: "fill", gravity: "face" },
+        { quality: "auto:eco" },
+        { fetch_format: "auto" },
+      ];
+      uploadOptions.format = "webp";
+    } else {
+      uploadOptions.transformation = [{ quality: "auto", fetch_format: "auto" }];
+    }
+
+    const result = await cloudinary.uploader.upload(base64Data, uploadOptions);
 
     return {
       secureUrl: buildOptimizedUrl(result.public_id),
       publicId: result.public_id,
+      format: result.format,
+      bytes: result.bytes,
     };
   } catch (error: any) {
     throw new AppError(

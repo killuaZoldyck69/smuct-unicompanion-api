@@ -4,6 +4,7 @@ import { UpdateRolePayload } from "./user.schema";
 import {
   uploadSingleImageService,
   MulterFile,
+  MAX_PROFILE_IMAGE_SIZE,
 } from "../upload/upload.service";
 import { deleteImageFromCloudinary } from "../../lib/cloudinary";
 
@@ -108,6 +109,19 @@ export const updateUserProfileImageService = async (
     throw new AppError("User not found.", 404);
   }
   const previousImage = existingUser.image;
+
+  // Strict profile image size limit (< 3MB)
+  if (file && file.size >= MAX_PROFILE_IMAGE_SIZE) {
+    throw new AppError("Profile image must be less than 3 MB.", 400);
+  }
+
+  if (base64 && base64.trim()) {
+    const rawBase64 = base64.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
+    const approxSizeBytes = Math.ceil((rawBase64.length * 3) / 4);
+    if (approxSizeBytes >= MAX_PROFILE_IMAGE_SIZE) {
+      throw new AppError("Profile image must be less than 3 MB.", 400);
+    }
+  }
 
   let finalImageUrl = imageUrl?.trim();
 

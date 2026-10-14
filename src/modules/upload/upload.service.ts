@@ -17,6 +17,7 @@ const ALLOWED_MIME_TYPES = new Set([
 ]);
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+export const MAX_PROFILE_IMAGE_SIZE = 3 * 1024 * 1024; // 3MB
 
 export interface MulterFile {
   fieldname: string;
@@ -27,7 +28,10 @@ export interface MulterFile {
   buffer: Buffer;
 }
 
-export function validateImageFile(file: MulterFile): void {
+export function validateImageFile(
+  file: MulterFile,
+  maxSizeBytes: number = MAX_FILE_SIZE
+): void {
   if (!ALLOWED_MIME_TYPES.has(file.mimetype.toLowerCase())) {
     throw new AppError(
       `Unsupported file type: ${file.mimetype}. Allowed types are JPEG, PNG, WEBP, GIF, and HEIC.`,
@@ -35,9 +39,10 @@ export function validateImageFile(file: MulterFile): void {
     );
   }
 
-  if (file.size > MAX_FILE_SIZE) {
+  if (file.size >= maxSizeBytes) {
+    const limitMb = (maxSizeBytes / (1024 * 1024)).toFixed(0);
     throw new AppError(
-      `File size exceeds limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Max allowed is 10MB.`,
+      `File size exceeds limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Max allowed is ${limitMb}MB.`,
       400
     );
   }
@@ -48,12 +53,24 @@ export async function uploadSingleImageService(
   base64?: string,
   folder: string = PROJECT_ROOT_FOLDER
 ): Promise<UploadResult> {
+  const isProfile = folder.toLowerCase().includes("profile");
+  const maxLimit = isProfile ? MAX_PROFILE_IMAGE_SIZE : MAX_FILE_SIZE;
+
   if (file) {
-    validateImageFile(file);
+    validateImageFile(file, maxLimit);
     return uploadBufferToCloudinary(file.buffer, folder, file.originalname);
   }
 
   if (base64) {
+    const rawBase64 = base64.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
+    const approxSizeBytes = Math.ceil((rawBase64.length * 3) / 4);
+    if (approxSizeBytes >= maxLimit) {
+      const limitMb = (maxLimit / (1024 * 1024)).toFixed(0);
+      throw new AppError(
+        `Payload size exceeds limit. Max allowed for this image is ${limitMb}MB.`,
+        400
+      );
+    }
     return uploadBase64ToCloudinary(base64, folder);
   }
 
