@@ -20,7 +20,19 @@ export const requireAuth = async (
     });
 
     if (!session || !session.user) {
-      res.status(401).json({ error: "Unauthorized. Please log in first." });
+      res.status(401).json({
+        success: false,
+        error: "Unauthorized. Please log in first.",
+      });
+      return;
+    }
+
+    // Defense-in-depth: Require verified email on all authenticated application routes
+    if (!session.user.emailVerified) {
+      res.status(403).json({
+        success: false,
+        error: "Forbidden. Email verification is required before accessing this service.",
+      });
       return;
     }
 
@@ -28,6 +40,7 @@ export const requireAuth = async (
     next();
   } catch (error) {
     res.status(500).json({
+      success: false,
       error: "Internal server error during authentication validation.",
     });
   }

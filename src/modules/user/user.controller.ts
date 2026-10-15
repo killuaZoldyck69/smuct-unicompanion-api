@@ -15,9 +15,10 @@ export const getAllUsers = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const deleteUser = catchAsync(async (req: Request, res: Response) => {
-  const id = req.params.id as string; // Assert type to satisfy TypeScript
+  const id = req.params.id as string;
+  const callerId = req.user?.id;
 
-  await userService.deleteUserService(id);
+  await userService.deleteUserService(id, callerId);
 
   res.status(200).json({
     success: true,
@@ -60,6 +61,20 @@ export const updateUserProfileImage = catchAsync(
     res.status(200).json({
       success: true,
       message: "Profile image updated successfully.",
+      data: result,
+    });
+  },
+);
+
+export const runMaintenanceCleanup = catchAsync(
+  async (req: Request, res: Response) => {
+    const hours = req.query?.hours ? Number(req.query.hours) : 24;
+    const { cleanupStaleData } = await import("../../services/cleanup.service");
+    const result = await cleanupStaleData(hours);
+
+    res.status(200).json({
+      success: true,
+      message: "Security maintenance cleanup executed successfully.",
       data: result,
     });
   },

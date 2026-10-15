@@ -46,7 +46,11 @@ export const getAllUsersService = async (query?: {
   };
 };
 
-export const deleteUserService = async (id: string) => {
+export const deleteUserService = async (id: string, callerId?: string) => {
+  if (callerId && id === callerId) {
+    throw new AppError("Administrators cannot delete their own account.", 400);
+  }
+
   const existingUser = await userRepository.findUserById(id);
 
   if (!existingUser) {

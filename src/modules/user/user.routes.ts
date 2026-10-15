@@ -12,9 +12,18 @@ import {
   deleteUser,
   updateStudentRole,
   updateUserProfileImage,
+  runMaintenanceCleanup,
 } from "./user.controller";
 
 const router = Router();
+
+// POST /api/users/maintenance/cleanup - Trigger unverified accounts & expired tokens cleanup (Admin Only)
+router.post(
+  "/maintenance/cleanup",
+  requireAuth,
+  requireAdmin,
+  runMaintenanceCleanup,
+);
 
 // PATCH /api/users/profile/image - Upload and update profile image for current user
 router.patch(

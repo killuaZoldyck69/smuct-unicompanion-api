@@ -29,7 +29,7 @@ model User {
   emailVerified Boolean     @default(false)
   name          String
   image         String      @default("")
-  role          SystemRole?
+  role          SystemRole  @default(STUDENT)
   phoneNumber   String      @default("")
   bloodGroup    BloodGroup?
 

@@ -19,6 +19,11 @@ export const verifyHubRole = async (
   hubId: string,
   allowedRoles: string[],
 ) => {
+  const user = await hubRepository.findUserWithStudentProfile(userId);
+  if (user?.role === "ADMIN") {
+    return { userId, hubId, role: "TEACHER" as any, joinedAt: new Date() };
+  }
+
   const member = await hubRepository.findHubMember(userId, hubId);
   if (!member) {
     throw new AppError(
@@ -29,7 +34,6 @@ export const verifyHubRole = async (
 
   let effectiveRole: string = member.role;
   if (effectiveRole === "STUDENT") {
-    const user = await hubRepository.findUserWithStudentProfile(userId);
     if (user?.role === "TEACHER") {
       effectiveRole = "TEACHER";
     } else if (user?.studentProfile?.isCR) {

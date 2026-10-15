@@ -1,4 +1,5 @@
 import { AppError } from "../../utils/AppError";
+import { prisma } from "../../lib/prisma";
 import * as studentRepository from "./student.repository";
 import { OnboardStudentPayload, UpdateProfilePayload } from "./student.schema";
 
@@ -6,10 +7,28 @@ export const onboardStudentService = async (
   userId: string,
   data: OnboardStudentPayload,
 ) => {
-  const existingProfile = await studentRepository.findStudentProfileByUserId(userId);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { studentProfile: true, teacherProfile: true },
+  });
 
-  if (existingProfile) {
+  if (!user) {
+    throw new AppError("User not found.", 404);
+  }
+
+  if (user.studentProfile) {
     throw new AppError("A student profile already exists for this user.", 409);
+  }
+
+  if (user.role === "TEACHER" || user.role === "ADMIN" || user.teacherProfile !== null) {
+    throw new AppError(
+      "Teacher and administrator accounts cannot be onboarded as students.",
+      403,
+    );
+  }
+
+  if (!user.emailVerified) {
+    throw new AppError("Email must be verified before student onboarding.", 403);
   }
 
   return await studentRepository.createStudentProfileWithRole(userId, data);

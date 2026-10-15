@@ -3,12 +3,17 @@ import { prisma } from "./lib/prisma";
 import { envConfig } from "./config/env";
 import { Server } from "http";
 
+import { startCleanupScheduler } from "./services/cleanup.service";
+
 let server: Server;
 
 const startServer = async () => {
   try {
     await prisma.$connect();
     console.log("✅ PostgreSQL Database connected successfully via Prisma.");
+
+    // Start background cleanup scheduler for stale unverified accounts and expired OTPs
+    startCleanupScheduler();
 
     server = app.listen(envConfig.PORT, "0.0.0.0", () => {
       console.log(

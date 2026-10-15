@@ -23,7 +23,7 @@ export const auth = betterAuth({
 
   user: {
     additionalFields: {
-      role: { type: "string", required: false },
+      role: { type: "string", required: true, defaultValue: "STUDENT" },
       phoneNumber: { type: "string", required: false },
       bloodGroup: { type: "string", required: false },
     },
@@ -42,7 +42,7 @@ export const auth = betterAuth({
 
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
-      // 1. Sign-up defense: strip role injection & enforce completed-profile duplicate policy
+      // 1. Sign-up defense: enforce STUDENT role & enforce completed-profile duplicate policy
       if (
         ctx.path === "/sign-up/email" ||
         ctx.path.endsWith("/sign-up/email")
@@ -50,9 +50,9 @@ export const auth = betterAuth({
         const body = ctx.body as Record<string, any> | undefined;
 
         // PRIVILEGE ESCALATION DEFENSE:
-        // Strip client-supplied role so public callers can never self-assign ADMIN or TEACHER roles
+        // Always enforce STUDENT role on public registration, preventing client-side privilege escalation
         if (body && typeof body === "object") {
-          delete body.role;
+          body.role = "STUDENT";
         }
 
         const email = body?.email;

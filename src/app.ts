@@ -69,14 +69,23 @@ app.use(
   otpEmailLimiter,
 );
 
-// 2. Auth Actions Limiter for Login & Register (Max 10 requests per 15 minutes window)
+// 2. Auth Actions Limiter for Login, Register, Verify OTP, Reset Password & Onboard (Max 10 requests per 15 minutes window)
 app.use(
-  ["/api/auth/sign-in/email", "/api/auth/sign-up/email"],
+  [
+    "/api/auth/sign-in/email",
+    "/api/auth/sign-up/email",
+    "/api/auth/email-otp/verify-email",
+    "/api/auth/email-otp/reset-password",
+    "/api/students/onboard",
+  ],
   authActionLimiter,
 );
 
 // 3. Baseline Limiter for General Auth Routes (sessions, tokens, sign-out)
 app.use("/api/auth", authLimiter);
+
+// 4. Global API Rate Limiter
+app.use("/api", globalLimiter);
 
 app.all("/api/auth/{*any}", toNodeHandler(auth));
 

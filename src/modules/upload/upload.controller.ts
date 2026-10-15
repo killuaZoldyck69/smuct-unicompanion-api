@@ -98,7 +98,33 @@ export const deleteUploadedFile = catchAsync(
       throw new AppError("File URL or public ID is required", 400);
     }
 
-    const { deleteFileFromCloudinary } = await import("../../lib/cloudinary");
+    const { extractPublicIdFromUrl, PROJECT_ROOT_FOLDER, deleteFileFromCloudinary } = await import("../../lib/cloudinary");
+    const { AppError } = await import("../../utils/AppError");
+
+    const publicId = extractPublicIdFromUrl(url);
+    if (!publicId) {
+      throw new AppError("Invalid file identifier or URL provided", 400);
+    }
+
+    // Security check: Must reside within the smuct-unicompanion project root namespace
+    if (!publicId.startsWith(PROJECT_ROOT_FOLDER)) {
+      throw new AppError("Forbidden: Cannot delete resources outside of application namespace", 403);
+    }
+
+    // Non-admin authorization restrictions
+    const user = (req as any).user;
+    if (user?.role !== "ADMIN") {
+      const protectedAdminFolders = [
+        `${PROJECT_ROOT_FOLDER}/notices`,
+        `${PROJECT_ROOT_FOLDER}/calendars`,
+        `${PROJECT_ROOT_FOLDER}/buses`,
+      ];
+      const isProtected = protectedAdminFolders.some((f) => publicId.startsWith(f));
+      if (isProtected) {
+        throw new AppError("Forbidden: Only administrators can delete institutional assets", 403);
+      }
+    }
+
     const success = await deleteFileFromCloudinary(url, resourceType);
 
     res.status(200).json({
