@@ -70,26 +70,129 @@ function handlePasswordValidation(body?: Record<string, any>): void {
 }
 
 /**
+ * Validates that an existing, verified account exists before dispatching a password reset OTP.
+ * Prevents misleading success feedback and improves UX when an unregistered email is entered.
+ */
+async function handlePasswordResetRequest(body?: Record<string, any>): Promise<void> {
+  const email = body?.email;
+  if (!email || typeof email !== "string") {
+    throw new APIError("BAD_REQUEST", {
+      message: "Email address is required.",
+    });
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  const existingUser = await prisma.user.findFirst({
+    where: {
+      email: {
+        equals: normalizedEmail,
+        mode: "insensitive",
+      },
+    },
+    select: {
+      id: true,
+      email: true,
+      emailVerified: true,
+    },
+  });
+
+  if (!existingUser) {
+    throw new APIError("BAD_REQUEST", {
+      message: "No account found with this email address. Please register or check for typos.",
+    });
+  }
+
+  if (!existingUser.emailVerified) {
+    throw new APIError("BAD_REQUEST", {
+      message: "This account has not been verified yet. Please complete verification or register again.",
+    });
+  }
+}
+
+/**
+ * Validates account existence when requesting a verification OTP resend.
+ */
+async function handleVerificationOtpRequest(body?: Record<string, any>): Promise<void> {
+  const email = body?.email;
+  if (!email || typeof email !== "string") {
+    throw new APIError("BAD_REQUEST", {
+      message: "Email address is required.",
+    });
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  const existingUser = await prisma.user.findFirst({
+    where: {
+      email: {
+        equals: normalizedEmail,
+        mode: "insensitive",
+      },
+    },
+    select: {
+      id: true,
+      emailVerified: true,
+    },
+  });
+
+  if (!existingUser) {
+    throw new APIError("BAD_REQUEST", {
+      message: "No account found with this email address. Please register first.",
+    });
+  }
+
+  if (existingUser.emailVerified) {
+    throw new APIError("BAD_REQUEST", {
+      message: "This email address is already verified. Please log in directly.",
+    });
+  }
+}
+
+/**
  * Centralized Better Auth Pre-Execution Security Middleware
  */
 export const authBeforeHook = createAuthMiddleware(async (ctx) => {
-  const path = ctx.path;
+  const rawPath = ctx.path || "";
+  const cleanPath = rawPath.split("?")[0].replace(/\/+$/, "");
   const body = ctx.body as Record<string, any> | undefined;
 
   // 1. Registration security & duplicate profile checks
-  if (path === "/sign-up/email" || path.endsWith("/sign-up/email")) {
+  if (cleanPath === "/sign-up/email" || cleanPath.endsWith("/sign-up/email")) {
     await handleSignUpSecurity(body);
   }
 
   // 2. Strict password validation for password creation and updates
   const isPasswordPath =
-    path === "/sign-up/email" ||
-    path === "/reset-password" ||
-    path === "/change-password" ||
-    path === "/email-otp/reset-password" ||
-    path.endsWith("/reset-password");
+    cleanPath === "/sign-up/email" ||
+    cleanPath === "/reset-password" ||
+    cleanPath === "/change-password" ||
+    cleanPath === "/email-otp/reset-password" ||
+    cleanPath.endsWith("/reset-password");
 
   if (isPasswordPath) {
     handlePasswordValidation(body);
+  }
+
+  // 3. Password reset request verification: ensure account exists before sending OTP
+  const isPasswordResetRequest =
+    cleanPath === "/email-otp/request-password-reset" ||
+    cleanPath.endsWith("/email-otp/request-password-reset") ||
+    cleanPath === "/forget-password/email-otp" ||
+    cleanPath.endsWith("/forget-password/email-otp") ||
+    cleanPath === "/forget-password" ||
+    cleanPath.endsWith("/forget-password") ||
+    (cleanPath.includes("send-verification-otp") && body?.type === "forget-password");
+
+  if (isPasswordResetRequest) {
+    await handlePasswordResetRequest(body);
+  }
+
+  // 4. Email verification OTP resend verification: ensure account exists and is unverified
+  const isEmailVerificationOtpRequest =
+    (cleanPath === "/email-otp/send-verification-otp" ||
+      cleanPath.endsWith("/email-otp/send-verification-otp")) &&
+    body?.type === "email-verification";
+
+  if (isEmailVerificationOtpRequest) {
+    await handleVerificationOtpRequest(body);
   }
 });
