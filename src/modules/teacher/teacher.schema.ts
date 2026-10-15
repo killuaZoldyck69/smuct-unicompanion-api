@@ -37,7 +37,22 @@ export const updateTeacherProfileSchema = z.object({
     department: z.string().optional(),
     faculty: z.string().optional(),
     officeRoom: z.string().optional(),
-    consultationHours: z.string().optional(),
+    consultationHours: z.string().nullable().optional(),
+    advisoryBatch: z
+      .union([z.number(), z.string().regex(/^\d+$/).transform(Number)])
+      .nullable()
+      .optional(),
+    dayOff: z.string().nullable().optional(),
+    consultationSlots: z
+      .array(
+        z.object({
+          day: z.string(),
+          startTime: z.string(),
+          endTime: z.string(),
+        }),
+      )
+      .nullable()
+      .optional(),
     expertiseFields: z.array(z.string()).optional(),
     academicQualifications: z.record(z.string(), z.any()).optional(),
     linkedInUrl: z

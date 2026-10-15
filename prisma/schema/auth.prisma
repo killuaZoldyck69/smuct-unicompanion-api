@@ -159,6 +159,9 @@ model TeacherProfile {
 
   officeRoom        String?
   consultationHours String?
+  advisoryBatch     Int?
+  dayOff            String?
+  consultationSlots Json?
 
   expertiseFields        String[]
   academicQualifications Json?

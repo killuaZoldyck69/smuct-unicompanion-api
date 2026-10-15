@@ -114,6 +114,18 @@ export const updateTeacherProfileData = async (
   if (data.faculty !== undefined) profileUpdateData.faculty = data.faculty;
   if (data.officeRoom !== undefined)
     profileUpdateData.officeRoom = data.officeRoom;
+  if (data.advisoryBatch !== undefined)
+    profileUpdateData.advisoryBatch = data.advisoryBatch;
+  if (data.dayOff !== undefined)
+    profileUpdateData.dayOff = data.dayOff;
+  if (data.consultationSlots !== undefined) {
+    profileUpdateData.consultationSlots = data.consultationSlots;
+    if (data.consultationHours === undefined && Array.isArray(data.consultationSlots)) {
+      profileUpdateData.consultationHours = data.consultationSlots
+        .map((s) => `${s.day}: ${s.startTime} - ${s.endTime}`)
+        .join(", ");
+    }
+  }
   if (data.consultationHours !== undefined)
     profileUpdateData.consultationHours = data.consultationHours;
 
