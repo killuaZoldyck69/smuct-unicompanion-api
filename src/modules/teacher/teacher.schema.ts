@@ -3,9 +3,23 @@ import { BLOOD_GROUP_VALUES } from "../../constants/enums";
 
 export const registerTeacherSchema = z.object({
   body: z.object({
-    teacherId: z.string().min(1, "Teacher ID is required"),
-    name: z.string().min(1, "Name is required"),
-    email: z.string().email("Invalid email format"),
+    teacherId: z
+      .string()
+      .trim()
+      .min(1, "Teacher ID is required")
+      .regex(/^\d+$/, "Teacher ID must be a valid numeric integer"),
+    name: z
+      .string()
+      .trim()
+      .min(1, "Name is required")
+      .transform((val) =>
+        val.replace(/\s+/g, " ").replace(/(?:^|\s)\S/g, (c) => c.toUpperCase())
+      ),
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .email("Must be a valid email address"),
     password: z
       .string()
       .min(8, "Password must be at least 8 characters long")
@@ -18,9 +32,44 @@ export const registerTeacherSchema = z.object({
       ),
     designation: z
       .string()
+      .trim()
       .min(1, "Designation is required (e.g., Lecturer, Professor)"),
-    department: z.string().min(1, "Department is required"),
-    faculty: z.string().min(1, "Faculty is required"),
+    department: z.string().trim().min(1, "Department is required"),
+    faculty: z.string().trim().min(1, "Faculty is required"),
+    officeRoom: z
+      .string()
+      .trim()
+      .regex(/^\d*$/, "Office room must contain numbers only")
+      .optional()
+      .nullable(),
+    dayOff: z.string().trim().nullable().optional(),
+    consultationHours: z.string().nullable().optional(),
+    advisoryBatch: z
+      .union([z.number(), z.string().regex(/^\d+$/).transform(Number)])
+      .nullable()
+      .optional(),
+    consultationSlots: z
+      .array(
+        z.object({
+          day: z.string(),
+          startTime: z.string(),
+          endTime: z.string(),
+        }),
+      )
+      .nullable()
+      .optional(),
+    expertiseFields: z.array(z.string()).optional(),
+    academicQualifications: z.any().optional(),
+    linkedInUrl: z
+      .string()
+      .url("Must be a valid URL")
+      .or(z.literal(""))
+      .optional(),
+    personalWebsiteUrl: z
+      .string()
+      .url("Must be a valid URL")
+      .or(z.literal(""))
+      .optional(),
   }),
 });
 
@@ -35,14 +84,19 @@ export const updateTeacherProfileSchema = z.object({
     bloodGroup: z.enum(BLOOD_GROUP_VALUES).optional(),
     designation: z.string().optional(),
     department: z.string().optional(),
-    faculty: z.string().optional(),
-    officeRoom: z.string().optional(),
+    faculty: z.string().trim().optional(),
+    officeRoom: z
+      .string()
+      .trim()
+      .regex(/^\d*$/, "Office room must contain numbers only")
+      .optional()
+      .nullable(),
     consultationHours: z.string().nullable().optional(),
     advisoryBatch: z
       .union([z.number(), z.string().regex(/^\d+$/).transform(Number)])
       .nullable()
       .optional(),
-    dayOff: z.string().nullable().optional(),
+    dayOff: z.string().trim().nullable().optional(),
     consultationSlots: z
       .array(
         z.object({

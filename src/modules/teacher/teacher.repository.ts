@@ -24,6 +24,15 @@ export const createTeacherProfileRecord = async (data: {
   designation: string;
   department: string;
   faculty: string;
+  officeRoom?: string;
+  consultationHours?: string | null;
+  advisoryBatch?: number | null;
+  dayOff?: string | null;
+  consultationSlots?: any;
+  expertiseFields?: string[];
+  academicQualifications?: any;
+  linkedInUrl?: string | null;
+  personalWebsiteUrl?: string | null;
 }) => {
   return await prisma.teacherProfile.create({
     data,

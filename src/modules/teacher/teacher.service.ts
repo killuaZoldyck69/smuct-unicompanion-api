@@ -5,8 +5,12 @@ import * as teacherRepository from "./teacher.repository";
 import { RegisterTeacherPayload, UpdateTeacherPayload } from "./teacher.schema";
 
 export const registerTeacherService = async (data: RegisterTeacherPayload) => {
+  const sanitizedTeacherId = data.teacherId.trim();
+  const sanitizedEmail = data.email.trim().toLowerCase();
+  const sanitizedName = data.name.trim();
+
   // 1. Pre-check: Ensure email is unique
-  const existingEmail = await teacherRepository.findUserByEmail(data.email);
+  const existingEmail = await teacherRepository.findUserByEmail(sanitizedEmail);
 
   if (existingEmail) {
     throw new AppError("A user with this email already exists.", 409);
@@ -14,7 +18,7 @@ export const registerTeacherService = async (data: RegisterTeacherPayload) => {
 
   // 2. Pre-check: Ensure Teacher ID is unique
   const existingTeacherId =
-    await teacherRepository.findTeacherProfileByTeacherId(data.teacherId);
+    await teacherRepository.findTeacherProfileByTeacherId(sanitizedTeacherId);
 
   if (existingTeacherId) {
     throw new AppError(
@@ -29,9 +33,9 @@ export const registerTeacherService = async (data: RegisterTeacherPayload) => {
     // 3. Create core user account via Better Auth
     authResponse = await auth.api.signUpEmail({
       body: {
-        email: data.email,
+        email: sanitizedEmail,
         password: data.password,
-        name: data.name,
+        name: sanitizedName,
       },
     });
   } catch (error: any) {
@@ -51,13 +55,37 @@ export const registerTeacherService = async (data: RegisterTeacherPayload) => {
     // 4. Revoke the automatic session
     await teacherRepository.deleteUserSessions(userId);
 
-    // 5. Create the delegated Teacher Profile with the new fields
+    // 5. Create the delegated Teacher Profile with all fields
+    const consultationHours =
+      data.consultationHours ||
+      (Array.isArray(data.consultationSlots) && data.consultationSlots.length > 0
+        ? data.consultationSlots
+            .map((s) => `${s.day}: ${s.startTime} - ${s.endTime}`)
+            .join(", ")
+        : undefined);
+
+    const advisoryBatch =
+      data.advisoryBatch !== undefined && data.advisoryBatch !== null
+        ? typeof data.advisoryBatch === "string"
+          ? parseInt(data.advisoryBatch, 10)
+          : data.advisoryBatch
+        : undefined;
+
     const profile = await teacherRepository.createTeacherProfileRecord({
       userId: userId,
-      teacherId: data.teacherId,
-      designation: data.designation,
-      department: data.department,
-      faculty: data.faculty,
+      teacherId: sanitizedTeacherId,
+      designation: data.designation.trim(),
+      department: data.department.trim(),
+      faculty: data.faculty.trim(),
+      officeRoom: data.officeRoom?.trim() || undefined,
+      consultationHours,
+      advisoryBatch: isNaN(advisoryBatch as number) ? undefined : advisoryBatch,
+      dayOff: data.dayOff?.trim() || undefined,
+      consultationSlots: data.consultationSlots,
+      expertiseFields: data.expertiseFields || [],
+      academicQualifications: data.academicQualifications,
+      linkedInUrl: data.linkedInUrl?.trim() || undefined,
+      personalWebsiteUrl: data.personalWebsiteUrl?.trim() || undefined,
     });
 
     // Auto-verify the Teacher so they don't have to click a verification link
