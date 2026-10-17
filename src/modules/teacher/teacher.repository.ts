@@ -1,8 +1,13 @@
 import { prisma } from "../../lib/prisma";
 
 export const findUserByEmail = async (email: string) => {
-  return await prisma.user.findUnique({
-    where: { email },
+  return await prisma.user.findFirst({
+    where: {
+      email: {
+        equals: email,
+        mode: "insensitive",
+      },
+    },
   });
 };
 
@@ -36,6 +41,26 @@ export const createTeacherProfileRecord = async (data: {
 }) => {
   return await prisma.teacherProfile.create({
     data,
+  });
+};
+
+export const createTeacherProfileTransaction = async (
+  userId: string,
+  profileData: Parameters<typeof createTeacherProfileRecord>[0],
+) => {
+  return await prisma.$transaction(async (tx) => {
+    await tx.session.deleteMany({
+      where: { userId },
+    });
+
+    await tx.user.update({
+      where: { id: userId },
+      data: { emailVerified: true, role: "TEACHER" },
+    });
+
+    return await tx.teacherProfile.create({
+      data: profileData,
+    });
   });
 };
 

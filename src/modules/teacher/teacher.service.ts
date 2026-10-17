@@ -3,13 +3,17 @@ import { AppError } from "../../utils/AppError";
 import { envConfig } from "../../config/env";
 import * as teacherRepository from "./teacher.repository";
 import { RegisterTeacherPayload, UpdateTeacherPayload } from "./teacher.schema";
+import {
+  pendingTeacherRegistrationEmails,
+  sendTeacherWelcomeEmail,
+} from "../../services/auth-email.service";
 
 export const registerTeacherService = async (data: RegisterTeacherPayload) => {
   const sanitizedTeacherId = data.teacherId.trim();
   const sanitizedEmail = data.email.trim().toLowerCase();
   const sanitizedName = data.name.trim();
 
-  // 1. Pre-check: Ensure email is unique
+  // 1. Pre-check: Ensure email is unique (case-insensitive)
   const existingEmail = await teacherRepository.findUserByEmail(sanitizedEmail);
 
   if (existingEmail) {
@@ -29,6 +33,9 @@ export const registerTeacherService = async (data: RegisterTeacherPayload) => {
 
   let authResponse: any;
 
+  // Track pending registration to suppress unnecessary OTP dispatch during creation
+  pendingTeacherRegistrationEmails.add(sanitizedEmail);
+
   try {
     // 3. Create core user account via Better Auth
     authResponse = await auth.api.signUpEmail({
@@ -39,10 +46,12 @@ export const registerTeacherService = async (data: RegisterTeacherPayload) => {
       },
     });
   } catch (error: any) {
-    throw new AppError(
-      error.message || "Failed to create core user account",
-      500,
-    );
+    const status = error.status || error.statusCode || 400;
+    const message =
+      error.body?.message || error.message || "Failed to create core user account";
+    throw new AppError(message, status);
+  } finally {
+    pendingTeacherRegistrationEmails.delete(sanitizedEmail);
   }
 
   if (!authResponse?.user) {
@@ -52,10 +61,7 @@ export const registerTeacherService = async (data: RegisterTeacherPayload) => {
   const userId = authResponse.user.id;
 
   try {
-    // 4. Revoke the automatic session
-    await teacherRepository.deleteUserSessions(userId);
-
-    // 5. Create the delegated Teacher Profile with all fields
+    // 4 & 5. Atomically revoke initial session, set TEACHER role, and create profile
     const consultationHours =
       data.consultationHours ||
       (Array.isArray(data.consultationSlots) && data.consultationSlots.length > 0
@@ -71,43 +77,61 @@ export const registerTeacherService = async (data: RegisterTeacherPayload) => {
           : data.advisoryBatch
         : undefined;
 
-    const profile = await teacherRepository.createTeacherProfileRecord({
-      userId: userId,
-      teacherId: sanitizedTeacherId,
-      designation: data.designation.trim(),
-      department: data.department.trim(),
-      faculty: data.faculty.trim(),
-      officeRoom: data.officeRoom?.trim() || undefined,
-      consultationHours,
-      advisoryBatch: isNaN(advisoryBatch as number) ? undefined : advisoryBatch,
-      dayOff: data.dayOff?.trim() || undefined,
-      consultationSlots: data.consultationSlots,
-      expertiseFields: data.expertiseFields || [],
-      academicQualifications: data.academicQualifications,
-      linkedInUrl: data.linkedInUrl?.trim() || undefined,
-      personalWebsiteUrl: data.personalWebsiteUrl?.trim() || undefined,
-    });
-
-    // Auto-verify the Teacher so they don't have to click a verification link
-    await teacherRepository.updateUserEmailVerified(userId, true);
-
-    // Trigger password reset flow so the Teacher can securely set their initial password
-    await (auth.api as any).forgetPassword({
-      body: {
-        email: data.email,
-        redirectTo: `${envConfig.FRONTEND_URL}?type=reset-password`,
+    const profile = await teacherRepository.createTeacherProfileTransaction(
+      userId,
+      {
+        userId: userId,
+        teacherId: sanitizedTeacherId,
+        designation: data.designation.trim(),
+        department: data.department.trim(),
+        faculty: data.faculty.trim(),
+        officeRoom: data.officeRoom?.trim() || undefined,
+        consultationHours,
+        advisoryBatch: isNaN(advisoryBatch as number) ? undefined : advisoryBatch,
+        dayOff: data.dayOff?.trim() || undefined,
+        consultationSlots: data.consultationSlots,
+        expertiseFields: data.expertiseFields || [],
+        academicQualifications: data.academicQualifications,
+        linkedInUrl: data.linkedInUrl?.trim() || undefined,
+        personalWebsiteUrl: data.personalWebsiteUrl?.trim() || undefined,
       },
-    });
+    );
+
+    // Non-blocking welcome email with credentials, academic info, and security warning
+    try {
+      await sendTeacherWelcomeEmail({
+        name: sanitizedName,
+        email: sanitizedEmail,
+        teacherId: sanitizedTeacherId,
+        temporaryPassword: data.password,
+        designation: data.designation.trim(),
+        department: data.department.trim(),
+        faculty: data.faculty.trim(),
+        officeRoom: data.officeRoom?.trim() || undefined,
+      });
+    } catch (emailErr) {
+      console.warn(
+        `[TeacherService] Account created successfully, but welcome email could not be dispatched for ${sanitizedEmail}:`,
+        emailErr,
+      );
+    }
 
     return { user: authResponse.user, profile };
-  } catch (error) {
-    // 6. Manual Rollback
+  } catch (error: any) {
+    // Rollback orphaned auth user
     await teacherRepository.deleteUserById(userId);
     console.error("Teacher Profile creation failed, rolled back user:", error);
 
+    if (error.code === "P2002") {
+      throw new AppError(
+        "This Teacher ID is already registered in the system.",
+        409,
+      );
+    }
+
     throw new AppError(
-      "Failed to create teacher profile. Database rolled back.",
-      500,
+      error.message || "Failed to create teacher profile. Database rolled back.",
+      error.statusCode || 500,
     );
   }
 };

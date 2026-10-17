@@ -7,6 +7,14 @@ import { AppError } from "../../utils/AppError";
 
 export const registerTeacher = catchAsync(
   async (req: Request, res: Response) => {
+    // Defense-in-depth: Enforce that only authenticated administrators can invoke this action
+    if (!req.user || req.user.role !== "ADMIN") {
+      throw new AppError(
+        "Forbidden. Only an administrator can register faculty accounts.",
+        403,
+      );
+    }
+
     const result = await teacherService.registerTeacherService(req.body);
 
     const formattedData = {
