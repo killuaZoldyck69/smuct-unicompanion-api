@@ -7,6 +7,7 @@ import {
   pendingTeacherRegistrationEmails,
   sendTeacherWelcomeEmail,
 } from "../../services/auth-email.service";
+import { appCache } from "../../lib/cache";
 
 export const registerTeacherService = async (data: RegisterTeacherPayload) => {
   const sanitizedTeacherId = data.teacherId.trim();
@@ -96,6 +97,10 @@ export const registerTeacherService = async (data: RegisterTeacherPayload) => {
         personalWebsiteUrl: data.personalWebsiteUrl?.trim() || undefined,
       },
     );
+
+    // Invalidate user directory and teacher directory in-memory caches
+    appCache.delPattern(/^users:list/);
+    appCache.delPattern(/^directory:teachers/);
 
     // Non-blocking welcome email with credentials, academic info, and security warning
     try {
@@ -190,9 +195,15 @@ export const updateTeacherProfileData = async (
   if (data.personalWebsiteUrl !== undefined)
     profileUpdateData.personalWebsiteUrl = data.personalWebsiteUrl;
 
-  return await teacherRepository.updateTeacherUserAndProfile(
+  const result = await teacherRepository.updateTeacherUserAndProfile(
     userId,
     userUpdateData,
     profileUpdateData,
   );
+
+  // Invalidate user directory and teacher directory in-memory caches
+  appCache.delPattern(/^users:list/);
+  appCache.delPattern(/^directory:teachers/);
+
+  return result;
 };

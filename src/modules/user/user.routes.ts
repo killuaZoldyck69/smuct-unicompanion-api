@@ -6,7 +6,7 @@ import {
   singleUpload,
   normalizeSingleFile,
 } from "../../middleware/upload.middleware";
-import { updateRoleSchema } from "./user.schema";
+import { updateRoleSchema, getUsersQuerySchema } from "./user.schema";
 import {
   getAllUsers,
   deleteUser,
@@ -34,8 +34,14 @@ router.patch(
   updateUserProfileImage,
 );
 
-// GET /api/users - Get All Users (Admin Only)
-router.get("/", requireAuth, requireAdmin, getAllUsers);
+// GET /api/users - Get All Users with filtering, pagination, search, and caching (Admin Only)
+router.get(
+  "/",
+  requireAuth,
+  requireAdmin,
+  validateRequest(getUsersQuerySchema),
+  getAllUsers,
+);
 
 // DELETE /api/users/:id - Permanently Delete User (Admin Only)
 router.delete("/:id", requireAuth, requireAdmin, deleteUser);

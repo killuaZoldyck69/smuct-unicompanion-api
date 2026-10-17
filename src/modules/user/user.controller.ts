@@ -4,7 +4,13 @@ import * as userService from "./user.service";
 import { MulterFile } from "../upload/upload.service";
 
 export const getAllUsers = catchAsync(async (req: Request, res: Response) => {
-  const result = await userService.getAllUsersService(req.query);
+  const result = await userService.getAllUsersService(req.query as any);
+
+  // Set HTTP caching headers for client & reverse proxy (private, short max-age, stale-while-revalidate)
+  res.setHeader(
+    "Cache-Control",
+    "private, max-age=30, stale-while-revalidate=60",
+  );
 
   res.status(200).json({
     success: true,

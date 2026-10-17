@@ -1,49 +1,148 @@
 import { AppError } from "../../utils/AppError";
 import * as userRepository from "./user.repository";
-import { UpdateRolePayload } from "./user.schema";
+import { UpdateRolePayload, GetUsersQuery } from "./user.schema";
 import {
   uploadSingleImageService,
   MulterFile,
   MAX_PROFILE_IMAGE_SIZE,
 } from "../upload/upload.service";
 import { deleteImageFromCloudinary } from "../../lib/cloudinary";
+import { appCache } from "../../lib/cache";
 
+const DEPARTMENT_ALIASES: Record<string, string[]> = {
+  CSE: ["computer science and engineering", "cse", "computer science"],
+  CSIT: ["computer science and information technology", "csit", "information technology"],
+  AMMT: ["apparel manufacturing management and technology", "ammt", "apparel"],
+  FDT: ["fashion design and technology", "fdt", "fashion design"],
+  IA: ["interior architecture", "ia", "interior design"],
+  GDM: ["graphic design and multimedia", "gdm", "graphic design"],
+  ARCH: ["architecture", "arch"],
+  BBA: ["business administration", "bba", "business"],
+  ENG: ["english", "eng"],
+  LAW: ["law", "llb", "llm"],
+  SOC: ["sociology & anthropology", "sociology", "anthropology", "soc"],
+  BAN: ["bangla", "ban"],
+  "G&P": ["government & politics", "government and politics", "g&p", "gp"],
+  IS: ["islamic studies", "is"],
+  FA: ["fine arts", "fine art", "fa"],
+  MUS: ["music", "mus"],
+  DAN: ["dance", "dan"],
+};
 
-export const getAllUsersService = async (query?: {
-  page?: number | string;
-  limit?: number | string;
-  role?: any;
-  search?: string;
-}) => {
+export const getAllUsersService = async (query?: GetUsersQuery) => {
   const page = Math.max(1, Number(query?.page) || 1);
-  const limit = Math.max(1, Math.min(100, Number(query?.limit) || 25));
+  const limit = Math.max(1, Math.min(100, Number(query?.limit) || 20));
   const skip = (page - 1) * limit;
 
-  const where: any = {};
-  if (query?.role) {
-    where.role = query.role;
-  }
-  if (query?.search) {
-    where.OR = [
-      { name: { contains: query.search, mode: "insensitive" } },
-      { email: { contains: query.search, mode: "insensitive" } },
-    ];
-  }
+  const role = query?.role;
+  const department = query?.department;
+  const tag = query?.tag;
+  const search = query?.search?.trim() || "";
 
-  const [users, total] = await Promise.all([
-    userRepository.findUsersWithProfiles(where, skip, limit),
-    userRepository.countUsers(where),
-  ]);
+  // Deterministic cache key for in-memory caching
+  const cacheKey = `users:list:${role || "ALL"}:${department || "ALL"}:${tag || "ALL"}:${search}:${page}:${limit}`;
 
-  return {
-    data: users,
-    meta: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
+  return await appCache.getOrSet(
+    cacheKey,
+    async () => {
+      const conditions: any[] = [];
+
+      // 1. Filter by Role (STUDENT | TEACHER | ADMIN)
+      if (role) {
+        conditions.push({ role });
+      }
+
+      // 2. Filter by Department (Short Code or Full Name with Aliases)
+      if (department && department !== "All") {
+        const deptKey = department.trim().toUpperCase();
+        const aliases = DEPARTMENT_ALIASES[deptKey] || [department.trim().toLowerCase()];
+
+        if (role === "STUDENT") {
+          conditions.push({
+            studentProfile: {
+              OR: aliases.map((alias) => ({
+                department: { contains: alias, mode: "insensitive" },
+              })),
+            },
+          });
+        } else if (role === "TEACHER") {
+          conditions.push({
+            teacherProfile: {
+              OR: aliases.map((alias) => ({
+                department: { contains: alias, mode: "insensitive" },
+              })),
+            },
+          });
+        } else {
+          conditions.push({
+            OR: [
+              {
+                studentProfile: {
+                  OR: aliases.map((alias) => ({
+                    department: { contains: alias, mode: "insensitive" },
+                  })),
+                },
+              },
+              {
+                teacherProfile: {
+                  OR: aliases.map((alias) => ({
+                    department: { contains: alias, mode: "insensitive" },
+                  })),
+                },
+              },
+            ],
+          });
+        }
+      }
+
+      // 3. Filter by Student Role Tags (CR / TA)
+      if (role === "STUDENT" && tag && tag !== "ALL") {
+        if (tag === "CR") {
+          conditions.push({ studentProfile: { isCR: true } });
+        } else if (tag === "TA") {
+          conditions.push({ studentProfile: { isTA: true } });
+        }
+      }
+
+      // 4. Multi-field Search (name, email, phone, studentId, teacherId, department, designation)
+      if (search) {
+        conditions.push({
+          OR: [
+            { name: { contains: search, mode: "insensitive" } },
+            { email: { contains: search, mode: "insensitive" } },
+            { phoneNumber: { contains: search, mode: "insensitive" } },
+            { studentProfile: { studentId: { contains: search, mode: "insensitive" } } },
+            { studentProfile: { department: { contains: search, mode: "insensitive" } } },
+            { teacherProfile: { teacherId: { contains: search, mode: "insensitive" } } },
+            { teacherProfile: { department: { contains: search, mode: "insensitive" } } },
+            { teacherProfile: { designation: { contains: search, mode: "insensitive" } } },
+          ],
+        });
+      }
+
+      const where: any = {};
+      if (conditions.length > 0) {
+        where.AND = conditions;
+      }
+
+      const [users, total] = await Promise.all([
+        userRepository.findUsersWithProfiles(where, skip, limit),
+        userRepository.countUsers(where),
+      ]);
+
+      return {
+        data: users,
+        meta: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+          hasMore: page * limit < total,
+        },
+      };
     },
-  };
+    60, // 60 seconds TTL cache
+  );
 };
 
 export const deleteUserService = async (id: string, callerId?: string) => {
@@ -59,6 +158,9 @@ export const deleteUserService = async (id: string, callerId?: string) => {
 
   // Cascades automatically to StudentProfile, TeacherProfile, Session, Account, etc.
   const result = await userRepository.deleteUserById(id);
+
+  // Invalidate in-memory user list cache
+  appCache.delPattern(/^users:list/);
 
   // Storage cleanup optimization: delete user profile image from Cloudinary
   if (existingUser.image) {
@@ -97,6 +199,9 @@ export const updateStudentRoleService = async (
   } else if (action === "REMOVE_ROLE") {
     updateData = { isCR: false, isTA: false };
   }
+
+  // Invalidate in-memory user list cache
+  appCache.delPattern(/^users:list/);
 
   // Apply the update to the delegated StudentProfile
   return await userRepository.updateStudentProfileByUserId(id, updateData);
@@ -150,6 +255,9 @@ export const updateUserProfileImageService = async (
   if (!updatedUser) {
     throw new AppError("User not found.", 404);
   }
+
+  // Invalidate in-memory user list cache
+  appCache.delPattern(/^users:list/);
 
   // Storage cleanup optimization: delete previous image from Cloudinary
   if (previousImage && previousImage !== finalImageUrl) {
