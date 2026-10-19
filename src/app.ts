@@ -21,6 +21,7 @@ import { uploadRoutes } from "./modules/upload/upload.routes";
 import { lostFoundRoutes } from "./modules/lost-found/lost-found.routes";
 import { marketplaceRoutes } from "./modules/marketplace/marketplace.routes";
 import { memeRoutes } from "./modules/meme/meme.routes";
+import { adminRoutes } from "./modules/admin/admin.routes";
 
 import { envConfig } from "./config/env";
 import {
@@ -113,6 +114,7 @@ app.use("/api/directory", directoryRoutes);
 app.use("/api/complaints", complaintRoutes);
 app.use("/api/alumni", alumniRoutes);
 app.use("/api/field", fieldRoutes);
+app.use("/api/admin", adminRoutes);
 
 // 2. MOUNT THE HUB ROUTES
 app.use("/api/hubs", hubRoutes);
