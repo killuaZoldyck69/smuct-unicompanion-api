@@ -8,6 +8,7 @@ import {
   sendTeacherWelcomeEmail,
 } from "../../services/auth-email.service";
 import { appCache } from "../../lib/cache";
+import { sortQualifications } from "../../utils/qualification-order";
 
 export const registerTeacherService = async (data: RegisterTeacherPayload) => {
   const sanitizedTeacherId = data.teacherId.trim();
@@ -92,7 +93,13 @@ export const registerTeacherService = async (data: RegisterTeacherPayload) => {
         dayOff: data.dayOff?.trim() || undefined,
         consultationSlots: data.consultationSlots,
         expertiseFields: data.expertiseFields || [],
-        academicQualifications: data.academicQualifications,
+        academicQualifications: Array.isArray(data.academicQualifications)
+          ? sortQualifications(
+              data.academicQualifications,
+              (q: any) => q.degree || "",
+              (q: any) => q.passingYear || q.year || "",
+            )
+          : data.academicQualifications,
         linkedInUrl: data.linkedInUrl?.trim() || undefined,
         personalWebsiteUrl: data.personalWebsiteUrl?.trim() || undefined,
       },
@@ -192,8 +199,17 @@ export const updateTeacherProfileData = async (
 
   if (data.expertiseFields !== undefined)
     profileUpdateData.expertiseFields = data.expertiseFields;
-  if (data.academicQualifications !== undefined)
-    profileUpdateData.academicQualifications = data.academicQualifications;
+  if (data.academicQualifications !== undefined) {
+    profileUpdateData.academicQualifications = Array.isArray(
+      data.academicQualifications,
+    )
+      ? sortQualifications(
+          data.academicQualifications,
+          (q: any) => q.degree || "",
+          (q: any) => q.passingYear || q.year || "",
+        )
+      : data.academicQualifications;
+  }
   if (data.linkedInUrl !== undefined)
     profileUpdateData.linkedInUrl = data.linkedInUrl;
   if (data.personalWebsiteUrl !== undefined)
