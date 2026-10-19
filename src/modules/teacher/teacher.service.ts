@@ -158,16 +158,20 @@ export const updateTeacherProfileData = async (
 ) => {
   // 1. Update Core User Data
   const userUpdateData: Record<string, any> = {};
-  if (data.name) userUpdateData.name = data.name;
+  if (data.name) userUpdateData.name = data.name.trim();
   if (data.phoneNumber !== undefined)
-    userUpdateData.phoneNumber = data.phoneNumber;
+    userUpdateData.phoneNumber = data.phoneNumber?.trim() || null;
   if (data.bloodGroup !== undefined)
-    userUpdateData.bloodGroup = data.bloodGroup;
+    userUpdateData.bloodGroup = data.bloodGroup || null;
 
   // 2. Update Delegated Teacher Profile Data
   const profileUpdateData: Record<string, any> = {};
-  if (data.designation) profileUpdateData.designation = data.designation;
-  if (data.department) profileUpdateData.department = data.department;
+  if (data.designation) profileUpdateData.designation = data.designation.trim();
+  if (data.administrativeRole !== undefined)
+    profileUpdateData.administrativeRole = data.administrativeRole
+      ? data.administrativeRole.trim()
+      : null;
+  if (data.department) profileUpdateData.department = data.department.trim();
   if (data.faculty !== undefined) profileUpdateData.faculty = data.faculty;
   if (data.officeRoom !== undefined)
     profileUpdateData.officeRoom = data.officeRoom;

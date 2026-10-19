@@ -47,7 +47,9 @@ export const getTeacherProfile = catchAsync(
 
     // Flatten the response
     // The spread operator automatically includes expertiseFields, academicQualifications, etc.
+    const { id: _profileId, ...restProfile } = (userProfile.teacherProfile || {}) as any;
     const formattedProfile = {
+      ...restProfile,
       id: userProfile.id,
       name: userProfile.name,
       email: userProfile.email,
@@ -55,7 +57,6 @@ export const getTeacherProfile = catchAsync(
       phoneNumber: userProfile.phoneNumber,
       bloodGroup: userProfile.bloodGroup,
       role: userProfile.role,
-      ...userProfile.teacherProfile,
     };
 
     res.status(200).json({

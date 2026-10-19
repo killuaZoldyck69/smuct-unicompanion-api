@@ -12,6 +12,8 @@ import {
 } from "../upload/upload.service";
 import { deleteImageFromCloudinary } from "../../lib/cloudinary";
 import { appCache } from "../../lib/cache";
+import * as teacherService from "../teacher/teacher.service";
+import { UpdateTeacherPayload } from "../teacher/teacher.schema";
 
 const DEPARTMENT_ALIASES: Record<string, string[]> = {
   CSE: ["computer science and engineering", "cse", "computer science"],
@@ -255,6 +257,26 @@ export const updateTeacherPositionService = async (
   appCache.delPattern(/^directory:teachers/);
 
   return await userRepository.updateTeacherProfileByUserId(id, updateData);
+};
+
+export const adminUpdateTeacherProfileService = async (
+  id: string,
+  payload: UpdateTeacherPayload,
+) => {
+  const user = await userRepository.findUserWithTeacherProfile(id);
+
+  if (!user) {
+    throw new AppError("User not found.", 404);
+  }
+
+  if (user.role !== "TEACHER" || !user.teacherProfile) {
+    throw new AppError(
+      "This action can only be performed on faculty accounts.",
+      400,
+    );
+  }
+
+  return await teacherService.updateTeacherProfileData(id, payload);
 };
 
 export const updateUserProfileImageService = async (

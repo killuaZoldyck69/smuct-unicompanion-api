@@ -91,8 +91,10 @@ export const findTeacherUserById = async (userId: string) => {
       phoneNumber: true,
       bloodGroup: true,
       role: true,
+      isRestricted: true,
       teacherProfile: {
         select: {
+          id: true,
           teacherId: true,
           designation: true,
           administrativeRole: true,

@@ -4,9 +4,11 @@ import { BLOOD_GROUP_VALUES } from "../../constants/enums";
 export const academicQualificationItemSchema = z.object({
   id: z.string().optional(),
   degree: z.string().trim().max(100).optional(),
-  field: z.string().trim().min(1, "Field is required").max(150),
-  institution: z.string().trim().min(1, "Institution is required").max(200),
-  passingYear: z.union([z.string().trim().max(10), z.number()]).optional(),
+  field: z.string().trim().max(150).optional().nullable(),
+  institution: z.string().trim().max(200).optional().nullable(),
+  passingYear: z.union([z.string().trim().max(10), z.number()]).optional().nullable(),
+  year: z.union([z.string().trim().max(10), z.number()]).optional().nullable(),
+  honors: z.string().optional().nullable(),
 });
 
 const urlSanitizer = z
@@ -129,9 +131,10 @@ export type RegisterTeacherPayload = z.infer<
 export const updateTeacherProfileSchema = z.object({
   body: z.object({
     name: z.string().trim().min(2).max(100).optional(),
-    phoneNumber: z.string().trim().max(25).optional(),
-    bloodGroup: z.enum(BLOOD_GROUP_VALUES).optional(),
+    phoneNumber: z.string().trim().max(25).nullable().optional(),
+    bloodGroup: z.enum(BLOOD_GROUP_VALUES).nullable().optional(),
     designation: z.string().trim().max(100).optional(),
+    administrativeRole: z.string().trim().max(100).nullable().optional(),
     department: z.string().trim().max(100).optional(),
     faculty: z.string().trim().max(100).optional(),
     officeRoom: z

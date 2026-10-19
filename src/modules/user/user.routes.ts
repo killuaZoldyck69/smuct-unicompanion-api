@@ -12,12 +12,14 @@ import {
   restrictUserSchema,
   updateTeacherPositionSchema,
 } from "./user.schema";
+import { updateTeacherProfileSchema } from "../teacher/teacher.schema";
 import {
   getAllUsers,
   deleteUser,
   restrictUser,
   updateStudentRole,
   updateTeacherPosition,
+  adminUpdateTeacherProfile,
   updateUserProfileImage,
   runMaintenanceCleanup,
 } from "./user.controller";
@@ -78,6 +80,15 @@ router.patch(
   requireAdmin,
   validateRequest(updateTeacherPositionSchema),
   updateTeacherPosition,
+);
+
+// PATCH /api/users/:id/teacher-profile - Full Teacher Profile Edit (Admin Only)
+router.patch(
+  "/:id/teacher-profile",
+  requireAuth,
+  requireAdmin,
+  validateRequest(updateTeacherProfileSchema),
+  adminUpdateTeacherProfile,
 );
 
 export const userRoutes = router;
