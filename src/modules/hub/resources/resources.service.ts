@@ -14,8 +14,8 @@ export const createResourceService = async (
     throw new AppError("You are not a member of this hub", 403);
   }
 
-  // Official materials can only be uploaded by Teacher, CR, or TA
-  if (!data.isStudentNote && !["TEACHER", "CR", "TA"].includes(role)) {
+  // Official materials can only be uploaded by Teacher or CR
+  if (!data.isStudentNote && !["TEACHER", "CR"].includes(role)) {
     throw new AppError(
       "Only Teachers and CRs can upload official course materials. As a student, please post under Student Shared Resources.",
       403,
@@ -44,7 +44,7 @@ export const deleteResourceService = async (
 
   const role = await getUserHubRole(userId, hubId);
   const isUploader = resource.uploaderId === userId;
-  const isPrivileged = role && ["TEACHER", "CR", "TA"].includes(role);
+  const isPrivileged = role && ["TEACHER", "CR"].includes(role);
 
   if (!isUploader && !isPrivileged) {
     throw new AppError("You do not have permission to delete this resource", 403);

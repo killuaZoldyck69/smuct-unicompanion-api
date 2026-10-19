@@ -139,7 +139,6 @@ model StudentProfile {
   currentTerm     String? // e.g. "Fall 2026"
 
   isCR Boolean @default(false)
-  isTA Boolean @default(false)
 
   skills             String[]
   linkedInUrl        String?

@@ -95,12 +95,10 @@ export const getAllUsersService = async (query?: GetUsersQuery) => {
         }
       }
 
-      // 3. Filter by Student Role Tags (CR / TA)
+      // 3. Filter by Student Role Tags (CR)
       if (role === "STUDENT" && tag && tag !== "ALL") {
         if (tag === "CR") {
           conditions.push({ studentProfile: { isCR: true } });
-        } else if (tag === "TA") {
-          conditions.push({ studentProfile: { isTA: true } });
         }
       }
 
@@ -194,10 +192,8 @@ export const updateStudentRoleService = async (
   let updateData = {};
   if (action === "MAKE_CR") {
     updateData = { isCR: true };
-  } else if (action === "MAKE_TA") {
-    updateData = { isTA: true };
   } else if (action === "REMOVE_ROLE") {
-    updateData = { isCR: false, isTA: false };
+    updateData = { isCR: false };
   }
 
   // Invalidate in-memory user list cache

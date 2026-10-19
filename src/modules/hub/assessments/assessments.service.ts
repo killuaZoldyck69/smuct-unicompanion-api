@@ -14,7 +14,7 @@ export const createAssessment = async (
   hubId: string,
   data: CreateAssessmentPayload,
 ) => {
-  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
   return await assessmentsRepository.createAssessment(userId, hubId, data);
 };
 
@@ -45,7 +45,7 @@ export const submitAssessment = async (
   const assessment = await assessmentsRepository.findAssessmentById(assessmentId);
   if (!assessment) throw new AppError("Assessment not found", 404);
 
-  await verifyHubRole(userId, assessment.hubId, ["STUDENT", "CR", "TA"]);
+  await verifyHubRole(userId, assessment.hubId, ["STUDENT", "CR"]);
 
   const isLate = new Date() > new Date(assessment.deadline);
 
@@ -140,7 +140,7 @@ export const updateAssessment = async (
   const assessment = await assessmentsRepository.findAssessmentById(assessmentId);
   if (!assessment) throw new AppError("Assessment not found", 404);
 
-  await verifyHubRole(userId, assessment.hubId, ["TEACHER", "CR", "TA"]);
+  await verifyHubRole(userId, assessment.hubId, ["TEACHER", "CR"]);
 
   return await assessmentsRepository.updateAssessment(assessmentId, data);
 };
@@ -152,7 +152,7 @@ export const deleteAssessment = async (
   const assessment = await assessmentsRepository.findAssessmentById(assessmentId);
   if (!assessment) throw new AppError("Assessment not found", 404);
 
-  await verifyHubRole(userId, assessment.hubId, ["TEACHER", "CR", "TA"]);
+  await verifyHubRole(userId, assessment.hubId, ["TEACHER", "CR"]);
 
   return await assessmentsRepository.deleteAssessment(assessmentId);
 };

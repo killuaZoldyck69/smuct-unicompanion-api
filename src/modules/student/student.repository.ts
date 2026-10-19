@@ -29,7 +29,6 @@ export const createStudentProfileWithRole = async (
         section: data.section,
         currentTerm: data.currentTerm,
         isCR: false,
-        isTA: false,
       },
     });
   });
@@ -68,7 +67,6 @@ export const findStudentUserById = async (userId: string) => {
           section: true,
           currentTerm: true,
           isCR: true,
-          isTA: true,
           skills: true,
           linkedInUrl: true,
           personalWebsiteUrl: true,

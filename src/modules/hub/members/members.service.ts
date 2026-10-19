@@ -27,7 +27,6 @@ export const getHubMembersService = async (userId: string, hubId: string) => {
   await verifyMembershipRole(userId, hubId, [
     "TEACHER",
     "CR",
-    "TA",
     "STUDENT",
   ]);
 
@@ -50,7 +49,6 @@ export const updateMemberRoleService = async (
   const requester = await verifyMembershipRole(requesterUserId, hubId, [
     "TEACHER",
     "CR",
-    "TA",
   ]);
 
   const targetMember = await membersRepo.findMemberByHubAndId(hubId, memberId);
@@ -58,19 +56,18 @@ export const updateMemberRoleService = async (
     throw new AppError("Member not found in this course hub.", 404);
   }
 
-  const isRequesterLeadershipOnly =
-    requester.role === "CR" || requester.role === "TA";
+  const isRequesterLeadershipOnly = requester.role === "CR";
 
   if (isRequesterLeadershipOnly && targetMember.role === "TEACHER") {
     throw new AppError(
-      "Class Representatives and TAs cannot modify Teacher roles.",
+      "Class Representatives cannot modify Teacher roles.",
       403,
     );
   }
 
   if (isRequesterLeadershipOnly && newRole === "TEACHER") {
     throw new AppError(
-      "Class Representatives and TAs cannot assign Teacher roles.",
+      "Class Representatives cannot assign Teacher roles.",
       403,
     );
   }
@@ -97,15 +94,13 @@ export const removeMemberService = async (
     const requester = await verifyMembershipRole(requesterUserId, hubId, [
       "TEACHER",
       "CR",
-      "TA",
     ]);
 
-    const isRequesterLeadershipOnly =
-      requester.role === "CR" || requester.role === "TA";
+    const isRequesterLeadershipOnly = requester.role === "CR";
 
     if (isRequesterLeadershipOnly && targetMember.role === "TEACHER") {
       throw new AppError(
-        "Class Representatives and TAs cannot remove Teachers from the hub.",
+        "Class Representatives cannot remove Teachers from the hub.",
         403,
       );
     }

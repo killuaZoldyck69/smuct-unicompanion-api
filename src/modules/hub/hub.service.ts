@@ -166,7 +166,7 @@ export const archiveHubService = async (
   hubId: string,
   isArchived: boolean,
 ) => {
-  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
   const updated = await hubRepository.updateHubArchiveStatus(hubId, isArchived);
   appCache.delPattern(new RegExp(`^hub:${hubId}`));
   return updated;
@@ -178,7 +178,7 @@ export const toggleLiveClassService = async (
   isClassLive: boolean,
   meetUrl?: string | null,
 ) => {
-  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA"]);
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
   const updated = await hubRepository.updateHubLiveClass(hubId, isClassLive, meetUrl);
   appCache.delPattern(new RegExp(`^hub:${hubId}`));
   return updated;

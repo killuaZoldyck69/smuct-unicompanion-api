@@ -40,7 +40,6 @@ export const getHubDetails = catchAsync(async (req: Request, res: Response) => {
   await verifyHubRole(req.user.id, req.params.id as string, [
     "TEACHER",
     "CR",
-    "TA",
     "STUDENT",
   ]);
   const hub = await hubService.getHubDetailsService(req.params.id as string);

@@ -26,7 +26,6 @@ export const updateAnnouncement = async (
   const member = await verifyHubRole(userId, hubId, [
     "TEACHER",
     "CR",
-    "TA",
     "STUDENT",
   ]);
   const announcement = await contentRepository.findAnnouncementById(
@@ -53,7 +52,6 @@ export const deleteAnnouncement = async (
   const member = await verifyHubRole(userId, hubId, [
     "TEACHER",
     "CR",
-    "TA",
     "STUDENT",
   ]);
   const announcement = await contentRepository.findAnnouncementById(
@@ -88,7 +86,7 @@ export const createAnnouncementComment = async (
   announcementId: string,
   content: string,
 ) => {
-  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT"]);
   return await contentRepository.createAnnouncementComment(
     userId,
     announcementId,
@@ -101,7 +99,7 @@ export const createDiscussion = async (
   hubId: string,
   data: CreateDiscussionPayload,
 ) => {
-  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT"]);
   return await contentRepository.createHubDiscussion(userId, hubId, data);
 };
 
@@ -111,7 +109,7 @@ export const replyToDiscussion = async (
   discussionId: string,
   content: string,
 ) => {
-  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT"]);
   return await contentRepository.createDiscussionReply(
     userId,
     discussionId,
@@ -142,7 +140,7 @@ export const commentOnAnnouncement = async (
       throw new AppError("Replies can only be made to top-level comments", 400);
     }
   } else {
-    await verifyHubRole(userId, hubId, ["TEACHER", "CR", "TA", "STUDENT"]);
+    await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT"]);
   }
 
   const comment = await contentRepository.createAnnouncementComment(

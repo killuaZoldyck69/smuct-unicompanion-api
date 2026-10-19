@@ -31,7 +31,6 @@ export const findUsersWithProfiles = async (
           section: true,
           currentTerm: true,
           isCR: true,
-          isTA: true,
           skills: true,
           linkedInUrl: true,
           personalWebsiteUrl: true,

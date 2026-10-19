@@ -22,7 +22,7 @@ export const submitReview = async (
   hubId: string,
   data: SubmitReviewPayload,
 ) => {
-  await verifyHubRole(userId, hubId, ["STUDENT", "CR", "TA"]);
+  await verifyHubRole(userId, hubId, ["STUDENT", "CR"]);
 
   const hub = await reviewsRepository.findHubById(hubId);
 
@@ -65,7 +65,7 @@ export const editReview = async (
   hubId: string,
   data: EditReviewPayload,
 ) => {
-  await verifyHubRole(userId, hubId, ["STUDENT", "CR", "TA"]);
+  await verifyHubRole(userId, hubId, ["STUDENT", "CR"]);
 
   const existingReview = await reviewsRepository.findExistingReview(
     hubId,
@@ -83,7 +83,7 @@ export const deleteReview = async (
   userId: string,
   hubId: string,
 ) => {
-  await verifyHubRole(userId, hubId, ["STUDENT", "CR", "TA"]);
+  await verifyHubRole(userId, hubId, ["STUDENT", "CR"]);
 
   const existingReview = await reviewsRepository.findExistingReview(
     hubId,
