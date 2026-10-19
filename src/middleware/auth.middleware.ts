@@ -36,6 +36,15 @@ export const requireAuth = async (
       return;
     }
 
+    // Defense-in-depth: Block restricted accounts from accessing any authenticated route
+    if (session.user.isRestricted) {
+      res.status(403).json({
+        success: false,
+        error: "Forbidden. Your account has been restricted by an administrator.",
+      });
+      return;
+    }
+
     req.user = session.user;
     next();
   } catch (error) {

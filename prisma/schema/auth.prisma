@@ -32,6 +32,7 @@ model User {
   role          SystemRole  @default(STUDENT)
   phoneNumber   String      @default("")
   bloodGroup    BloodGroup?
+  isRestricted  Boolean     @default(false)
 
   // Better Auth Relations
   sessions Session[]
@@ -155,6 +156,8 @@ model TeacherProfile {
   designation String
   department  String
   faculty     String
+
+  administrativeRole String? // e.g. "HOD", "Coordinator", "Dean"
 
   officeRoom        String?
   consultationHours String?

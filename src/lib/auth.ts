@@ -25,6 +25,7 @@ export const auth = betterAuth({
       role: { type: "string", required: true, defaultValue: "STUDENT", input: false },
       phoneNumber: { type: "string", required: false },
       bloodGroup: { type: "string", required: false },
+      isRestricted: { type: "boolean", required: false, defaultValue: false, input: false },
     },
   },
 

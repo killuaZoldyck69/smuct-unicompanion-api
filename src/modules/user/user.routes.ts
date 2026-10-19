@@ -6,11 +6,18 @@ import {
   singleUpload,
   normalizeSingleFile,
 } from "../../middleware/upload.middleware";
-import { updateRoleSchema, getUsersQuerySchema } from "./user.schema";
+import {
+  updateRoleSchema,
+  getUsersQuerySchema,
+  restrictUserSchema,
+  updateTeacherPositionSchema,
+} from "./user.schema";
 import {
   getAllUsers,
   deleteUser,
+  restrictUser,
   updateStudentRole,
+  updateTeacherPosition,
   updateUserProfileImage,
   runMaintenanceCleanup,
 } from "./user.controller";
@@ -43,8 +50,17 @@ router.get(
   getAllUsers,
 );
 
-// DELETE /api/users/:id - Permanently Delete User (Admin Only)
+// DELETE /api/users/:id - Restrict User (Admin Only, soft restriction preventing re-registration)
 router.delete("/:id", requireAuth, requireAdmin, deleteUser);
+
+// PATCH /api/users/:id/restrict - Restrict or Unrestrict User (Admin Only)
+router.patch(
+  "/:id/restrict",
+  requireAuth,
+  requireAdmin,
+  validateRequest(restrictUserSchema),
+  restrictUser,
+);
 
 // PATCH /api/users/:id/role - Update Student Special Role (Admin Only)
 router.patch(
@@ -53,6 +69,15 @@ router.patch(
   requireAdmin,
   validateRequest(updateRoleSchema),
   updateStudentRole,
+);
+
+// PATCH /api/users/:id/teacher-position - Update Teacher Designation & Leadership Role (Admin Only)
+router.patch(
+  "/:id/teacher-position",
+  requireAuth,
+  requireAdmin,
+  validateRequest(updateTeacherPositionSchema),
+  updateTeacherPosition,
 );
 
 export const userRoutes = router;

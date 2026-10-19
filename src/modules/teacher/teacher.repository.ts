@@ -95,6 +95,7 @@ export const findTeacherUserById = async (userId: string) => {
         select: {
           teacherId: true,
           designation: true,
+          administrativeRole: true,
           department: true,
           faculty: true,
           officeRoom: true,

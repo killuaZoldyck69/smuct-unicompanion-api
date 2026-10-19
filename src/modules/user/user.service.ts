@@ -1,6 +1,10 @@
 import { AppError } from "../../utils/AppError";
 import * as userRepository from "./user.repository";
-import { UpdateRolePayload, GetUsersQuery } from "./user.schema";
+import {
+  UpdateRolePayload,
+  GetUsersQuery,
+  UpdateTeacherPositionPayload,
+} from "./user.schema";
 import {
   uploadSingleImageService,
   MulterFile,
@@ -143,9 +147,13 @@ export const getAllUsersService = async (query?: GetUsersQuery) => {
   );
 };
 
-export const deleteUserService = async (id: string, callerId?: string) => {
+export const restrictUserService = async (
+  id: string,
+  callerId?: string,
+  isRestricted: boolean = true,
+) => {
   if (callerId && id === callerId) {
-    throw new AppError("Administrators cannot delete their own account.", 400);
+    throw new AppError("Administrators cannot restrict their own account.", 400);
   }
 
   const existingUser = await userRepository.findUserById(id);
@@ -154,20 +162,30 @@ export const deleteUserService = async (id: string, callerId?: string) => {
     throw new AppError("User not found.", 404);
   }
 
-  // Cascades automatically to StudentProfile, TeacherProfile, Session, Account, etc.
-  const result = await userRepository.deleteUserById(id);
+  if (existingUser.role === "ADMIN") {
+    throw new AppError("Administrator accounts cannot be restricted.", 403);
+  }
+
+  // Update restriction status
+  const updatedUser = await userRepository.setUserRestrictedById(
+    id,
+    isRestricted,
+  );
+
+  // If restricting, terminate all active sessions so the user is immediately logged out
+  if (isRestricted) {
+    await userRepository.revokeAllUserSessions(id);
+  }
 
   // Invalidate in-memory user list cache
   appCache.delPattern(/^users:list/);
 
-  // Storage cleanup optimization: delete user profile image from Cloudinary
-  if (existingUser.image) {
-    deleteImageFromCloudinary(existingUser.image).catch((err) =>
-      console.warn("[Cloudinary] Failed to clean up user image:", err)
-    );
-  }
+  return updatedUser;
+};
 
-  return result;
+export const deleteUserService = async (id: string, callerId?: string) => {
+  // Account restriction instead of permanent deletion to prevent spam re-registration
+  return await restrictUserService(id, callerId, true);
 };
 
 export const updateStudentRoleService = async (
@@ -201,6 +219,42 @@ export const updateStudentRoleService = async (
 
   // Apply the update to the delegated StudentProfile
   return await userRepository.updateStudentProfileByUserId(id, updateData);
+};
+
+export const updateTeacherPositionService = async (
+  id: string,
+  payload: UpdateTeacherPositionPayload,
+) => {
+  const user = await userRepository.findUserWithTeacherProfile(id);
+
+  if (!user) {
+    throw new AppError("User not found.", 404);
+  }
+
+  if (user.role !== "TEACHER" || !user.teacherProfile) {
+    throw new AppError(
+      "This action can only be performed on faculty accounts.",
+      400,
+    );
+  }
+
+  const updateData: { designation?: string; administrativeRole?: string | null } = {};
+
+  if (payload.designation !== undefined) {
+    updateData.designation = payload.designation.trim();
+  }
+
+  if (payload.administrativeRole !== undefined) {
+    updateData.administrativeRole = payload.administrativeRole
+      ? payload.administrativeRole.trim()
+      : null;
+  }
+
+  // Invalidate in-memory user list & directory caches
+  appCache.delPattern(/^users:list/);
+  appCache.delPattern(/^directory:teachers/);
+
+  return await userRepository.updateTeacherProfileByUserId(id, updateData);
 };
 
 export const updateUserProfileImageService = async (

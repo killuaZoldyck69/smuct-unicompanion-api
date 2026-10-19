@@ -20,15 +20,36 @@ export const getAllUsers = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+export const restrictUser = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const callerId = req.user?.id;
+  const isRestricted = req.body?.isRestricted !== false;
+
+  const result = await userService.restrictUserService(
+    id,
+    callerId,
+    isRestricted,
+  );
+
+  res.status(200).json({
+    success: true,
+    message: isRestricted
+      ? "User account has been restricted successfully."
+      : "User account restriction has been lifted.",
+    data: result,
+  });
+});
+
 export const deleteUser = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
   const callerId = req.user?.id;
 
-  await userService.deleteUserService(id, callerId);
+  const result = await userService.deleteUserService(id, callerId);
 
   res.status(200).json({
     success: true,
-    message: "User and associated profiles deleted successfully.",
+    message: "User account has been restricted successfully.",
+    data: result,
   });
 });
 
@@ -45,6 +66,24 @@ export const updateStudentRole = catchAsync(
     res.status(200).json({
       success: true,
       message: `Student role updated successfully (${action}).`,
+      data: updatedProfile,
+    });
+  },
+);
+
+export const updateTeacherPosition = catchAsync(
+  async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const { designation, administrativeRole } = req.body;
+
+    const updatedProfile = await userService.updateTeacherPositionService(id, {
+      designation,
+      administrativeRole,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Teacher position and role updated successfully.",
       data: updatedProfile,
     });
   },

@@ -63,6 +63,7 @@ export const findTeachersDirectory = async (
         userId: true,
         teacherId: true,
         designation: true,
+        administrativeRole: true,
         department: true,
         faculty: true,
         officeRoom: true,

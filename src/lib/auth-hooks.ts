@@ -32,12 +32,19 @@ async function handleSignUpSecurity(body?: Record<string, any>): Promise<void> {
 
   if (!existingUser) return;
 
-  // An email is considered permanently taken ONLY if the user has an active/completed profile
+  if (existingUser.isRestricted) {
+    throw new APIError("FORBIDDEN", {
+      message: "This account has been restricted by an administrator. Please contact support.",
+    });
+  }
+
+  // An email is considered permanently taken ONLY if the user has an active/completed profile or is restricted
   const isProfileComplete =
     existingUser.studentProfile !== null ||
     existingUser.teacherProfile !== null ||
     existingUser.role === "TEACHER" ||
-    existingUser.role === "ADMIN";
+    existingUser.role === "ADMIN" ||
+    Boolean(existingUser.isRestricted);
 
   if (isProfileComplete) {
     throw new APIError("BAD_REQUEST", {
@@ -93,12 +100,19 @@ async function handlePasswordResetRequest(body?: Record<string, any>): Promise<v
       id: true,
       email: true,
       emailVerified: true,
+      isRestricted: true,
     },
   });
 
   if (!existingUser) {
     throw new APIError("BAD_REQUEST", {
       message: "No account found with this email address. Please register or check for typos.",
+    });
+  }
+
+  if (existingUser.isRestricted) {
+    throw new APIError("FORBIDDEN", {
+      message: "Your account has been restricted by an administrator. Please contact support.",
     });
   }
 
@@ -194,5 +208,30 @@ export const authBeforeHook = createAuthMiddleware(async (ctx) => {
 
   if (isEmailVerificationOtpRequest) {
     await handleVerificationOtpRequest(body);
+  }
+
+  // 5. Restrict sign-in for banned/restricted accounts
+  const isSignInPath =
+    cleanPath === "/sign-in/email" ||
+    cleanPath.endsWith("/sign-in/email") ||
+    cleanPath === "/sign-in" ||
+    cleanPath.endsWith("/sign-in");
+
+  if (isSignInPath) {
+    const email = body?.email;
+    if (email && typeof email === "string") {
+      const user = await prisma.user.findFirst({
+        where: {
+          email: { equals: email.toLowerCase().trim(), mode: "insensitive" },
+        },
+        select: { isRestricted: true },
+      });
+      if (user?.isRestricted) {
+        throw new APIError("FORBIDDEN", {
+          message:
+            "Your account has been restricted by an administrator. Please contact support.",
+        });
+      }
+    }
   }
 });

@@ -18,6 +18,7 @@ export const findUsersWithProfiles = async (
       role: true,
       phoneNumber: true,
       bloodGroup: true,
+      isRestricted: true,
       createdAt: true,
       studentProfile: {
         select: {
@@ -41,6 +42,7 @@ export const findUsersWithProfiles = async (
           id: true,
           teacherId: true,
           designation: true,
+          administrativeRole: true,
           department: true,
           faculty: true,
           officeRoom: true,
@@ -78,6 +80,13 @@ export const findUserWithStudentProfile = async (id: string) => {
   });
 };
 
+export const findUserWithTeacherProfile = async (id: string) => {
+  return await prisma.user.findUnique({
+    where: { id },
+    include: { teacherProfile: true },
+  });
+};
+
 export const deleteUserById = async (id: string) => {
   return await prisma.user.delete({
     where: { id },
@@ -94,6 +103,16 @@ export const updateStudentProfileByUserId = async (
   });
 };
 
+export const updateTeacherProfileByUserId = async (
+  userId: string,
+  data: Record<string, any>,
+) => {
+  return await prisma.teacherProfile.update({
+    where: { userId },
+    data,
+  });
+};
+
 export const updateUserImageById = async (id: string, image: string) => {
   return await prisma.user.update({
     where: { id },
@@ -105,6 +124,26 @@ export const updateUserImageById = async (id: string, image: string) => {
       image: true,
       role: true,
     },
+  });
+};
+
+export const setUserRestrictedById = async (id: string, isRestricted: boolean) => {
+  return await prisma.user.update({
+    where: { id },
+    data: { isRestricted },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      isRestricted: true,
+    },
+  });
+};
+
+export const revokeAllUserSessions = async (userId: string) => {
+  return await prisma.session.deleteMany({
+    where: { userId },
   });
 };
 
