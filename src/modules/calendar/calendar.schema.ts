@@ -49,10 +49,16 @@ export const updateEventInputSchema = z.object({
   remarks: z.string().nullable().optional(),
 });
 
+export const SMUCT_SEMESTERS = ["Summer", "Winter", "Spring", "Fall"] as const;
+export type SmuctSemester = (typeof SMUCT_SEMESTERS)[number];
+
 export const createCalendarSchema = z.object({
   body: z.object({
     title: z.string().min(1, "Calendar title is required"),
-    semester: z.string().min(1, "Semester is required (e.g. Winter 2026)"),
+    semester: z.enum(SMUCT_SEMESTERS, {
+      message: "Semester must be one of: Summer, Winter, Spring, Fall",
+    }),
+    academicYear: z.coerce.number().int().min(2000).max(2100).default(2026),
     targetFaculties: z.array(z.string()).default([]),
     targetPrograms: z.array(z.string()).default([]),
     semesterDuration: z.string().nullable().optional(),
@@ -65,7 +71,8 @@ export const createCalendarSchema = z.object({
 export const updateCalendarSchema = z.object({
   body: z.object({
     title: z.string().min(1, "Calendar title is required").optional(),
-    semester: z.string().min(1, "Semester is required").optional(),
+    semester: z.enum(SMUCT_SEMESTERS).optional(),
+    academicYear: z.coerce.number().int().min(2000).max(2100).optional(),
     targetFaculties: z.array(z.string()).optional(),
     targetPrograms: z.array(z.string()).optional(),
     semesterDuration: z.string().nullable().optional(),

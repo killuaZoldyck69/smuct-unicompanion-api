@@ -130,7 +130,8 @@ Mid-term Examination,Offline Mode,EXAM,2026-09-30,2026-10-15,8,false,true,Offlin
   console.log("  [9/9] Testing Calendar Clone & Duplicate Data Transformation...");
   const sampleOriginal = {
     title: "Summer 2026",
-    semester: "Summer 2026",
+    semester: "Summer",
+    academicYear: 2026,
     events: [
       {
         title: "Class Start",
@@ -147,7 +148,7 @@ Mid-term Examination,Offline Mode,EXAM,2026-09-30,2026-10-15,8,false,true,Offlin
 
   const clonedData = {
     title: `${sampleOriginal.title} (Copy)`,
-    semester: `${sampleOriginal.semester} (Copy)`,
+    semester: sampleOriginal.semester,
     status: "DRAFT",
     events: sampleOriginal.events.map((e) => ({ ...e })),
   };

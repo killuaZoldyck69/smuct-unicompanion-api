@@ -70,6 +70,7 @@ export const createAcademicCalendar = async (
     data: {
       title: data.title,
       semester: data.semester,
+      academicYear: data.academicYear || 2026,
       status: data.status || "DRAFT",
       isActive: true,
       targetFaculties: data.targetFaculties || [],
@@ -110,6 +111,7 @@ export const updateAcademicCalendar = async (
     data: {
       ...(data.title !== undefined && { title: data.title }),
       ...(data.semester !== undefined && { semester: data.semester }),
+      ...(data.academicYear !== undefined && { academicYear: data.academicYear }),
       ...(data.targetFaculties !== undefined && {
         targetFaculties: data.targetFaculties,
       }),
@@ -318,7 +320,8 @@ export const duplicateAcademicCalendar = async (
   return await prisma.academicCalendar.create({
     data: {
       title: `${original.title} (Copy)`,
-      semester: `${original.semester} (Copy)`,
+      semester: original.semester,
+      academicYear: original.academicYear,
       status: "DRAFT",
       isActive: true,
       targetFaculties: original.targetFaculties,

@@ -28,6 +28,7 @@ model AcademicCalendar {
   id                String          @id @default(uuid())
   title             String
   semester          String
+  academicYear      Int             @default(2026)
   status            CalendarStatus  @default(DRAFT)
   isActive          Boolean         @default(true)
   targetFaculties   String[]
