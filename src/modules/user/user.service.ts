@@ -112,18 +112,41 @@ export const getAllUsersService = async (query?: GetUsersQuery) => {
 
       // 4. Multi-field Search (name, email, phone, studentId, teacherId, department, designation)
       if (search) {
-        conditions.push({
-          OR: [
-            { name: { contains: search, mode: "insensitive" } },
-            { email: { contains: search, mode: "insensitive" } },
-            { phoneNumber: { contains: search, mode: "insensitive" } },
-            { studentProfile: { studentId: { contains: search, mode: "insensitive" } } },
-            { studentProfile: { department: { contains: search, mode: "insensitive" } } },
-            { teacherProfile: { teacherId: { contains: search, mode: "insensitive" } } },
-            { teacherProfile: { department: { contains: search, mode: "insensitive" } } },
-            { teacherProfile: { designation: { contains: search, mode: "insensitive" } } },
-          ],
-        });
+        if (role === "STUDENT") {
+          conditions.push({
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { email: { contains: search, mode: "insensitive" } },
+              { phoneNumber: { contains: search, mode: "insensitive" } },
+              { studentProfile: { studentId: { contains: search, mode: "insensitive" } } },
+              { studentProfile: { department: { contains: search, mode: "insensitive" } } },
+            ],
+          });
+        } else if (role === "TEACHER") {
+          conditions.push({
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { email: { contains: search, mode: "insensitive" } },
+              { phoneNumber: { contains: search, mode: "insensitive" } },
+              { teacherProfile: { teacherId: { contains: search, mode: "insensitive" } } },
+              { teacherProfile: { department: { contains: search, mode: "insensitive" } } },
+              { teacherProfile: { designation: { contains: search, mode: "insensitive" } } },
+            ],
+          });
+        } else {
+          conditions.push({
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { email: { contains: search, mode: "insensitive" } },
+              { phoneNumber: { contains: search, mode: "insensitive" } },
+              { studentProfile: { studentId: { contains: search, mode: "insensitive" } } },
+              { studentProfile: { department: { contains: search, mode: "insensitive" } } },
+              { teacherProfile: { teacherId: { contains: search, mode: "insensitive" } } },
+              { teacherProfile: { department: { contains: search, mode: "insensitive" } } },
+              { teacherProfile: { designation: { contains: search, mode: "insensitive" } } },
+            ],
+          });
+        }
       }
 
       const where: any = {};
@@ -181,8 +204,10 @@ export const restrictUserService = async (
     await userRepository.revokeAllUserSessions(id);
   }
 
-  // Invalidate in-memory user list cache
+  // Invalidate in-memory user list & public directory caches
   appCache.delPattern(/^users:list/);
+  appCache.delPattern(/^directory:students/);
+  appCache.delPattern(/^directory:teachers/);
 
   return updatedUser;
 };
@@ -203,7 +228,7 @@ export const updateStudentRoleService = async (
     throw new AppError("User not found.", 404);
   }
 
-  if (!user.studentProfile) {
+  if (user.role !== "STUDENT" || !user.studentProfile) {
     throw new AppError(
       "This action can only be performed on student accounts.",
       400,
@@ -218,8 +243,9 @@ export const updateStudentRoleService = async (
     updateData = { isCR: false };
   }
 
-  // Invalidate in-memory user list cache
+  // Invalidate in-memory user list & student directory caches
   appCache.delPattern(/^users:list/);
+  appCache.delPattern(/^directory:students/);
 
   // Apply the update to the delegated StudentProfile
   return await userRepository.updateStudentProfileByUserId(id, updateData);

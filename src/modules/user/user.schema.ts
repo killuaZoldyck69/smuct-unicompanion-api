@@ -34,6 +34,25 @@ export type UpdateTeacherPositionPayload = z.infer<
   typeof updateTeacherPositionSchema
 >["body"];
 
+const urlSanitizer = z
+  .string()
+  .trim()
+  .max(300, "URL must not exceed 300 characters")
+  .transform((val) => {
+    if (!val) return "";
+    return /^https?:\/\//i.test(val) ? val : `https://${val}`;
+  })
+  .pipe(
+    z
+      .string()
+      .url("Must be a valid URL")
+      .refine(
+        (url) => !url || /^https?:\/\//i.test(url),
+        "URL must use http or https protocol",
+      )
+      .or(z.literal("")),
+  );
+
 export const adminUpdateStudentProfileSchema = z.object({
   body: z.object({
     name: z.string().trim().min(1, "Name cannot be empty").optional(),
@@ -49,20 +68,8 @@ export const adminUpdateStudentProfileSchema = z.object({
     currentTerm: z.string().trim().nullable().optional(),
     isCR: z.boolean().optional(),
     skills: z.array(z.string()).optional(),
-    linkedInUrl: z
-      .string()
-      .trim()
-      .url({ message: "Must be a valid URL" })
-      .or(z.literal(""))
-      .nullable()
-      .optional(),
-    personalWebsiteUrl: z
-      .string()
-      .trim()
-      .url({ message: "Must be a valid URL" })
-      .or(z.literal(""))
-      .nullable()
-      .optional(),
+    linkedInUrl: urlSanitizer.optional().nullable(),
+    personalWebsiteUrl: urlSanitizer.optional().nullable(),
   }),
 });
 

@@ -27,9 +27,14 @@ export const globalErrorHandler = (
   else if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === "P2002") {
       statusCode = 409;
-      message = "Duplicate Record Entry";
+      const target = Array.isArray(err.meta?.target)
+        ? err.meta.target.join(", ")
+        : typeof err.meta?.target === "string"
+        ? err.meta.target
+        : "Record";
+      message = `${target} is already registered in the system.`;
       errorSources = [
-        { path: err.meta?.target, message: "This value is already in use." },
+        { path: err.meta?.target, message: `${target} is already in use.` },
       ];
     }
   }
