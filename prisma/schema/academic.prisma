@@ -28,12 +28,12 @@ model AcademicCalendar {
   id                String          @id @default(uuid())
   title             String
   semester          String
-  academicYear      Int             @default(2026)
   status            CalendarStatus  @default(DRAFT)
   isActive          Boolean         @default(true)
-  isGlobal          Boolean         @default(false)
   targetFaculties   String[]
-  targetDepartments String[]
+  targetPrograms    String[]        @default([])
+  semesterDuration  String?
+  targetBatch       String?
   publishedAt       DateTime?
   createdBy         String?
   updatedBy         String?

@@ -251,27 +251,33 @@ const buildUserAudienceConditions = async (userId: string) => {
 
   let userFaculty: string | null = null;
   let userDepartment: string | null = null;
+  let userProgram: string | null = null;
 
   if (user.studentProfile) {
     userFaculty = user.studentProfile.faculty || null;
     userDepartment = user.studentProfile.department;
+    userProgram = user.studentProfile.program || null;
   } else if (user.teacherProfile) {
     userFaculty = user.teacherProfile.faculty || null;
     userDepartment = user.teacherProfile.department;
   }
 
-  const orConditions: any[] = [{ isGlobal: true }];
+  const orConditions: any[] = [
+    {
+      AND: [
+        { targetFaculties: { equals: [] } },
+        { targetPrograms: { equals: [] } },
+      ],
+    },
+  ];
 
   if (userFaculty) {
     orConditions.push({ targetFaculties: { has: userFaculty } });
     orConditions.push({ targetFaculties: { has: userFaculty.toUpperCase() } });
   }
 
-  if (userDepartment) {
-    orConditions.push({ targetDepartments: { has: userDepartment } });
-    orConditions.push({
-      targetDepartments: { has: userDepartment.toUpperCase() },
-    });
+  if (userProgram) {
+    orConditions.push({ targetPrograms: { has: userProgram } });
   }
 
   return { user, orConditions };

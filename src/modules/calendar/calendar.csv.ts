@@ -151,19 +151,37 @@ export function validateIsoDateString(dateStr: string): {
   error?: string;
 } {
   const trimmed = dateStr.trim();
-  const isoRegex = /^(\d{4})-(\d{2})-(\d{2})$/;
-  const match = trimmed.match(isoRegex);
+  const isoRegex = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/;
+  const slashRegex = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/;
 
-  if (!match) {
-    return {
-      valid: false,
-      error: `Invalid date format "${dateStr}". Strict format required: YYYY-MM-DD (e.g. 2026-08-22). Ambiguous formats like DD/MM/YYYY are not allowed.`,
-    };
+  let year: number;
+  let month: number;
+  let day: number;
+
+  const isoMatch = trimmed.match(isoRegex);
+  const slashMatch = trimmed.match(slashRegex);
+
+  if (isoMatch) {
+    year = parseInt(isoMatch[1], 10);
+    month = parseInt(isoMatch[2], 10);
+    day = parseInt(isoMatch[3], 10);
+  } else if (slashMatch) {
+    month = parseInt(slashMatch[1], 10);
+    day = parseInt(slashMatch[2], 10);
+    year = parseInt(slashMatch[3], 10);
+  } else {
+    const parsed = new Date(trimmed);
+    if (!isNaN(parsed.getTime())) {
+      year = parsed.getUTCFullYear();
+      month = parsed.getUTCMonth() + 1;
+      day = parsed.getUTCDate();
+    } else {
+      return {
+        valid: false,
+        error: `Invalid date format "${dateStr}". Supported formats: YYYY-MM-DD or M/D/YYYY (e.g. 2026-08-22 or 8/22/2026).`,
+      };
+    }
   }
-
-  const year = parseInt(match[1], 10);
-  const month = parseInt(match[2], 10);
-  const day = parseInt(match[3], 10);
 
   if (month < 1 || month > 12) {
     return { valid: false, error: `Invalid month "${month}" in date "${dateStr}".` };
@@ -178,7 +196,8 @@ export function validateIsoDateString(dateStr: string): {
     return { valid: false, error: `Calendar date "${dateStr}" does not exist.` };
   }
 
-  return { valid: true, formatted: trimmed };
+  const formatted = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return { valid: true, formatted };
 }
 
 /**

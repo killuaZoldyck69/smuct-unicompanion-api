@@ -53,10 +53,10 @@ export const createCalendarSchema = z.object({
   body: z.object({
     title: z.string().min(1, "Calendar title is required"),
     semester: z.string().min(1, "Semester is required (e.g. Winter 2026)"),
-    academicYear: z.coerce.number().int().min(2000).max(2100).default(2026),
-    isGlobal: z.boolean().default(false),
     targetFaculties: z.array(z.string()).default([]),
-    targetDepartments: z.array(z.string()).default([]),
+    targetPrograms: z.array(z.string()).default([]),
+    semesterDuration: z.string().nullable().optional(),
+    targetBatch: z.string().nullable().optional(),
     status: calendarStatusEnum.default("DRAFT").optional(),
     events: z.array(calendarEventInputSchema).optional().default([]),
   }),
@@ -66,10 +66,10 @@ export const updateCalendarSchema = z.object({
   body: z.object({
     title: z.string().min(1, "Calendar title is required").optional(),
     semester: z.string().min(1, "Semester is required").optional(),
-    academicYear: z.coerce.number().int().min(2000).max(2100).optional(),
-    isGlobal: z.boolean().optional(),
     targetFaculties: z.array(z.string()).optional(),
-    targetDepartments: z.array(z.string()).optional(),
+    targetPrograms: z.array(z.string()).optional(),
+    semesterDuration: z.string().nullable().optional(),
+    targetBatch: z.string().nullable().optional(),
     isActive: z.boolean().optional(),
   }),
 });

@@ -70,12 +70,12 @@ export const createAcademicCalendar = async (
     data: {
       title: data.title,
       semester: data.semester,
-      academicYear: data.academicYear || 2026,
       status: data.status || "DRAFT",
       isActive: true,
-      isGlobal: data.isGlobal ?? false,
       targetFaculties: data.targetFaculties || [],
-      targetDepartments: data.targetDepartments || [],
+      targetPrograms: data.targetPrograms || [],
+      semesterDuration: data.semesterDuration || null,
+      targetBatch: data.targetBatch || null,
       createdBy: userId || null,
       publishedAt: data.status === "PUBLISHED" ? new Date() : null,
       events: {
@@ -110,13 +110,17 @@ export const updateAcademicCalendar = async (
     data: {
       ...(data.title !== undefined && { title: data.title }),
       ...(data.semester !== undefined && { semester: data.semester }),
-      ...(data.academicYear !== undefined && { academicYear: data.academicYear }),
-      ...(data.isGlobal !== undefined && { isGlobal: data.isGlobal }),
       ...(data.targetFaculties !== undefined && {
         targetFaculties: data.targetFaculties,
       }),
-      ...(data.targetDepartments !== undefined && {
-        targetDepartments: data.targetDepartments,
+      ...(data.targetPrograms !== undefined && {
+        targetPrograms: data.targetPrograms,
+      }),
+      ...(data.semesterDuration !== undefined && {
+        semesterDuration: data.semesterDuration,
+      }),
+      ...(data.targetBatch !== undefined && {
+        targetBatch: data.targetBatch,
       }),
       ...(data.isActive !== undefined && { isActive: data.isActive }),
       updatedBy: userId || null,
@@ -315,12 +319,12 @@ export const duplicateAcademicCalendar = async (
     data: {
       title: `${original.title} (Copy)`,
       semester: `${original.semester} (Copy)`,
-      academicYear: original.academicYear,
       status: "DRAFT",
       isActive: true,
-      isGlobal: original.isGlobal,
       targetFaculties: original.targetFaculties,
-      targetDepartments: original.targetDepartments,
+      targetPrograms: original.targetPrograms,
+      semesterDuration: original.semesterDuration,
+      targetBatch: original.targetBatch,
       createdBy: userId || null,
       events: {
         create: original.events.map((ev) => ({
