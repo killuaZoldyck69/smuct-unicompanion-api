@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BLOOD_GROUP_VALUES } from "../../constants/enums";
 
 export const updateRoleSchema = z.object({
   body: z.object({
@@ -31,6 +32,42 @@ export const updateTeacherPositionSchema = z.object({
 
 export type UpdateTeacherPositionPayload = z.infer<
   typeof updateTeacherPositionSchema
+>["body"];
+
+export const adminUpdateStudentProfileSchema = z.object({
+  body: z.object({
+    name: z.string().trim().min(1, "Name cannot be empty").optional(),
+    phoneNumber: z.string().trim().nullable().optional(),
+    bloodGroup: z.enum(BLOOD_GROUP_VALUES).nullable().optional(),
+    studentId: z.string().trim().min(1, "Student ID cannot be empty").optional(),
+    faculty: z.string().trim().optional(),
+    department: z.string().trim().optional(),
+    program: z.string().trim().optional(),
+    batch: z.string().trim().optional(),
+    currentSemester: z.number().int().min(1).max(12).optional(),
+    section: z.string().trim().optional(),
+    currentTerm: z.string().trim().nullable().optional(),
+    isCR: z.boolean().optional(),
+    skills: z.array(z.string()).optional(),
+    linkedInUrl: z
+      .string()
+      .trim()
+      .url({ message: "Must be a valid URL" })
+      .or(z.literal(""))
+      .nullable()
+      .optional(),
+    personalWebsiteUrl: z
+      .string()
+      .trim()
+      .url({ message: "Must be a valid URL" })
+      .or(z.literal(""))
+      .nullable()
+      .optional(),
+  }),
+});
+
+export type AdminUpdateStudentProfilePayload = z.infer<
+  typeof adminUpdateStudentProfileSchema
 >["body"];
 
 export const getUsersQuerySchema = z.object({

@@ -11,6 +11,7 @@ import {
   getUsersQuerySchema,
   restrictUserSchema,
   updateTeacherPositionSchema,
+  adminUpdateStudentProfileSchema,
 } from "./user.schema";
 import { updateTeacherProfileSchema } from "../teacher/teacher.schema";
 import {
@@ -20,6 +21,7 @@ import {
   updateStudentRole,
   updateTeacherPosition,
   adminUpdateTeacherProfile,
+  adminUpdateStudentProfile,
   updateUserProfileImage,
   runMaintenanceCleanup,
 } from "./user.controller";
@@ -89,6 +91,15 @@ router.patch(
   requireAdmin,
   validateRequest(updateTeacherProfileSchema),
   adminUpdateTeacherProfile,
+);
+
+// PATCH /api/users/:id/student-profile - Full Student Profile Edit (Admin Only)
+router.patch(
+  "/:id/student-profile",
+  requireAuth,
+  requireAdmin,
+  validateRequest(adminUpdateStudentProfileSchema),
+  adminUpdateStudentProfile,
 );
 
 export const userRoutes = router;

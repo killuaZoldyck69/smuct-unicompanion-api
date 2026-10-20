@@ -4,6 +4,7 @@ import {
   UpdateRolePayload,
   GetUsersQuery,
   UpdateTeacherPositionPayload,
+  AdminUpdateStudentProfilePayload,
 } from "./user.schema";
 import {
   uploadSingleImageService,
@@ -13,6 +14,7 @@ import {
 import { deleteImageFromCloudinary } from "../../lib/cloudinary";
 import { appCache } from "../../lib/cache";
 import * as teacherService from "../teacher/teacher.service";
+import * as studentService from "../student/student.service";
 import { UpdateTeacherPayload } from "../teacher/teacher.schema";
 
 const DEPARTMENT_ALIASES: Record<string, string[]> = {
@@ -277,6 +279,26 @@ export const adminUpdateTeacherProfileService = async (
   }
 
   return await teacherService.updateTeacherProfileData(id, payload);
+};
+
+export const adminUpdateStudentProfileService = async (
+  id: string,
+  payload: AdminUpdateStudentProfilePayload,
+) => {
+  const user = await userRepository.findUserWithStudentProfile(id);
+
+  if (!user) {
+    throw new AppError("User not found.", 404);
+  }
+
+  if (user.role !== "STUDENT" || !user.studentProfile) {
+    throw new AppError(
+      "This action can only be performed on student accounts.",
+      400,
+    );
+  }
+
+  return await studentService.updateStudentProfileData(id, payload);
 };
 
 export const updateUserProfileImageService = async (

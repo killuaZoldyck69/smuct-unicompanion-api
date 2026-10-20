@@ -106,6 +106,23 @@ export const adminUpdateTeacherProfile = catchAsync(
   },
 );
 
+export const adminUpdateStudentProfile = catchAsync(
+  async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+
+    const updatedUser = await userService.adminUpdateStudentProfileService(
+      id,
+      req.body,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Student profile updated successfully.",
+      data: updatedUser,
+    });
+  },
+);
+
 export const updateUserProfileImage = catchAsync(
   async (req: Request, res: Response) => {
     const userId = req.user.id;
