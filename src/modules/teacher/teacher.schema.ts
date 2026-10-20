@@ -86,7 +86,6 @@ export const registerTeacherSchema = z.object({
       .optional()
       .nullable(),
     dayOff: z.string().trim().max(50).nullable().optional(),
-    consultationHours: z.string().max(250).nullable().optional(),
     advisoryBatch: z
       .union([
         z.number().int().positive().max(99999),
@@ -144,7 +143,6 @@ export const updateTeacherProfileSchema = z.object({
       .regex(/^\d*$/, "Office room must contain numbers only")
       .optional()
       .nullable(),
-    consultationHours: z.string().max(250).nullable().optional(),
     advisoryBatch: z
       .union([
         z.number().int().positive().max(99999),

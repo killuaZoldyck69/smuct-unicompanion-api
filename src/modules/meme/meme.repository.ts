@@ -24,7 +24,7 @@ const authorSelection = {
       department: true,
       designation: true,
       officeRoom: true,
-      consultationHours: true,
+      consultationSlots: true,
     },
   },
 };

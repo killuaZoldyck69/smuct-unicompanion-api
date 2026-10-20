@@ -36,7 +36,7 @@ const authorSelect = {
       department: true,
       designation: true,
       officeRoom: true,
-      consultationHours: true,
+      consultationSlots: true,
     },
   },
 } satisfies Prisma.UserSelect;

@@ -64,14 +64,6 @@ export const registerTeacherService = async (data: RegisterTeacherPayload) => {
 
   try {
     // 4 & 5. Atomically revoke initial session, set TEACHER role, and create profile
-    const consultationHours =
-      data.consultationHours ||
-      (Array.isArray(data.consultationSlots) && data.consultationSlots.length > 0
-        ? data.consultationSlots
-            .map((s) => `${s.day}: ${s.startTime} - ${s.endTime}`)
-            .join(", ")
-        : undefined);
-
     const advisoryBatch =
       data.advisoryBatch !== undefined && data.advisoryBatch !== null
         ? typeof data.advisoryBatch === "string"
@@ -88,7 +80,6 @@ export const registerTeacherService = async (data: RegisterTeacherPayload) => {
         department: data.department.trim(),
         faculty: data.faculty.trim(),
         officeRoom: data.officeRoom?.trim() || undefined,
-        consultationHours,
         advisoryBatch: isNaN(advisoryBatch as number) ? undefined : advisoryBatch,
         dayOff: data.dayOff?.trim() || undefined,
         consultationSlots: data.consultationSlots,
@@ -188,14 +179,7 @@ export const updateTeacherProfileData = async (
     profileUpdateData.dayOff = data.dayOff;
   if (data.consultationSlots !== undefined) {
     profileUpdateData.consultationSlots = data.consultationSlots;
-    if (data.consultationHours === undefined && Array.isArray(data.consultationSlots)) {
-      profileUpdateData.consultationHours = data.consultationSlots
-        .map((s) => `${s.day}: ${s.startTime} - ${s.endTime}`)
-        .join(", ");
-    }
   }
-  if (data.consultationHours !== undefined)
-    profileUpdateData.consultationHours = data.consultationHours;
 
   if (data.expertiseFields !== undefined)
     profileUpdateData.expertiseFields = data.expertiseFields;

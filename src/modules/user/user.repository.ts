@@ -46,7 +46,6 @@ export const findUsersWithProfiles = async (
           department: true,
           faculty: true,
           officeRoom: true,
-          consultationHours: true,
           advisoryBatch: true,
           dayOff: true,
           consultationSlots: true,

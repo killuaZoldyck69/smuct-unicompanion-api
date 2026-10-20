@@ -29,7 +29,7 @@ export const publicAuthorSelection = {
       department: true,
       designation: true,
       officeRoom: true,
-      consultationHours: true,
+      consultationSlots: true,
     },
   },
 };
@@ -55,7 +55,7 @@ export const privateContactSelection = {
       department: true,
       designation: true,
       officeRoom: true,
-      consultationHours: true,
+      consultationSlots: true,
     },
   },
 };

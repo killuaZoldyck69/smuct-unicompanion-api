@@ -30,7 +30,6 @@ export const createTeacherProfileRecord = async (data: {
   department: string;
   faculty: string;
   officeRoom?: string;
-  consultationHours?: string | null;
   advisoryBatch?: number | null;
   dayOff?: string | null;
   consultationSlots?: any;
@@ -101,7 +100,6 @@ export const findTeacherUserById = async (userId: string) => {
           department: true,
           faculty: true,
           officeRoom: true,
-          consultationHours: true,
           advisoryBatch: true,
           dayOff: true,
           consultationSlots: true,

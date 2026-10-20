@@ -83,7 +83,7 @@ export const findMembersByHubId = async (hubId: string) => {
               designation: true,
               faculty: true,
               officeRoom: true,
-              consultationHours: true,
+              consultationSlots: true,
             },
           },
         },

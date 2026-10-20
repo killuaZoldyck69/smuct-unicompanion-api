@@ -160,7 +160,6 @@ model TeacherProfile {
   administrativeRole String? // e.g. "HOD", "Coordinator", "Dean"
 
   officeRoom        String?
-  consultationHours String?
   advisoryBatch     Int?
   dayOff            String?
   consultationSlots Json?
