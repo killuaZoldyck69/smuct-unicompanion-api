@@ -315,6 +315,27 @@ export function validateAndParseCsv(
     };
   }
 
+  // Maximum CSV rows safeguard (DoS / ReDoS prevention)
+  const MAX_ALLOWED_CSV_ROWS = 500;
+  if (rawRows.length - 1 > MAX_ALLOWED_CSV_ROWS) {
+    return {
+      isValid: false,
+      totalRows: rawRows.length - 1,
+      validRowsCount: 0,
+      errorCount: 1,
+      warningCount: 0,
+      errors: [
+        {
+          rowNumber: 1,
+          field: "file",
+          message: `The uploaded CSV contains ${rawRows.length - 1} events, which exceeds the maximum limit of ${MAX_ALLOWED_CSV_ROWS} events per academic schedule.`,
+        },
+      ],
+      warnings: [],
+      parsedEvents: [],
+    };
+  }
+
   // Header Validation
   const headerRow = rawRows[0].map((h) => h.trim().toLowerCase());
   const headerMap: Record<string, number> = {};
@@ -438,7 +459,7 @@ export function validateAndParseCsv(
     }
 
     // 4. Category validation
-    const categoryValidation = normalizeCategory(rawCategory);
+    let categoryValidation = normalizeCategory(rawCategory);
     if (!categoryValidation.valid) {
       errors.push({
         rowNumber,
@@ -447,6 +468,14 @@ export function validateAndParseCsv(
         rawValue: rawCategory,
       });
       rowHasError = true;
+    } else if (
+      categoryValidation.category === "CLASS" &&
+      (rawTitle.toLowerCase().includes("commencement") ||
+        rawTitle.toLowerCase().includes("next sem") ||
+        rawTitle.toLowerCase().includes("next semester"))
+    ) {
+      // Future semester start is an academic milestone, not a current regular class
+      categoryValidation = { valid: true, category: "ACADEMIC" };
     }
 
     // 5. Week number validation
@@ -474,6 +503,29 @@ export function validateAndParseCsv(
       });
     }
 
+    let finalIsHoliday = isHolidayValidation.value;
+    // Safeguard: DEADLINE events (like tuition fee payments, retake/registration deadlines) are never holidays
+    if (categoryValidation.category === "DEADLINE" && finalIsHoliday) {
+      finalIsHoliday = false;
+      warnings.push({
+        rowNumber,
+        field: "isHoliday",
+        message: `Event "${rawTitle}" is a DEADLINE, so isHoliday was automatically corrected to false.`,
+      });
+    } else if (
+      categoryValidation.category === "CLASS" &&
+      finalIsHoliday &&
+      !rawTitle.toLowerCase().includes("holiday") &&
+      !rawTitle.toLowerCase().includes("break")
+    ) {
+      finalIsHoliday = false;
+      warnings.push({
+        rowNumber,
+        field: "isHoliday",
+        message: `Event "${rawTitle}" is categorized as CLASS, so isHoliday was automatically corrected to false.`,
+      });
+    }
+
     const isAllDayValidation = parseBooleanValue(rawIsAllDay, true);
     if (!isAllDayValidation.valid) {
       warnings.push({
@@ -492,7 +544,7 @@ export function validateAndParseCsv(
         startDate: startDateValidation.formatted!,
         endDate: validatedEndDate,
         weekNumber: parsedWeekNumber,
-        isHoliday: isHolidayValidation.value,
+        isHoliday: finalIsHoliday,
         isAllDay: isAllDayValidation.value,
         remarks: rawRemarks || null,
       });
@@ -595,7 +647,11 @@ export function validateAndParseCsv(
  */
 function escapeCsvCell(value: any): string {
   if (value === null || value === undefined) return "";
-  const str = String(value);
+  let str = String(value);
+  // Mitigate CSV Formula Injection (CWE-1236): Neutralize formula prefixes
+  if (/^[=+@\-\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
   if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
     return `"${str.replace(/"/g, '""')}"`;
   }

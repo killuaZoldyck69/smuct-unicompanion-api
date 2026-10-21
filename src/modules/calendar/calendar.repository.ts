@@ -265,6 +265,9 @@ export const replaceCalendarEventsTransaction = async (
  * Finds published calendars filtered by user audience conditions.
  */
 export const findActiveCalendarsFiltered = async (orConditions: any[]) => {
+  if (!orConditions || orConditions.length === 0) {
+    return [];
+  }
   return await prisma.academicCalendar.findMany({
     where: {
       status: "PUBLISHED",
@@ -284,6 +287,9 @@ export const findActiveCalendarsFiltered = async (orConditions: any[]) => {
  * Finds the latest published calendar for a user audience.
  */
 export const findCurrentPublishedCalendar = async (orConditions: any[]) => {
+  if (!orConditions || orConditions.length === 0) {
+    return null;
+  }
   return await prisma.academicCalendar.findFirst({
     where: {
       status: "PUBLISHED",

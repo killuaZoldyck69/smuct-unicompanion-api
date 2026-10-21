@@ -52,8 +52,8 @@ export const updateEventInputSchema = z.object({
 export const SMUCT_SEMESTERS = ["Summer", "Winter", "Spring", "Fall"] as const;
 export type SmuctSemester = (typeof SMUCT_SEMESTERS)[number];
 
-export const createCalendarSchema = z.object({
-  body: z.object({
+export const createCalendarBodySchema = z
+  .object({
     title: z.string().min(1, "Calendar title is required"),
     semester: z.enum(SMUCT_SEMESTERS, {
       message: "Semester must be one of: Summer, Winter, Spring, Fall",
@@ -65,11 +65,28 @@ export const createCalendarSchema = z.object({
     targetBatch: z.string().nullable().optional(),
     status: calendarStatusEnum.default("DRAFT").optional(),
     events: z.array(calendarEventInputSchema).optional().default([]),
-  }),
+  })
+  .refine(
+    (data) => {
+      const hasBatch = Boolean(data.targetBatch && data.targetBatch.trim().length > 0);
+      if (hasBatch) {
+        return Array.isArray(data.targetPrograms) && data.targetPrograms.length > 0;
+      }
+      return true;
+    },
+    {
+      message:
+        "Targeting a specific batch requires at least one targeted program to be specified.",
+      path: ["targetPrograms"],
+    },
+  );
+
+export const createCalendarSchema = z.object({
+  body: createCalendarBodySchema,
 });
 
-export const updateCalendarSchema = z.object({
-  body: z.object({
+export const updateCalendarBodySchema = z
+  .object({
     title: z.string().min(1, "Calendar title is required").optional(),
     semester: z.enum(SMUCT_SEMESTERS).optional(),
     academicYear: z.coerce.number().int().min(2000).max(2100).optional(),
@@ -78,7 +95,24 @@ export const updateCalendarSchema = z.object({
     semesterDuration: z.string().nullable().optional(),
     targetBatch: z.string().nullable().optional(),
     isActive: z.boolean().optional(),
-  }),
+  })
+  .refine(
+    (data) => {
+      const hasBatch = Boolean(data.targetBatch && data.targetBatch.trim().length > 0);
+      if (hasBatch && data.targetPrograms !== undefined) {
+        return Array.isArray(data.targetPrograms) && data.targetPrograms.length > 0;
+      }
+      return true;
+    },
+    {
+      message:
+        "Targeting a specific batch requires at least one targeted program to be specified.",
+      path: ["targetPrograms"],
+    },
+  );
+
+export const updateCalendarSchema = z.object({
+  body: updateCalendarBodySchema,
 });
 
 export const updateCalendarStatusSchema = z.object({
