@@ -9,6 +9,26 @@ export const createBloodPostService = async (
   authorId: string,
   data: CreateBloodPostPayload,
 ) => {
+  const author = await bloodRepository.findUserById(authorId);
+  if (!author) {
+    throw new AppError("User not found.", 404);
+  }
+
+  const missingFields: string[] = [];
+  if (!author.phoneNumber || !author.phoneNumber.trim()) {
+    missingFields.push("phone number");
+  }
+  if (!author.bloodGroup) {
+    missingFields.push("blood group");
+  }
+
+  if (missingFields.length > 0) {
+    throw new AppError(
+      `Profile incomplete: You must have both a phone number and blood group filled in your profile before submitting a blood request. Missing: ${missingFields.join(" and ")}.`,
+      400,
+    );
+  }
+
   return await bloodRepository.createBloodPost(authorId, data);
 };
 
@@ -98,6 +118,26 @@ export const respondToBloodPostService = async (
   // Prevent users from responding to their own requests
   if (post.authorId === responderId) {
     throw new AppError("You cannot volunteer for your own blood request.", 400);
+  }
+
+  const responder = await bloodRepository.findUserById(responderId);
+  if (!responder) {
+    throw new AppError("User not found.", 404);
+  }
+
+  const missingFields: string[] = [];
+  if (!responder.phoneNumber || !responder.phoneNumber.trim()) {
+    missingFields.push("phone number");
+  }
+  if (!responder.bloodGroup) {
+    missingFields.push("blood group");
+  }
+
+  if (missingFields.length > 0) {
+    throw new AppError(
+      `Profile incomplete: You must have both a phone number and blood group filled in your profile before volunteering. Missing: ${missingFields.join(" and ")}.`,
+      400,
+    );
   }
 
   // Prevent duplicate responses from the same user on the same post

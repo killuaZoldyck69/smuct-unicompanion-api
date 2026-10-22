@@ -148,3 +148,16 @@ export const deleteBloodPostById = async (id: string) => {
     where: { id },
   });
 };
+
+export const findUserById = async (id: string) => {
+  return await prisma.user.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      phoneNumber: true,
+      bloodGroup: true,
+      role: true,
+    },
+  });
+};
+
