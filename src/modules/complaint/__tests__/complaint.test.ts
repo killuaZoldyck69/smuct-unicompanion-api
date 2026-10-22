@@ -118,7 +118,7 @@ export function runComplaintUnitTests() {
   const pendingToResolved = validateStatusTransition("PENDING", "RESOLVED");
   assert(!pendingToResolved.valid, "PENDING -> RESOLVED must be rejected");
   assert(
-    pendingToResolved.error?.includes("must first be accepted"),
+    !!pendingToResolved.error?.includes("must first be accepted"),
     "Should explain complaint must first be accepted",
   );
 

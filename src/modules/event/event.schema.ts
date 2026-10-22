@@ -10,7 +10,8 @@ export const createEventSchema = z.object({
       (val) => {
         if (!val) return undefined;
         if (val instanceof Date) return val;
-        return new Date(val as string);
+        const d = new Date(val as string);
+        return isNaN(d.getTime()) ? undefined : d;
       },
       z.date({
         message: "Event date is required and must be a valid date",
@@ -31,8 +32,9 @@ export const updateEventSchema = z.object({
       .preprocess((val) => {
         if (!val) return undefined;
         if (val instanceof Date) return val;
-        return new Date(val as string);
-      }, z.date())
+        const d = new Date(val as string);
+        return isNaN(d.getTime()) ? undefined : d;
+      }, z.date({ message: "Event date must be a valid date" }))
       .optional(),
   }),
 });
