@@ -33,6 +33,17 @@ export const getNoticeById = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+export const updateNotice = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const updatedNotice = await noticeService.updateNoticeService(id, req.body);
+
+  res.status(200).json({
+    success: true,
+    message: "Notice updated successfully.",
+    data: updatedNotice,
+  });
+});
+
 export const deleteNotice = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string; // Assert as string to avoid TS array errors
 

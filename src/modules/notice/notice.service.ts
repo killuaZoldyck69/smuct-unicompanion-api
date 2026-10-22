@@ -1,6 +1,6 @@
 import { AppError } from "../../utils/AppError";
 import * as noticeRepository from "./notice.repository";
-import { CreateNoticePayload } from "./notice.schema";
+import { CreateNoticePayload, UpdateNoticePayload } from "./notice.schema";
 
 export const createNoticeService = async (data: CreateNoticePayload) => {
   return await noticeRepository.createNotice(data);
@@ -18,6 +18,19 @@ export const getNoticeByIdService = async (id: string) => {
   }
 
   return notice;
+};
+
+export const updateNoticeService = async (
+  id: string,
+  data: UpdateNoticePayload,
+) => {
+  const existingNotice = await noticeRepository.findNoticeById(id);
+
+  if (!existingNotice) {
+    throw new AppError("Notice not found.", 404);
+  }
+
+  return await noticeRepository.updateNoticeById(id, data);
 };
 
 export const deleteNoticeService = async (id: string) => {

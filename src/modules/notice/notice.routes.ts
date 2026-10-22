@@ -2,9 +2,10 @@ import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.middleware";
 import { requireAdmin } from "../../middleware/admin.middleware";
 import { validateRequest } from "../../middleware/validateRequest";
-import { createNoticeSchema } from "./notice.schema";
+import { createNoticeSchema, updateNoticeSchema } from "./notice.schema";
 import {
   createNotice,
+  updateNotice,
   getNotices,
   getNoticeById,
   deleteNotice,
@@ -26,6 +27,24 @@ router.get("/", requireAuth, getNotices);
 
 // GET /api/notices/:id - Get Notice Details (All Authenticated Users)
 router.get("/:id", requireAuth, getNoticeById);
+
+// PATCH /api/notices/:id - Update Notice (Admin Only)
+router.patch(
+  "/:id",
+  requireAuth,
+  requireAdmin,
+  validateRequest(updateNoticeSchema),
+  updateNotice,
+);
+
+// PUT /api/notices/:id - Update Notice (Admin Only)
+router.put(
+  "/:id",
+  requireAuth,
+  requireAdmin,
+  validateRequest(updateNoticeSchema),
+  updateNotice,
+);
 
 // DELETE /api/notices/:id - Delete Notice (Admin Only)
 router.delete("/:id", requireAuth, requireAdmin, deleteNotice);
