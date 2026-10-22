@@ -71,9 +71,12 @@ export const createAlumniService = async (data: CreateAlumniPayload) => {
 };
 
 export const bulkCreateAlumniService = async (
-  dataArray: CreateAlumniPayload[],
+  dataArray: CreateAlumniPayload[] | { alumni?: CreateAlumniPayload[] },
 ) => {
-  return await alumniRepository.bulkCreateAlumni(dataArray);
+  const items = Array.isArray(dataArray)
+    ? dataArray
+    : (dataArray as any)?.alumni || [];
+  return await alumniRepository.bulkCreateAlumni(items);
 };
 
 export const updateAlumniService = async (
