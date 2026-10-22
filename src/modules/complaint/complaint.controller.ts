@@ -47,13 +47,49 @@ export const getMyComplaintStats = catchAsync(
   },
 );
 
+export const getAdminComplaintStats = catchAsync(
+  async (_req: Request, res: Response) => {
+    const stats = await complaintService.getAdminComplaintStatsService();
+    res.status(200).json({
+      success: true,
+      message: "Admin complaint stats retrieved.",
+      data: stats,
+    });
+  },
+);
+
 export const getAllComplaints = catchAsync(
   async (req: Request, res: Response) => {
-    const complaints = await complaintService.getAllComplaintsService();
+    const { status, search, category, page, limit } = req.query;
+
+    const result = await complaintService.getAllComplaintsService({
+      status: status ? (status as any) : undefined,
+      search: search ? String(search) : undefined,
+      category: category ? String(category) : undefined,
+      page: page ? parseInt(page as string, 10) : undefined,
+      limit: limit ? parseInt(limit as string, 10) : undefined,
+    });
+
     res.status(200).json({
       success: true,
       message: "All complaints retrieved.",
-      data: complaints,
+      data: result.items,
+      pagination: result.pagination,
+    });
+  },
+);
+
+export const getComplaintById = catchAsync(
+  async (req: Request, res: Response) => {
+    const complaint = await complaintService.getComplaintByIdService(
+      req.params.id as string,
+      req.user.id,
+      req.user.role,
+    );
+    res.status(200).json({
+      success: true,
+      message: "Complaint retrieved successfully.",
+      data: complaint,
     });
   },
 );

@@ -72,6 +72,7 @@ export const SUBMISSION_TYPE_VALUES = [
 
 export const COMPLAINT_STATUS_VALUES = [
   ComplaintStatus.PENDING,
+  ComplaintStatus.ACCEPTED,
   ComplaintStatus.RESOLVED,
   ComplaintStatus.REJECTED,
 ] as const;

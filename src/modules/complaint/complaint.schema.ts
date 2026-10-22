@@ -22,9 +22,19 @@ export const updateComplaintSchema = z.object({
 export const updateComplaintStatusSchema = z.object({
   body: z.object({
     status: z.enum(COMPLAINT_STATUS_VALUES, {
-      message: "Status must be PENDING, RESOLVED, or REJECTED",
+      message: "Status must be PENDING, ACCEPTED, RESOLVED, or REJECTED",
     }),
-    adminRemarks: z.string().nullable().optional(),
+    adminRemarks: z.string().trim().max(1500, "Remarks cannot exceed 1500 characters").nullable().optional(),
+  }),
+});
+
+export const adminComplaintsQuerySchema = z.object({
+  query: z.object({
+    status: z.enum([...COMPLAINT_STATUS_VALUES, "ALL"]).optional(),
+    search: z.string().trim().optional(),
+    category: z.string().trim().optional(),
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(100).optional(),
   }),
 });
 
@@ -37,3 +47,7 @@ export type UpdateComplaintPayload = z.infer<
 export type UpdateComplaintStatusPayload = z.infer<
   typeof updateComplaintStatusSchema
 >["body"];
+export type AdminComplaintsQueryPayload = z.infer<
+  typeof adminComplaintsQuerySchema
+>["query"];
+
