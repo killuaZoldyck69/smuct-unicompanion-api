@@ -2,30 +2,66 @@ import { z } from "zod";
 
 export const createNoticeSchema = z.object({
   body: z.object({
-    referenceNo: z.string().optional(),
-    title: z.string().min(1, "Title is required"),
-    body: z.string().min(1, "Body is required"),
-    issuerName: z.string().min(1, "Issuer name is required"),
-    issuerDesignation: z.string().min(1, "Issuer designation is required"),
-    copyTo: z.array(z.string()).optional().default([]),
+    referenceNo: z
+      .string()
+      .trim()
+      .min(1, "Reference / Memo number is required"),
+    title: z.string().trim().min(1, "Title is required"),
+    body: z.string().trim().min(1, "Body is required"),
+    issuerName: z.string().trim().min(1, "Issuer name is required"),
+    issuerDesignation: z.string().trim().min(1, "Issuer designation is required"),
+    copyTo: z.array(z.string().trim().min(1)).optional().default([]),
   }),
 });
 
-// Export the inferred type for the service layer
 export type CreateNoticePayload = z.infer<typeof createNoticeSchema>["body"];
 
 export const updateNoticeSchema = z.object({
+  params: z
+    .object({
+      id: z.string().uuid("Invalid notice ID format"),
+    })
+    .optional(),
   body: z.object({
-    referenceNo: z.string().optional().nullable(),
-    title: z.string().min(1, "Title cannot be empty").optional(),
-    body: z.string().min(1, "Body cannot be empty").optional(),
-    issuerName: z.string().min(1, "Issuer name cannot be empty").optional(),
+    referenceNo: z
+      .string()
+      .trim()
+      .min(1, "Reference number cannot be empty")
+      .optional()
+      .nullable(),
+    title: z.string().trim().min(1, "Title cannot be empty").optional(),
+    body: z.string().trim().min(1, "Body cannot be empty").optional(),
+    issuerName: z.string().trim().min(1, "Issuer name cannot be empty").optional(),
     issuerDesignation: z
       .string()
+      .trim()
       .min(1, "Issuer designation cannot be empty")
       .optional(),
-    copyTo: z.array(z.string()).optional(),
+    copyTo: z.array(z.string().trim().min(1)).optional(),
   }),
 });
 
 export type UpdateNoticePayload = z.infer<typeof updateNoticeSchema>["body"];
+
+export const noticeIdParamSchema = z.object({
+  params: z.object({
+    id: z.string().uuid("Invalid notice ID format"),
+  }),
+});
+
+export const getNoticesQuerySchema = z.object({
+  query: z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    search: z.string().trim().optional(),
+    category: z.string().trim().optional(),
+    sortBy: z
+      .enum(["createdAt", "issueDate", "title"])
+      .optional()
+      .default("createdAt"),
+    sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
+  }),
+});
+
+export type GetNoticesQuery = z.infer<typeof getNoticesQuerySchema>["query"];
+

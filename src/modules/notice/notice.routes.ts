@@ -2,7 +2,12 @@ import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.middleware";
 import { requireAdmin } from "../../middleware/admin.middleware";
 import { validateRequest } from "../../middleware/validateRequest";
-import { createNoticeSchema, updateNoticeSchema } from "./notice.schema";
+import {
+  createNoticeSchema,
+  updateNoticeSchema,
+  getNoticesQuerySchema,
+  noticeIdParamSchema,
+} from "./notice.schema";
 import {
   createNotice,
   updateNotice,
@@ -22,11 +27,16 @@ router.post(
   createNotice,
 );
 
-// GET /api/notices - Get All Notices (All Authenticated Users)
-router.get("/", requireAuth, getNotices);
+// GET /api/notices - Get All Notices with Pagination & Search (All Authenticated Users: Students, Teachers, Admins)
+router.get("/", requireAuth, validateRequest(getNoticesQuerySchema), getNotices);
 
 // GET /api/notices/:id - Get Notice Details (All Authenticated Users)
-router.get("/:id", requireAuth, getNoticeById);
+router.get(
+  "/:id",
+  requireAuth,
+  validateRequest(noticeIdParamSchema),
+  getNoticeById,
+);
 
 // PATCH /api/notices/:id - Update Notice (Admin Only)
 router.patch(
@@ -47,6 +57,13 @@ router.put(
 );
 
 // DELETE /api/notices/:id - Delete Notice (Admin Only)
-router.delete("/:id", requireAuth, requireAdmin, deleteNotice);
+router.delete(
+  "/:id",
+  requireAuth,
+  requireAdmin,
+  validateRequest(noticeIdParamSchema),
+  deleteNotice,
+);
 
 export const noticeRoutes = router;
+

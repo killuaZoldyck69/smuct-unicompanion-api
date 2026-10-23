@@ -13,12 +13,14 @@ export const createNotice = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getNotices = catchAsync(async (req: Request, res: Response) => {
-  const notices = await noticeService.getAllNoticesService();
+  const query = req.query as any;
+  const result = await noticeService.getAllNoticesService(query);
 
   res.status(200).json({
     success: true,
     message: "Notices retrieved successfully.",
-    data: notices,
+    data: result.items,
+    pagination: result.pagination,
   });
 });
 
