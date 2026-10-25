@@ -22,8 +22,9 @@ model Notice {
 model CampusEvent {
   id          String   @id @default(uuid())
   title       String
+  category    String   @default("GENERAL")
   description String?
-  location    String?
+  location    String   @default("Permanent Campus")
   organizer   String?
   eventDate   DateTime
 
@@ -34,6 +35,7 @@ model CampusEvent {
 
   @@index([eventDate])
   @@index([createdAt])
+  @@index([category])
 }
 
 model EventInterested {

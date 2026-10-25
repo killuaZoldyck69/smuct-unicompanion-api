@@ -5,6 +5,7 @@ export const createCampusEvent = async (data: CreateEventPayload) => {
   return await prisma.campusEvent.create({
     data: {
       title: data.title,
+      category: data.category,
       description: data.description,
       location: data.location,
       organizer: data.organizer,
@@ -17,6 +18,7 @@ export interface FindEventsParams {
   page?: number;
   limit?: number;
   tab?: "all" | "upcoming" | "today" | "past";
+  category?: string;
   search?: string;
   sortBy?: "eventDate" | "createdAt" | "title";
   sortOrder?: "asc" | "desc";
@@ -28,6 +30,7 @@ export const findPaginatedCampusEvents = async (params: FindEventsParams) => {
   const limit = Math.min(50, Math.max(1, Number(params.limit) || 10));
   const skip = (page - 1) * limit;
   const tab = params.tab || "upcoming";
+  const category = params.category?.trim();
   const search = params.search?.trim();
   const sortBy = params.sortBy || "eventDate";
   const sortOrder = params.sortOrder || (tab === "past" ? "desc" : "asc");
@@ -47,12 +50,19 @@ export const findPaginatedCampusEvents = async (params: FindEventsParams) => {
     dateFilter = { eventDate: { lt: startOfToday } };
   }
 
+  // Build category filter
+  let categoryFilter: any = {};
+  if (category && category.toLowerCase() !== "all") {
+    categoryFilter = { category: { equals: category, mode: "insensitive" } };
+  }
+
   // Build search filter
   let searchFilter: any = {};
   if (search) {
     searchFilter = {
       OR: [
         { title: { contains: search, mode: "insensitive" } },
+        { category: { contains: search, mode: "insensitive" } },
         { location: { contains: search, mode: "insensitive" } },
         { organizer: { contains: search, mode: "insensitive" } },
         { description: { contains: search, mode: "insensitive" } },
@@ -62,6 +72,7 @@ export const findPaginatedCampusEvents = async (params: FindEventsParams) => {
 
   const whereClause: any = {
     ...dateFilter,
+    ...categoryFilter,
     ...searchFilter,
   };
 
@@ -100,6 +111,7 @@ export const findPaginatedCampusEvents = async (params: FindEventsParams) => {
     const items = paginatedEvents.map((ev) => ({
       id: ev.id,
       title: ev.title,
+      category: ev.category,
       description: ev.description,
       location: ev.location,
       organizer: ev.organizer,
@@ -154,6 +166,7 @@ export const findPaginatedCampusEvents = async (params: FindEventsParams) => {
       prisma.campusEvent.count({
         where: {
           eventDate: { gte: startOfToday },
+          ...categoryFilter,
           ...(search ? searchFilter : {}),
         },
       }),
@@ -162,6 +175,7 @@ export const findPaginatedCampusEvents = async (params: FindEventsParams) => {
       prisma.campusEvent.count({
         where: {
           eventDate: { gte: startOfToday, lte: endOfToday },
+          ...categoryFilter,
           ...(search ? searchFilter : {}),
         },
       }),
@@ -170,13 +184,17 @@ export const findPaginatedCampusEvents = async (params: FindEventsParams) => {
       prisma.campusEvent.count({
         where: {
           eventDate: { lt: startOfToday },
+          ...categoryFilter,
           ...(search ? searchFilter : {}),
         },
       }),
 
       // 6. Tab Counts: All
       prisma.campusEvent.count({
-        where: search ? searchFilter : {},
+        where: {
+          ...categoryFilter,
+          ...(search ? searchFilter : {}),
+        },
       }),
 
       // 7. Next Upcoming Event (for Hero Card)
@@ -197,6 +215,7 @@ export const findPaginatedCampusEvents = async (params: FindEventsParams) => {
   const items = paginatedEvents.map((ev) => ({
     id: ev.id,
     title: ev.title,
+    category: ev.category,
     description: ev.description,
     location: ev.location,
     organizer: ev.organizer,
@@ -214,6 +233,7 @@ export const findPaginatedCampusEvents = async (params: FindEventsParams) => {
     ? {
         id: nextEventRaw.id,
         title: nextEventRaw.title,
+        category: nextEventRaw.category,
         description: nextEventRaw.description,
         location: nextEventRaw.location,
         organizer: nextEventRaw.organizer,
@@ -272,6 +292,7 @@ export const findAllCampusEvents = async (take = 100, currentUserId?: string) =>
   return events.map((ev) => ({
     id: ev.id,
     title: ev.title,
+    category: ev.category,
     description: ev.description,
     location: ev.location,
     organizer: ev.organizer,
@@ -308,6 +329,7 @@ export const findCampusEventById = async (id: string, currentUserId?: string) =>
   return {
     id: ev.id,
     title: ev.title,
+    category: ev.category,
     description: ev.description,
     location: ev.location,
     organizer: ev.organizer,
@@ -320,39 +342,41 @@ export const findCampusEventById = async (id: string, currentUserId?: string) =>
 };
 
 export const toggleEventInterested = async (eventId: string, userId: string) => {
-  const existing = await prisma.eventInterested.findUnique({
-    where: {
-      eventId_userId: {
-        eventId,
-        userId,
-      },
-    },
-  });
-
-  let isInterested = false;
-  if (existing) {
-    await prisma.eventInterested.delete({
-      where: { id: existing.id },
-    });
-    isInterested = false;
-  } else {
-    await prisma.eventInterested.create({
-      data: {
-        eventId,
-        userId,
+  return await prisma.$transaction(async (tx) => {
+    const existing = await tx.eventInterested.findUnique({
+      where: {
+        eventId_userId: {
+          eventId,
+          userId,
+        },
       },
     });
-    isInterested = true;
-  }
 
-  const count = await prisma.eventInterested.count({
-    where: { eventId },
+    let isInterested = false;
+    if (existing) {
+      await tx.eventInterested.delete({
+        where: { id: existing.id },
+      });
+      isInterested = false;
+    } else {
+      await tx.eventInterested.create({
+        data: {
+          eventId,
+          userId,
+        },
+      });
+      isInterested = true;
+    }
+
+    const count = await tx.eventInterested.count({
+      where: { eventId },
+    });
+
+    return {
+      isInterested,
+      interestedCount: count,
+    };
   });
-
-  return {
-    isInterested,
-    interestedCount: count,
-  };
 };
 
 export const getEventInterested = async (eventId: string, userId?: string) => {
@@ -384,6 +408,7 @@ export const updateCampusEvent = async (id: string, data: UpdateEventPayload) =>
     where: { id },
     data: {
       ...(data.title !== undefined ? { title: data.title } : {}),
+      ...(data.category !== undefined ? { category: data.category } : {}),
       ...(data.description !== undefined ? { description: data.description } : {}),
       ...(data.location !== undefined ? { location: data.location } : {}),
       ...(data.organizer !== undefined ? { organizer: data.organizer } : {}),
@@ -393,7 +418,14 @@ export const updateCampusEvent = async (id: string, data: UpdateEventPayload) =>
 };
 
 export const deleteCampusEventById = async (id: string) => {
-  return await prisma.campusEvent.delete({
-    where: { id },
+  return await prisma.$transaction(async (tx) => {
+    // Delete dependent interest relations first for bulletproof referential integrity
+    await tx.eventInterested.deleteMany({
+      where: { eventId: id },
+    });
+
+    return await tx.campusEvent.delete({
+      where: { id },
+    });
   });
 };

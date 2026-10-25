@@ -16,11 +16,12 @@ export const getAllEventsService = async (
   const page = query?.page || 1;
   const limit = query?.limit || 10;
   const tab = query?.tab || "upcoming";
+  const category = query?.category?.trim() || "";
   const search = query?.search?.trim() || "";
   const sortBy = query?.sortBy || "eventDate";
   const sortOrder = query?.sortOrder || (tab === "past" ? "desc" : "asc");
 
-  const cacheKey = `events:${currentUserId || "anon"}:${tab}:${search}:${page}:${limit}:${sortBy}:${sortOrder}`;
+  const cacheKey = `events:${currentUserId || "anon"}:${tab}:${category}:${search}:${page}:${limit}:${sortBy}:${sortOrder}`;
   const cached = eventCache.get<any>(cacheKey);
   if (cached) {
     return cached;
@@ -30,6 +31,7 @@ export const getAllEventsService = async (
     page,
     limit,
     tab,
+    category,
     search,
     sortBy,
     sortOrder,
@@ -56,6 +58,14 @@ export const toggleEventInterestedService = async (eventId: string, userId: stri
 
   if (!existingEvent) {
     throw new AppError("Campus event not found.", 404);
+  }
+
+  const eventDate = new Date(existingEvent.eventDate);
+  const now = new Date();
+  const isToday = eventDate.toDateString() === now.toDateString();
+  const isPast = eventDate.getTime() < now.getTime() && !isToday;
+  if (isPast) {
+    throw new AppError("Cannot mark interest in past events.", 400);
   }
 
   const result = await eventRepository.toggleEventInterested(eventId, userId);

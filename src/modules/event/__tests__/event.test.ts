@@ -2,6 +2,7 @@ import {
   createEventSchema,
   updateEventSchema,
   getEventsQuerySchema,
+  eventIdParamSchema,
 } from "../event.schema";
 import { eventCache } from "../event.cache";
 
@@ -23,10 +24,11 @@ export function runEventUnitTests() {
   console.log("🧪 Running Campus Event Validation & Cache Unit Tests...\n");
 
   // 1. Create Event: Valid payload
-  console.log("  [1/9] Testing Create Event Schema with valid payload...");
+  console.log("  [1/12] Testing Create Event Schema with valid payload...");
   const validCreatePayload = {
     body: {
       title: "Annual Tech Fest 2026",
+      category: "TECH",
       description: "Inter-university robotics and coding contest",
       location: "Main Auditorium & Lab 3",
       organizer: "CSE Club & Robotics Society",
@@ -45,10 +47,15 @@ export function runEventUnitTests() {
       "Annual Tech Fest 2026",
       "Title must match input",
     );
+    assertEquals(
+      parsedCreate.data.body.category,
+      "TECH",
+      "Category must match input",
+    );
   }
 
-  // 2. Create Event: Missing title
-  console.log("  [2/9] Testing Create Event Schema rejection of missing title...");
+  // 2. Create Event: Missing title & whitespace-only title
+  console.log("  [2/12] Testing Create Event Schema rejection of missing and whitespace-only title...");
   const missingTitlePayload = {
     body: {
       location: "Room 402",
@@ -58,11 +65,53 @@ export function runEventUnitTests() {
   const parsedMissingTitle = createEventSchema.safeParse(missingTitlePayload);
   assert(!parsedMissingTitle.success, "Payload missing title must fail");
 
-  // 3. Create Event: Invalid eventDate string
-  console.log("  [3/9] Testing Create Event Schema rejection of invalid date string...");
+  const whitespaceTitlePayload = {
+    body: {
+      title: "    ",
+      location: "Room 402",
+      eventDate: "2026-11-15T09:00:00.000Z",
+    },
+  };
+  const parsedWhitespaceTitle = createEventSchema.safeParse(whitespaceTitlePayload);
+  assert(!parsedWhitespaceTitle.success, "Payload with whitespace-only title must fail");
+
+  // 3. Create Event: Title too short (< 3 chars)
+  console.log("  [3/12] Testing Create Event Schema rejection of short title (< 3 chars)...");
+  const shortTitlePayload = {
+    body: {
+      title: "Hi",
+      location: "Room 402",
+      eventDate: "2026-11-15T09:00:00.000Z",
+    },
+  };
+  const parsedShortTitle = createEventSchema.safeParse(shortTitlePayload);
+  assert(!parsedShortTitle.success, "Payload with 2-char title must fail");
+
+  // 4. Create Event: Missing & short location
+  console.log("  [4/12] Testing Create Event Schema rejection of missing or short location...");
+  const missingLocPayload = {
+    body: {
+      title: "Grand Seminar",
+      eventDate: "2026-11-15T09:00:00.000Z",
+    },
+  };
+  assert(!createEventSchema.safeParse(missingLocPayload).success, "Missing location must fail");
+
+  const shortLocPayload = {
+    body: {
+      title: "Grand Seminar",
+      location: "A",
+      eventDate: "2026-11-15T09:00:00.000Z",
+    },
+  };
+  assert(!createEventSchema.safeParse(shortLocPayload).success, "1-char location must fail");
+
+  // 5. Create Event: Invalid eventDate string
+  console.log("  [5/12] Testing Create Event Schema rejection of invalid date string...");
   const invalidDatePayload = {
     body: {
       title: "Science Fair",
+      location: "Auditorium",
       eventDate: "not-a-valid-date-string",
     },
   };
@@ -72,8 +121,8 @@ export function runEventUnitTests() {
     "Payload with corrupted/invalid date string must be rejected",
   );
 
-  // 4. Update Event: Valid partial update
-  console.log("  [4/9] Testing Update Event Schema with partial updates...");
+  // 6. Update Event: Valid partial update
+  console.log("  [6/12] Testing Update Event Schema with partial updates...");
   const validUpdatePayload = {
     body: {
       location: "Permanent Campus Ground",
@@ -82,8 +131,8 @@ export function runEventUnitTests() {
   const parsedUpdate = updateEventSchema.safeParse(validUpdatePayload);
   assert(parsedUpdate.success, "Partial update with only location must succeed");
 
-  // 5. Update Event: Empty title rejection
-  console.log("  [5/9] Testing Update Event Schema rejection of empty title...");
+  // 7. Update Event: Empty title rejection
+  console.log("  [7/12] Testing Update Event Schema rejection of empty title...");
   const emptyTitleUpdate = {
     body: {
       title: "",
@@ -95,8 +144,16 @@ export function runEventUnitTests() {
     "Update with empty string title must be rejected",
   );
 
-  // 6. Get Events Query: Default parameters
-  console.log("  [6/9] Testing Query Schema default parameters...");
+  // 8. Event ID Param Schema Validation
+  console.log("  [8/12] Testing Event ID Parameter Schema validation...");
+  const validParam = { params: { id: "evt-uuid-12345" } };
+  assert(eventIdParamSchema.safeParse(validParam).success, "Valid ID param must pass");
+
+  const emptyParam = { params: { id: "   " } };
+  assert(!eventIdParamSchema.safeParse(emptyParam).success, "Whitespace ID param must fail");
+
+  // 9. Get Events Query: Default parameters
+  console.log("  [9/12] Testing Query Schema default parameters...");
   const emptyQuery = {
     query: {},
   };
@@ -122,13 +179,14 @@ export function runEventUnitTests() {
     );
   }
 
-  // 7. Get Events Query: Custom search, pagination, and tab
-  console.log("  [7/9] Testing Query Schema custom pagination and search...");
+  // 10. Get Events Query: Custom search, pagination, category, and tab
+  console.log("  [10/12] Testing Query Schema custom pagination, category, and search...");
   const customQuery = {
     query: {
       page: "3",
       limit: "25",
       tab: "past",
+      category: "  WORKSHOP  ",
       search: "  Robotics Exhibition  ",
       sortBy: "title",
       sortOrder: "desc",
@@ -140,6 +198,11 @@ export function runEventUnitTests() {
     assertEquals(parsedCustomQuery.data.query.page, 3, "Page must be coerced to 3");
     assertEquals(parsedCustomQuery.data.query.limit, 25, "Limit must be coerced to 25");
     assertEquals(
+      parsedCustomQuery.data.query.category,
+      "WORKSHOP",
+      "Category parameter must be trimmed",
+    );
+    assertEquals(
       parsedCustomQuery.data.query.search,
       "Robotics Exhibition",
       "Search parameter must be trimmed",
@@ -147,8 +210,8 @@ export function runEventUnitTests() {
     assertEquals(parsedCustomQuery.data.query.tab, "past", "Tab must be past");
   }
 
-  // 8. Event Date Lifecycle Classification
-  console.log("  [8/9] Testing Event Date Boundary Classification (Today, Upcoming, Past)...");
+  // 11. Event Date Lifecycle Classification
+  console.log("  [11/12] Testing Event Date Boundary Classification (Today, Upcoming, Past)...");
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
   const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
@@ -163,8 +226,8 @@ export function runEventUnitTests() {
     "Current moment must fall within today's boundaries",
   );
 
-  // 9. Cache Store & Invalidation
-  console.log("  [9/9] Testing Event In-Memory Cache Store and Invalidation...");
+  // 12. Cache Store & Invalidation
+  console.log("  [12/12] Testing Event In-Memory Cache Store and Invalidation...");
   const testKey = "events:test-user:upcoming::1:10:eventDate:asc";
   const dummyPayload = { items: [{ id: "ev-1", title: "Test Event" }] };
 
@@ -176,7 +239,7 @@ export function runEventUnitTests() {
   const afterInvalidate = eventCache.get(testKey);
   assert(afterInvalidate === null, "Cache must return null after invalidateAll()");
 
-  console.log("\n✅ All 9 Campus Event Unit Tests Passed Successfully!\n");
+  console.log("\n✅ All 12 Campus Event Unit Tests Passed Successfully!\n");
 }
 
 // Execute tests directly if invoked via CLI
