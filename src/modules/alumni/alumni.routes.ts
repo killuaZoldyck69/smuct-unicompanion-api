@@ -9,6 +9,7 @@ import {
 } from "./alumni.schema";
 import {
   getAllAlumni,
+  getAlumniById,
   getAlumniDepartments,
   createAlumni,
   bulkCreateAlumni,
@@ -20,6 +21,8 @@ const router = Router();
 
 router.get("/departments", requireAuth, getAlumniDepartments);
 router.get("/", requireAuth, getAllAlumni);
+router.get("/:id", requireAuth, getAlumniById);
+
 router.post(
   "/",
   requireAuth,
@@ -27,6 +30,7 @@ router.post(
   validateRequest(createAlumniSchema),
   createAlumni,
 );
+
 router.post(
   "/bulk",
   requireAuth,
@@ -34,6 +38,7 @@ router.post(
   validateRequest(bulkCreateAlumniSchema),
   bulkCreateAlumni,
 );
+
 router.patch(
   "/:id",
   requireAuth,
@@ -41,6 +46,7 @@ router.patch(
   validateRequest(updateAlumniSchema),
   updateAlumni,
 );
+
 router.delete("/:id", requireAuth, requireAdmin, deleteAlumni);
 
 export const alumniRoutes = router;

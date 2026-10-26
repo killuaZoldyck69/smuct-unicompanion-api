@@ -11,6 +11,14 @@ export const getAllAlumni = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+export const getAlumniById = catchAsync(async (req: Request, res: Response) => {
+  const alumni = await alumniService.getAlumniByIdService(req.params.id as string);
+  res.status(200).json({
+    success: true,
+    data: alumni,
+  });
+});
+
 export const getAlumniDepartments = catchAsync(
   async (_req: Request, res: Response) => {
     const departments = await alumniService.getAlumniDepartmentsService();
