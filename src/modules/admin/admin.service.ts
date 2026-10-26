@@ -65,6 +65,7 @@ export const getAdminDashboardStatsService = async (): Promise<AdminDashboardSta
     }),
     // 5 most recent complaints
     prisma.complaint.findMany({
+      where: { deletedAt: null },
       take: 5,
       orderBy: { createdAt: "desc" },
       select: { id: true, title: true, category: true, createdAt: true },

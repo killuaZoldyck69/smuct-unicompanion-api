@@ -3,9 +3,11 @@ import { requireAuth } from "../../middleware/auth.middleware";
 import { requireAdmin } from "../../middleware/admin.middleware";
 import { validateRequest } from "../../middleware/validateRequest";
 import {
+  complaintIdParamSchema,
   createComplaintSchema,
   updateComplaintSchema,
   updateComplaintStatusSchema,
+  getMyComplaintsQuerySchema,
   adminComplaintsQuerySchema,
 } from "./complaint.schema";
 import {
@@ -30,7 +32,12 @@ router.post(
   createComplaint,
 );
 
-router.get("/my", requireAuth, getMyComplaints);
+router.get(
+  "/my",
+  requireAuth,
+  validateRequest(getMyComplaintsQuerySchema),
+  getMyComplaints,
+);
 router.get("/my/stats", requireAuth, getMyComplaintStats);
 
 // Admin-only endpoints (must come before generic /:id parameter)
@@ -51,13 +58,23 @@ router.patch(
 );
 
 // Individual complaint operations
-router.get("/:id", requireAuth, getComplaintById);
+router.get(
+  "/:id",
+  requireAuth,
+  validateRequest(complaintIdParamSchema),
+  getComplaintById,
+);
 router.patch(
   "/:id",
   requireAuth,
   validateRequest(updateComplaintSchema),
   updateComplaint,
 );
-router.delete("/:id", requireAuth, deleteComplaint);
+router.delete(
+  "/:id",
+  requireAuth,
+  validateRequest(complaintIdParamSchema),
+  deleteComplaint,
+);
 
 export const complaintRoutes = router;

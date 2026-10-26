@@ -1,4 +1,10 @@
 import { sanitizeComplaint } from "../complaint.service";
+import {
+  createComplaintSchema,
+  updateComplaintSchema,
+  complaintIdParamSchema,
+  getMyComplaintsQuerySchema,
+} from "../complaint.schema";
 
 function assert(condition: boolean, message: string) {
   if (!condition) {
@@ -105,16 +111,44 @@ export function runComplaintUnitTests() {
   assertEquals(publicAdminView.user?.name, "Sabbir Ahmed", "Complainant name preserved");
   assertEquals(publicAdminView.userId, "user-789", "Complainant userId preserved");
 
-  // 4. Lifecycle rule: PENDING -> ACCEPTED (valid) & PENDING -> REJECTED (valid)
-  console.log("  [4/7] Testing PENDING Lifecycle Transitions...");
+  // 4. Faculty / Teacher complaint identity preservation
+  console.log("  [4/12] Testing Faculty / Teacher Complaint Preservation...");
+  const facultyComplaint = {
+    id: "comp-901",
+    userId: "teacher-101",
+    title: "Projector lamp burned out in Room 405",
+    description: "The ceiling projector lamp has reached end of life during CS201 lecture",
+    category: "IT Support",
+    status: "PENDING",
+    isAnonymous: false,
+    user: {
+      id: "teacher-101",
+      name: "Dr. Farhan Tanvir",
+      email: "farhan.tanvir@smuct.edu.bd",
+      role: "TEACHER",
+      teacherProfile: {
+        teacherId: "FAC-1002",
+        department: "Computer Science and Engineering",
+        designation: "Associate Professor",
+      },
+    },
+  };
+
+  const facultyAdminView = sanitizeComplaint(facultyComplaint, "admin-999", "ADMIN");
+  assert(facultyAdminView.user !== null, "Faculty public complaint user must NOT be null");
+  assertEquals(facultyAdminView.user?.teacherProfile?.teacherId, "FAC-1002", "Teacher ID preserved");
+  assertEquals(facultyAdminView.user?.role, "TEACHER", "Teacher role preserved");
+
+  // 5. Lifecycle rule: PENDING -> ACCEPTED (valid) & PENDING -> REJECTED (valid)
+  console.log("  [5/12] Testing PENDING Lifecycle Transitions...");
   const pendingToAccepted = validateStatusTransition("PENDING", "ACCEPTED");
   assert(pendingToAccepted.valid, "PENDING -> ACCEPTED must be valid");
 
   const pendingToRejected = validateStatusTransition("PENDING", "REJECTED");
   assert(pendingToRejected.valid, "PENDING -> REJECTED must be valid");
 
-  // 5. Lifecycle rule: PENDING -> RESOLVED (INVALID!)
-  console.log("  [5/7] Testing Direct Resolution Prevention (Must Accept First)...");
+  // 6. Lifecycle rule: PENDING -> RESOLVED (INVALID!)
+  console.log("  [6/12] Testing Direct Resolution Prevention (Must Accept First)...");
   const pendingToResolved = validateStatusTransition("PENDING", "RESOLVED");
   assert(!pendingToResolved.valid, "PENDING -> RESOLVED must be rejected");
   assert(
@@ -122,16 +156,16 @@ export function runComplaintUnitTests() {
     "Should explain complaint must first be accepted",
   );
 
-  // 6. Lifecycle rule: ACCEPTED -> RESOLVED (valid) & ACCEPTED -> PENDING (INVALID!)
-  console.log("  [6/7] Testing ACCEPTED Lifecycle Transitions...");
+  // 7. Lifecycle rule: ACCEPTED -> RESOLVED (valid) & ACCEPTED -> PENDING (INVALID!)
+  console.log("  [7/12] Testing ACCEPTED Lifecycle Transitions...");
   const acceptedToResolved = validateStatusTransition("ACCEPTED", "RESOLVED");
   assert(acceptedToResolved.valid, "ACCEPTED -> RESOLVED must be valid");
 
   const acceptedToPending = validateStatusTransition("ACCEPTED", "PENDING");
   assert(!acceptedToPending.valid, "ACCEPTED -> PENDING must be rejected");
 
-  // 7. Lifecycle rule: Terminal states (RESOLVED, REJECTED)
-  console.log("  [7/7] Testing Terminal State Immutability (RESOLVED / REJECTED)...");
+  // 8. Lifecycle rule: Terminal states (RESOLVED, REJECTED)
+  console.log("  [8/12] Testing Terminal State Immutability (RESOLVED / REJECTED)...");
   const resolvedToAccepted = validateStatusTransition("RESOLVED", "ACCEPTED");
   assert(!resolvedToAccepted.valid, "RESOLVED complaint cannot transition");
 
@@ -141,7 +175,61 @@ export function runComplaintUnitTests() {
   const duplicateCheck = validateStatusTransition("ACCEPTED", "ACCEPTED");
   assert(!duplicateCheck.valid, "Duplicate status transition must be rejected");
 
-  console.log("\n✅ All 7 Complaint Lifecycle & Anonymity Unit Tests Passed Successfully!\n");
+  // 9. Schema test: Create complaint schema validation
+  console.log("  [9/12] Testing Create Complaint Input Validation Schemas...");
+
+  const validPayload = {
+    body: {
+      title: "  Broken Window in 304  ",
+      description: "Window glass pane has a crack from the storm",
+      category: "Facilities",
+      isAnonymous: false,
+    },
+  };
+  const parsedValid = createComplaintSchema.parse(validPayload);
+  assertEquals(parsedValid.body.title, "Broken Window in 304", "Whitespace should be trimmed from title");
+
+  // 10. Schema test: Rejection of empty/too-short title
+  console.log("  [10/12] Testing Validation Rejection on Empty/Short Inputs...");
+  let shortTitleFailed = false;
+  try {
+    createComplaintSchema.parse({
+      body: {
+        title: "   ",
+        description: "Window glass pane has a crack from the storm",
+        category: "Facilities",
+      },
+    });
+  } catch (err: any) {
+    shortTitleFailed = true;
+  }
+  assert(shortTitleFailed, "Whitespace-only title must be rejected by schema");
+
+  // 11. Schema test: UUID parameter format validation
+  console.log("  [11/12] Testing UUID Param Validation...");
+  let invalidUuidFailed = false;
+  try {
+    complaintIdParamSchema.parse({ params: { id: "not-a-uuid" } });
+  } catch (err) {
+    invalidUuidFailed = true;
+  }
+  assert(invalidUuidFailed, "Malformed UUID must be rejected");
+
+  const validUuidResult = complaintIdParamSchema.parse({
+    params: { id: "a0000000-0000-4000-8000-000000000001" },
+  });
+  assertEquals(validUuidResult.params.id, "a0000000-0000-4000-8000-000000000001", "Valid UUID must pass");
+
+  // 12. Schema test: Query schema with limit and status
+  console.log("  [12/12] Testing Query Schema Coercion & Bounds...");
+  const parsedQuery = getMyComplaintsQuerySchema.parse({
+    query: { status: "PENDING", limit: "25", page: "2" },
+  });
+  assertEquals(parsedQuery.query.limit, 25, "Limit string should be coerced to number");
+  assertEquals(parsedQuery.query.page, 2, "Page string should be coerced to number");
+  assertEquals(parsedQuery.query.status, "PENDING", "Status enum parsed");
+
+  console.log("\n✅ All 12 Complaint Lifecycle, Security, Privacy & Validation Unit Tests Passed Successfully!\n");
 }
 
 if (process.argv[1]?.includes("complaint.test.ts")) {

@@ -97,7 +97,8 @@ export const updateComplaintService = async (
     throw new AppError("Cannot edit a complaint that has already been processed or resolved", 400);
   }
 
-  return await complaintRepository.updateComplaint(id, data);
+  const updated = await complaintRepository.updateComplaint(id, data);
+  return sanitizeComplaint(updated, userId, userRole);
 };
 
 export const updateComplaintStatusService = async (
