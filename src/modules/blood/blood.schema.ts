@@ -16,6 +16,9 @@ export const createBloodPostSchema = z.object({
       .default(1)
       .optional(),
     location: z.string().min(1, "Location is required"),
+    hospitalName: z.string().optional(),
+    latitude: z.coerce.number().optional(),
+    longitude: z.coerce.number().optional(),
     urgency: z.string().min(1, "Urgency is required"),
     contactPhone: z.string().min(1, "Contact phone is required"),
   }),

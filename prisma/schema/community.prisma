@@ -48,6 +48,9 @@ model BloodPost {
   bloodGroup       BloodGroup
   bagsNeeded       Int             @default(1)
   location         String
+  hospitalName     String?
+  latitude         Float?
+  longitude        Float?
   urgency          String
   contactPhone     String
   isFulfilled      Boolean         @default(false)
