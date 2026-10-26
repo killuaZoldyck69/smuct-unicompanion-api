@@ -45,10 +45,12 @@ model BloodPost {
   authorId         String
   patientName      String
   patientCondition String
+  details          String?
   bloodGroup       BloodGroup
   bagsNeeded       Int             @default(1)
   location         String
   hospitalName     String?
+  hospitalAddress  String?
   latitude         Float?
   longitude        Float?
   urgency          String

@@ -72,7 +72,10 @@ export const getBloodFeedService = async (
     where.OR = [
       { patientName: { contains: searchKeyword, mode: "insensitive" } },
       { patientCondition: { contains: searchKeyword, mode: "insensitive" } },
+      { details: { contains: searchKeyword, mode: "insensitive" } },
       { location: { contains: searchKeyword, mode: "insensitive" } },
+      { hospitalName: { contains: searchKeyword, mode: "insensitive" } },
+      { hospitalAddress: { contains: searchKeyword, mode: "insensitive" } },
     ];
   }
 
