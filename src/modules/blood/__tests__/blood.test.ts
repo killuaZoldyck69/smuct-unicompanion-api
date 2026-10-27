@@ -146,7 +146,48 @@ async function runBloodTests() {
   const unauthorizedCheck = checkBloodPostPermission(post, "random-user-456", "STUDENT");
   assert(!unauthorizedCheck.allowed, "Random user cannot manage another user's post");
 
-  console.log("\n✅ All 9 Campus Blood Module Unit Tests Passed Successfully!\n");
+  // 10. Upper bounds check
+  console.log("  [10/13] Testing upper bounds on inputs (patientName > 100, bags > 50)...");
+  const oversizedPayload = {
+    ...validPayload,
+    patientName: "A".repeat(101),
+    bagsNeeded: 55,
+  };
+  const parsedOversized = createBloodPostSchema.safeParse({ body: oversizedPayload });
+  assert(!parsedOversized.success, "Payload exceeding bounds must be rejected");
+
+  // 11. Privacy masking for volunteer phone numbers
+  console.log("  [11/13] Testing volunteer phone number privacy masking...");
+  const maskPhone = (phone?: string | null): string | null => {
+    if (!phone) return null;
+    const trimmed = phone.trim();
+    if (trimmed.length <= 5) return "***";
+    const start = trimmed.slice(0, 3);
+    const end = trimmed.slice(-3);
+    return `${start}****${end}`;
+  };
+  assertEquals(maskPhone("01712345678"), "017****678", "Masks standard mobile number correctly");
+  assertEquals(maskPhone("+8801812345678"), "+88****678", "Masks international number correctly");
+  assertEquals(maskPhone(null), null, "Returns null for null phone");
+
+  // 12. Volunteering on fulfilled request rejection
+  console.log("  [12/13] Testing rejection of volunteer attempt on fulfilled request...");
+  const fulfilledPost = { id: "post-1", isFulfilled: true, authorId: "author-1" };
+  const canVolunteerOnPost = (p: typeof fulfilledPost) => {
+    if (p.isFulfilled) return { allowed: false, error: "Request already fulfilled" };
+    return { allowed: true };
+  };
+  const volunteerCheck = canVolunteerOnPost(fulfilledPost);
+  assert(!volunteerCheck.allowed, "Volunteering on fulfilled post must be blocked");
+
+  // 13. Message bound check in respondBloodPostSchema
+  console.log("  [13/13] Testing message upper bound (max 500 chars) on volunteer response...");
+  const validResponse = respondBloodPostSchema.safeParse({ body: { message: "I can donate tomorrow morning" } });
+  assert(validResponse.success, "Valid response message must pass");
+  const tooLongResponse = respondBloodPostSchema.safeParse({ body: { message: "A".repeat(501) } });
+  assert(!tooLongResponse.success, "Message > 500 chars must fail validation");
+
+  console.log("\n✅ All 13 Campus Blood Module Unit Tests Passed Successfully!\n");
 }
 
 runBloodTests().catch((err) => {

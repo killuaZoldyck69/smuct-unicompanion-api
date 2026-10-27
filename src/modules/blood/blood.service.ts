@@ -97,14 +97,53 @@ export const getBloodFeedService = async (
   };
 };
 
-export const getBloodPostByIdService = async (id: string) => {
+export const maskPhoneNumber = (phone?: string | null): string | null => {
+  if (!phone) return null;
+  const trimmed = phone.trim();
+  if (trimmed.length <= 5) return "***";
+  const start = trimmed.slice(0, 3);
+  const end = trimmed.slice(-3);
+  return `${start}****${end}`;
+};
+
+export const getBloodPostByIdService = async (
+  id: string,
+  viewerUserId?: string,
+  viewerRole?: string,
+) => {
   const post = await bloodRepository.findBloodPostWithDetails(id);
 
   if (!post) {
     throw new AppError("Blood request not found.", 404);
   }
 
-  return post;
+  // Privacy Protection: Mask volunteer phone numbers for third parties
+  // Only the blood post author, an ADMIN, or the volunteer themselves may view unmasked contact numbers.
+  const isAuthor = !!(viewerUserId && post.authorId === viewerUserId);
+  const isAdmin = viewerRole === "ADMIN";
+
+  const sanitizedResponses = post.responses.map((response) => {
+    const isSelf = !!(viewerUserId && response.responderId === viewerUserId);
+    const canViewContact = isAuthor || isAdmin || isSelf;
+
+    return {
+      ...response,
+      responder: response.responder
+        ? {
+            ...response.responder,
+            phoneNumber: canViewContact
+              ? response.responder.phoneNumber
+              : maskPhoneNumber(response.responder.phoneNumber),
+            canContact: canViewContact,
+          }
+        : response.responder,
+    };
+  });
+
+  return {
+    ...post,
+    responses: sanitizedResponses,
+  };
 };
 
 export const respondToBloodPostService = async (
@@ -116,6 +155,14 @@ export const respondToBloodPostService = async (
 
   if (!post) {
     throw new AppError("Blood request not found.", 404);
+  }
+
+  // Prevent volunteering for already fulfilled requests
+  if (post.isFulfilled) {
+    throw new AppError(
+      "This blood request has already been fulfilled. No more volunteers are needed.",
+      400,
+    );
   }
 
   // Prevent users from responding to their own requests
@@ -176,6 +223,10 @@ export const resolveBloodPostService = async (
       "You do not have permission to mark this request as fulfilled.",
       403,
     );
+  }
+
+  if (post.isFulfilled) {
+    return post;
   }
 
   return await bloodRepository.updateBloodPostFulfilled(postId, true);

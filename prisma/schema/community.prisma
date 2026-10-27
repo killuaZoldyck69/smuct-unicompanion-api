@@ -61,6 +61,9 @@ model BloodPost {
   createdAt        DateTime        @default(now())
 
   @@index([authorId])
+  @@index([isFulfilled, createdAt(sort: Desc)])
+  @@index([urgency, isFulfilled])
+  @@index([bloodGroup])
 }
 
 model BloodResponse {
@@ -73,6 +76,7 @@ model BloodResponse {
   responder User      @relation(fields: [responderId], references: [id], onDelete: Cascade)
   createdAt DateTime  @default(now())
 
+  @@unique([postId, responderId])
   @@index([postId])
   @@index([responderId])
 }

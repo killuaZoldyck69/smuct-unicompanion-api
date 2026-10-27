@@ -33,7 +33,9 @@ export const getBloodFeed = catchAsync(async (req: Request, res: Response) => {
 export const getBloodPostById = catchAsync(
   async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    const post = await bloodService.getBloodPostByIdService(id);
+    const userId = req.user?.id;
+    const role = req.user?.role;
+    const post = await bloodService.getBloodPostByIdService(id, userId, role);
 
     res.status(200).json({
       success: true,
