@@ -109,6 +109,13 @@ export const LOST_FOUND_CATEGORY_VALUES = [
   LostFoundCategory.ID_CARD,
   LostFoundCategory.KEYS,
   LostFoundCategory.CLOTHING,
+  LostFoundCategory.WALLET,
+  LostFoundCategory.BAGS,
+  LostFoundCategory.DOCUMENTS,
+  LostFoundCategory.ACCESSORIES,
+  LostFoundCategory.STATIONERY,
+  LostFoundCategory.UMBRELLA,
+  LostFoundCategory.BOTTLE,
   LostFoundCategory.OTHER,
 ] as const;
 

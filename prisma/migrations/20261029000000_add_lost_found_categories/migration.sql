@@ -1,0 +1,9 @@
+-- AlterEnum: Add more relevant campus categories to LostFoundCategory
+ALTER TYPE "LostFoundCategory" ADD VALUE IF NOT EXISTS 'WALLET';
+ALTER TYPE "LostFoundCategory" ADD VALUE IF NOT EXISTS 'BAGS';
+ALTER TYPE "LostFoundCategory" ADD VALUE IF NOT EXISTS 'DOCUMENTS';
+ALTER TYPE "LostFoundCategory" ADD VALUE IF NOT EXISTS 'ACCESSORIES';
+ALTER TYPE "LostFoundCategory" ADD VALUE IF NOT EXISTS 'STATIONERY';
+ALTER TYPE "LostFoundCategory" ADD VALUE IF NOT EXISTS 'UMBRELLA';
+ALTER TYPE "LostFoundCategory" ADD VALUE IF NOT EXISTS 'BOTTLE';
+

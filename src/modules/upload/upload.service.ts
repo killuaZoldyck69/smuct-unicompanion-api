@@ -16,7 +16,7 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/heif",
 ]);
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB standard max image size
 export const MAX_PROFILE_IMAGE_SIZE = 3 * 1024 * 1024; // 3MB
 
 export interface MulterFile {
@@ -39,10 +39,10 @@ export function validateImageFile(
     );
   }
 
-  if (file.size >= maxSizeBytes) {
+  if (file.size > maxSizeBytes) {
     const limitMb = (maxSizeBytes / (1024 * 1024)).toFixed(0);
     throw new AppError(
-      `File size exceeds limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Max allowed is ${limitMb}MB.`,
+      `File "${file.originalname}" exceeds the ${limitMb}MB limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Please choose an image under ${limitMb}MB.`,
       400
     );
   }
@@ -64,7 +64,7 @@ export async function uploadSingleImageService(
   if (base64) {
     const rawBase64 = base64.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
     const approxSizeBytes = Math.ceil((rawBase64.length * 3) / 4);
-    if (approxSizeBytes >= maxLimit) {
+    if (approxSizeBytes > maxLimit) {
       const limitMb = (maxLimit / (1024 * 1024)).toFixed(0);
       throw new AppError(
         `Payload size exceeds limit. Max allowed for this image is ${limitMb}MB.`,
@@ -82,11 +82,18 @@ export async function uploadMultipleImagesService(
   base64List: string[] = [],
   folder: string = PROJECT_ROOT_FOLDER
 ): Promise<UploadResult[]> {
+  const isLostFound = folder.toLowerCase().includes("lost-found");
+  const totalCount = (files?.length || 0) + (base64List?.length || 0);
+
+  if (isLostFound && totalCount > 2) {
+    throw new AppError("A maximum of 2 photos can be uploaded for Lost & Found items.", 400);
+  }
+
   const uploadPromises: Promise<UploadResult>[] = [];
 
   if (files && files.length > 0) {
     for (const file of files) {
-      validateImageFile(file);
+      validateImageFile(file, MAX_FILE_SIZE);
       uploadPromises.push(
         uploadBufferToCloudinary(file.buffer, folder, file.originalname)
       );
@@ -95,6 +102,11 @@ export async function uploadMultipleImagesService(
 
   if (base64List && base64List.length > 0) {
     for (const b64 of base64List) {
+      const rawBase64 = b64.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
+      const approxSizeBytes = Math.ceil((rawBase64.length * 3) / 4);
+      if (approxSizeBytes > MAX_FILE_SIZE) {
+        throw new AppError("One or more images exceed the 5MB limit.", 400);
+      }
       uploadPromises.push(uploadBase64ToCloudinary(b64, folder));
     }
   }

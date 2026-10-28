@@ -194,7 +194,11 @@ export async function uploadBase64ToCloudinary(
       ];
       uploadOptions.format = "webp";
     } else {
-      uploadOptions.transformation = [{ quality: "auto", fetch_format: "auto" }];
+      uploadOptions.transformation = [
+        { width: 1080, crop: "limit" },
+        { quality: "auto:good" },
+        { fetch_format: "auto" },
+      ];
     }
 
     const result = await cloudinary.uploader.upload(base64Data, uploadOptions);

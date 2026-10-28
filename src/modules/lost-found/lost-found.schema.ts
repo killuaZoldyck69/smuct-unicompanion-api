@@ -16,7 +16,10 @@ export const createLostFoundSchema = z.object({
       message: "Invalid category selected",
     }),
     location: z.string().min(2, "Location is required").max(150),
-    images: z.array(z.string().url("Invalid image URL")).default([]),
+    images: z
+      .array(z.string().url("Invalid image URL"))
+      .max(2, "Maximum 2 photos allowed for Lost & Found items")
+      .default([]),
     verificationQuestion: z.string().max(200).optional().nullable(),
     verificationAnswer: z.string().max(200).optional().nullable(),
   }),
@@ -33,7 +36,10 @@ export const updateLostFoundSchema = z.object({
       message: "Invalid category selected",
     }).optional(),
     location: z.string().min(2, "Location is required").max(150).optional(),
-    images: z.array(z.string().url("Invalid image URL")).optional(),
+    images: z
+      .array(z.string().url("Invalid image URL"))
+      .max(2, "Maximum 2 photos allowed for Lost & Found items")
+      .optional(),
     verificationQuestion: z.string().max(200).optional().nullable(),
     verificationAnswer: z.string().max(200).optional().nullable(),
   }),
