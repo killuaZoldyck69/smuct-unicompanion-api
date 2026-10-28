@@ -167,10 +167,18 @@ export const getAdminCourseHubsService = async (query: AdminCourseHubsQuery) => 
     query.department.trim() !== "" &&
     query.department.toUpperCase() !== "ALL"
   ) {
-    where.department = {
-      equals: query.department.trim(),
-      mode: "insensitive",
-    };
+    const dept = query.department.trim();
+    if (dept.toUpperCase() === "CSE") {
+      where.OR = [
+        { department: { contains: "Computer Science", mode: "insensitive" } },
+        { department: { equals: "CSE", mode: "insensitive" } },
+      ];
+    } else {
+      where.department = {
+        contains: dept,
+        mode: "insensitive",
+      };
+    }
   }
 
   // Search filter (matches courseName OR courseCode)
