@@ -4,6 +4,7 @@ import { requireAdmin } from "../../middleware/admin.middleware";
 import {
   getDashboardStats,
   getSystemDiagnostics,
+  getAdminCourseHubs,
 } from "./admin.controller";
 
 const router = Router();
@@ -18,5 +19,8 @@ router.get(
   requireAdmin,
   getSystemDiagnostics,
 );
+
+// GET /api/admin/course-hubs - Paginated, searchable, filterable directory of all course hubs (Admin Only)
+router.get("/course-hubs", requireAuth, requireAdmin, getAdminCourseHubs);
 
 export const adminRoutes = router;

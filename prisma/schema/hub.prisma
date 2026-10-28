@@ -5,6 +5,7 @@
 enum HubRole {
   TEACHER
   CR
+  TA
   STUDENT
 }
 

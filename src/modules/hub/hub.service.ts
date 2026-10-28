@@ -21,7 +21,13 @@ export const verifyHubRole = async (
 ) => {
   const user = await hubRepository.findUserWithStudentProfile(userId);
   if (user?.role === "ADMIN") {
-    return { userId, hubId, role: "TEACHER" as any, joinedAt: new Date() };
+    if (allowedRoles.includes("ADMIN")) {
+      return { userId, hubId, role: "ADMIN" as any, joinedAt: new Date() };
+    }
+    throw new AppError(
+      "Administrators have read-only audit access and cannot modify course hubs.",
+      403,
+    );
   }
 
   const member = await hubRepository.findHubMember(userId, hubId);
@@ -42,6 +48,9 @@ export const verifyHubRole = async (
   }
 
   if (!allowedRoles.includes(effectiveRole)) {
+    if (effectiveRole === "TA" && allowedRoles.includes("STUDENT")) {
+      return { ...member, role: effectiveRole as any };
+    }
     throw new AppError(
       "You do not have permission to perform this action in this hub.",
       403,
@@ -51,6 +60,8 @@ export const verifyHubRole = async (
 };
 
 export const getUserHubRole = async (userId: string, hubId: string) => {
+  const user = await hubRepository.findUserWithStudentProfile(userId);
+  if (user?.role === "ADMIN") return "ADMIN";
   const member = await hubRepository.findHubMember(userId, hubId);
   return member?.role || null;
 };
@@ -64,6 +75,13 @@ export const getAvailableTeachersService = async (
 const generateJoinCode = () =>
   Math.random().toString(36).substring(2, 8).toUpperCase();
 
+export const invalidateHubCaches = (hubId?: string) => {
+  if (hubId) {
+    appCache.delPattern(new RegExp(`^hub:${hubId}`));
+  }
+  appCache.delPattern(/^admin:course-hubs:/);
+};
+
 export const createHubService = async (
   userId: string,
   data: CreateHubPayload,
@@ -71,6 +89,13 @@ export const createHubService = async (
   const user = await hubRepository.findUserWithStudentProfile(userId);
 
   if (!user) throw new AppError("User not found", 404);
+
+  if (user.role === "ADMIN") {
+    throw new AppError(
+      "Administrators have read-only access to course hubs and cannot create hubs.",
+      403,
+    );
+  }
 
   const isCR = user.studentProfile?.isCR === true;
   const isTeacher = user.role === "TEACHER";
@@ -91,20 +116,30 @@ export const createHubService = async (
 
   const joinCode = generateJoinCode();
 
-  return await hubRepository.createHubWithMembers(
+  const created = await hubRepository.createHubWithMembers(
     userId,
     data,
     isTeacher,
     isCR,
     joinCode,
   );
+  invalidateHubCaches();
+  return created;
 };
 
 export const joinHubService = async (userId: string, joinCode: string) => {
+  const user = await hubRepository.findUserWithStudentProfile(userId);
+
+  if (user?.role === "ADMIN") {
+    throw new AppError(
+      "Administrators have universal access to all course hubs and do not need to join with a code.",
+      400,
+    );
+  }
+
   const hub = await hubRepository.findHubByJoinCode(joinCode);
   if (!hub) throw new AppError("Invalid join code.", 404);
 
-  const user = await hubRepository.findUserWithStudentProfile(userId);
   let role: HubRole = "STUDENT";
   if (user?.role === "TEACHER") {
     role = "TEACHER";
@@ -118,6 +153,10 @@ export const joinHubService = async (userId: string, joinCode: string) => {
 };
 
 export const getMyHubsService = async (userId: string) => {
+  const user = await hubRepository.findUserWithStudentProfile(userId);
+  if (user?.role === "ADMIN") {
+    return await hubRepository.findAllHubsForAdmin(userId);
+  }
   return await hubRepository.findMyHubMemberships(userId);
 };
 
@@ -157,7 +196,7 @@ export const updateHubService = async (
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
   const updated = await hubRepository.updateHub(hubId, data);
-  appCache.delPattern(new RegExp(`^hub:${hubId}`));
+  invalidateHubCaches(hubId);
   return updated;
 };
 
@@ -168,7 +207,7 @@ export const archiveHubService = async (
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
   const updated = await hubRepository.updateHubArchiveStatus(hubId, isArchived);
-  appCache.delPattern(new RegExp(`^hub:${hubId}`));
+  invalidateHubCaches(hubId);
   return updated;
 };
 
@@ -180,14 +219,14 @@ export const toggleLiveClassService = async (
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
   const updated = await hubRepository.updateHubLiveClass(hubId, isClassLive, meetUrl);
-  appCache.delPattern(new RegExp(`^hub:${hubId}`));
+  invalidateHubCaches(hubId);
   return updated;
 };
 
 export const deleteHubService = async (userId: string, hubId: string) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
   const deleted = await hubRepository.deleteHubById(hubId);
-  appCache.delPattern(new RegExp(`^hub:${hubId}`));
+  invalidateHubCaches(hubId);
   return deleted;
 };
 

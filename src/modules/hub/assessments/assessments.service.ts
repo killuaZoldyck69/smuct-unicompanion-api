@@ -32,7 +32,7 @@ export const getAssessmentSubmissions = async (
   const assessment = await assessmentsRepository.findAssessmentById(assessmentId);
   if (!assessment) throw new AppError("Assessment not found", 404);
 
-  await verifyHubRole(userId, assessment.hubId, ["TEACHER"]);
+  await verifyHubRole(userId, assessment.hubId, ["TEACHER", "ADMIN"]);
 
   return await assessmentsRepository.findAssessmentSubmissions(assessmentId);
 };

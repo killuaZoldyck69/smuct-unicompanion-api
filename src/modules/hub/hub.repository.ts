@@ -213,6 +213,52 @@ export const findMyHubMemberships = async (userId: string) => {
   });
 };
 
+/**
+ * Returns all course hubs across the university for administrative overview.
+ * Mapped to standard HubMember structure so clients consume it seamlessly in read-only mode.
+ */
+export const findAllHubsForAdmin = async (adminUserId: string) => {
+  const hubs = await prisma.courseHub.findMany({
+    orderBy: { createdAt: "desc" },
+    include: {
+      _count: { select: { members: true } },
+      members: {
+        where: { role: "TEACHER" },
+        select: {
+          id: true,
+          role: true,
+          user: { select: { id: true, name: true, image: true, email: true } },
+        },
+        take: 1,
+      },
+      assessments: {
+        where: { deadline: { gt: new Date() } },
+        orderBy: { deadline: "asc" },
+        take: 1,
+        select: { id: true, title: true, type: true, deadline: true },
+      },
+      classNotices: {
+        where: { isActive: true },
+        include: {
+          author: {
+            select: { id: true, name: true, image: true, role: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+
+  return hubs.map((hub) => ({
+    id: `admin-view-${hub.id}`,
+    userId: adminUserId,
+    hubId: hub.id,
+    role: "ADMIN" as any,
+    joinedAt: hub.createdAt,
+    hub,
+  }));
+};
+
 export const findHubWithMembersAndDetails = async (hubId: string) => {
   return await prisma.courseHub.findUnique({
     where: { id: hubId },

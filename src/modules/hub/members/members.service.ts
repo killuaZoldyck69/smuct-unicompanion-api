@@ -2,18 +2,43 @@ import { AppError } from "../../../utils/AppError";
 import { HubRole } from "../../../constants/enums";
 import * as membersRepo from "./members.repository";
 import { appCache } from "../../../lib/cache";
+import { prisma } from "../../../lib/prisma";
 
 export const verifyMembershipRole = async (
   userId: string,
   hubId: string,
-  allowedRoles: HubRole[],
+  allowedRoles: (HubRole | "ADMIN")[],
 ) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true },
+  });
+
+  if (user?.role === "ADMIN") {
+    if (allowedRoles.includes("ADMIN" as any)) {
+      return {
+        id: `admin-${hubId}`,
+        userId,
+        hubId,
+        role: "ADMIN" as any,
+        joinedAt: new Date(),
+      };
+    }
+    throw new AppError(
+      "Administrators have read-only access and cannot modify course hub members.",
+      403,
+    );
+  }
+
   const membership = await membersRepo.findHubMembership(userId, hubId);
   if (!membership) {
     throw new AppError("Access denied: You are not a member of this hub.", 403);
   }
 
   if (!allowedRoles.includes(membership.role as HubRole)) {
+    if (membership.role === "TA" && allowedRoles.includes("STUDENT" as any)) {
+      return membership;
+    }
     throw new AppError(
       "Access denied: You do not have permission to perform this action.",
       403,
@@ -27,7 +52,9 @@ export const getHubMembersService = async (userId: string, hubId: string) => {
   await verifyMembershipRole(userId, hubId, [
     "TEACHER",
     "CR",
+    "TA",
     "STUDENT",
+    "ADMIN" as any,
   ]);
 
   const cacheKey = `hub:${hubId}:members`;

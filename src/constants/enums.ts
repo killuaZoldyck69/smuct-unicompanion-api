@@ -56,6 +56,7 @@ export const SYSTEM_ROLE_VALUES = [
 export const HUB_ROLE_VALUES = [
   HubRole.TEACHER,
   HubRole.CR,
+  HubRole.TA,
   HubRole.STUDENT,
 ] as const;
 
