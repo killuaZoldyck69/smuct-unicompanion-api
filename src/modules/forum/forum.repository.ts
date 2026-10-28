@@ -6,6 +6,50 @@ import {
   UpdateResponsePayload,
 } from "./forum.schema";
 
+const safeStudentProfileSelect = {
+  select: {
+    studentId: true,
+    department: true,
+    program: true,
+    batch: true,
+    currentSemester: true,
+    section: true,
+    isCR: true,
+    skills: true,
+    linkedInUrl: true,
+    personalWebsiteUrl: true,
+  },
+};
+
+const safeTeacherProfileSelect = {
+  select: {
+    teacherId: true,
+    designation: true,
+    department: true,
+    faculty: true,
+    administrativeRole: true,
+    officeRoom: true,
+    advisoryBatch: true,
+    dayOff: true,
+    consultationSlots: true,
+    expertiseFields: true,
+    academicQualifications: true,
+    linkedInUrl: true,
+    personalWebsiteUrl: true,
+  },
+};
+
+// Safe author & responder selector that protects personal phone numbers from public exposure
+const publicUserSelect = {
+  id: true,
+  name: true,
+  email: true,
+  image: true,
+  role: true,
+  studentProfile: safeStudentProfileSelect,
+  teacherProfile: safeTeacherProfileSelect,
+};
+
 export const createHelpPost = async (
   authorId: string,
   data: CreatePostPayload,
@@ -15,6 +59,11 @@ export const createHelpPost = async (
       title: data.title,
       description: data.description,
       authorId,
+    },
+    include: {
+      author: {
+        select: publicUserSelect,
+      },
     },
   });
 };
@@ -86,45 +135,25 @@ export const findHelpPostById = async (id: string) => {
   });
 };
 
-const responderSelect = {
-  id: true,
-  name: true,
-  email: true,
-  phoneNumber: true,
-  image: true,
-  role: true,
-  studentProfile: true,
-  teacherProfile: true,
-};
-
 export const findHelpPostWithDetails = async (id: string) => {
   return await prisma.helpPost.findUnique({
     where: { id },
     include: {
       author: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phoneNumber: true,
-          image: true,
-          role: true,
-          studentProfile: true,
-          teacherProfile: true,
-        },
+        select: publicUserSelect,
       },
       responses: {
         where: { parentId: null },
         orderBy: { createdAt: "asc" },
         include: {
           responder: {
-            select: responderSelect,
+            select: publicUserSelect,
           },
           replies: {
             orderBy: { createdAt: "asc" },
             include: {
               responder: {
-                select: responderSelect,
+                select: publicUserSelect,
               },
             },
           },
@@ -148,7 +177,7 @@ export const createHelpResponse = async (
     },
     include: {
       responder: {
-        select: responderSelect,
+        select: publicUserSelect,
       },
     },
   });
@@ -161,12 +190,31 @@ export const updateHelpPost = async (
   return await prisma.helpPost.update({
     where: { id },
     data,
+    include: {
+      author: {
+        select: publicUserSelect,
+      },
+    },
   });
 };
 
 export const deleteHelpPostById = async (id: string) => {
-  return await prisma.helpPost.delete({
-    where: { id },
+  return await prisma.$transaction(async (tx) => {
+    // 1. Delete all nested replies
+    await tx.helpResponse.deleteMany({
+      where: {
+        post: { id },
+        parentId: { not: null },
+      },
+    });
+    // 2. Delete all top-level responses
+    await tx.helpResponse.deleteMany({
+      where: { postId: id },
+    });
+    // 3. Delete the post
+    return await tx.helpPost.delete({
+      where: { id },
+    });
   });
 };
 
@@ -183,11 +231,23 @@ export const updateHelpResponse = async (
   return await prisma.helpResponse.update({
     where: { id },
     data,
+    include: {
+      responder: {
+        select: publicUserSelect,
+      },
+    },
   });
 };
 
 export const deleteHelpResponseById = async (id: string) => {
-  return await prisma.helpResponse.delete({
-    where: { id },
+  return await prisma.$transaction(async (tx) => {
+    // 1. Delete any replies to this response
+    await tx.helpResponse.deleteMany({
+      where: { parentId: id },
+    });
+    // 2. Delete the response itself
+    return await tx.helpResponse.delete({
+      where: { id },
+    });
   });
 };

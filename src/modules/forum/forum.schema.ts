@@ -20,12 +20,12 @@ export const createPostSchema = z.object({
     title: z
       .string()
       .trim()
-      .min(3, "Title must be at least 3 characters")
+      .min(5, "Title must be at least 5 characters")
       .max(150, "Title cannot exceed 150 characters"),
     description: z
       .string()
       .trim()
-      .min(5, "Description must be at least 5 characters")
+      .min(10, "Description must be at least 10 characters")
       .max(3000, "Description cannot exceed 3,000 characters"),
   }),
 });
@@ -53,19 +53,30 @@ export const updatePostSchema = z.object({
       title: z
         .string()
         .trim()
-        .min(3, "Title must be at least 3 characters")
+        .min(5, "Title must be at least 5 characters")
         .max(150, "Title cannot exceed 150 characters")
         .optional(),
       description: z
         .string()
         .trim()
-        .min(5, "Description must be at least 5 characters")
+        .min(10, "Description must be at least 10 characters")
         .max(3000, "Description cannot exceed 3,000 characters")
         .optional(),
     })
     .refine((data) => data.title !== undefined || data.description !== undefined, {
       message: "At least one field (title or description) must be provided",
     }),
+});
+
+export const resolvePostSchema = z.object({
+  params: z.object({
+    id: z.string().uuid("Invalid forum post ID"),
+  }),
+  body: z
+    .object({
+      isResolved: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 export const updateResponseSchema = z.object({
@@ -93,4 +104,5 @@ export type CreatePostPayload = z.infer<typeof createPostSchema>["body"];
 export type CreateResponsePayload = z.infer<typeof createResponseSchema>["body"];
 export type UpdateResponsePayload = z.infer<typeof updateResponseSchema>["body"];
 export type UpdatePostPayload = z.infer<typeof updatePostSchema>["body"];
+export type ResolvePostPayload = z.infer<typeof resolvePostSchema>["body"];
 export type GetFeedQuery = z.infer<typeof getFeedQuerySchema>["query"];

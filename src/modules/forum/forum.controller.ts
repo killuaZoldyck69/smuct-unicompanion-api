@@ -14,7 +14,7 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getFeed = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user.id;
+  const userId = req.user?.id;
   const result = await forumService.getAllPostsService(req.query, userId);
 
   res.status(200).json({
@@ -39,10 +39,12 @@ export const getThread = catchAsync(async (req: Request, res: Response) => {
 export const replyToPost = catchAsync(async (req: Request, res: Response) => {
   const postId = req.params.id as string;
   const responderId = req.user.id;
+  const role = req.user.role;
 
   const response = await forumService.createResponseService(
     postId,
     responderId,
+    role,
     req.body,
   );
 
@@ -56,29 +58,33 @@ export const replyToPost = catchAsync(async (req: Request, res: Response) => {
 export const markResolved = catchAsync(async (req: Request, res: Response) => {
   const postId = req.params.id as string;
   const userId = req.user.id;
-  const role = req.user.role; // Extract role for Admin check
+  const role = req.user.role;
 
   const resolvedPost = await forumService.resolvePostService(
     postId,
     userId,
     role,
+    req.body,
   );
 
   res.status(200).json({
     success: true,
-    message: "Post marked as resolved successfully.",
+    message: resolvedPost.isResolved
+      ? "Post marked as resolved successfully."
+      : "Post reopened successfully.",
     data: resolvedPost,
   });
 });
 
-// Update Post Controller
 export const updatePost = catchAsync(async (req: Request, res: Response) => {
   const postId = req.params.id as string;
   const userId = req.user.id;
+  const role = req.user.role;
 
   const updatedPost = await forumService.updatePostService(
     postId,
     userId,
+    role,
     req.body,
   );
 
@@ -89,11 +95,10 @@ export const updatePost = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-// Delete Post Controller
 export const deletePost = catchAsync(async (req: Request, res: Response) => {
   const postId = req.params.id as string;
   const userId = req.user.id;
-  const role = req.user.role; // Extract role for Admin check
+  const role = req.user.role;
 
   await forumService.deletePostService(postId, userId, role);
 
@@ -103,7 +108,6 @@ export const deletePost = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-// Update Response Controller
 export const updateResponse = catchAsync(async (req: Request, res: Response) => {
   const postId = req.params.id as string;
   const responseId = req.params.responseId as string;
@@ -125,7 +129,6 @@ export const updateResponse = catchAsync(async (req: Request, res: Response) => 
   });
 });
 
-// Delete Response Controller
 export const deleteResponse = catchAsync(async (req: Request, res: Response) => {
   const postId = req.params.id as string;
   const responseId = req.params.responseId as string;

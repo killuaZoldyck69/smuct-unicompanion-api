@@ -8,6 +8,7 @@ import {
   updateResponseSchema,
   responseIdParamSchema,
   updatePostSchema,
+  resolvePostSchema,
   forumIdParamSchema,
   getFeedQuerySchema,
 } from "./forum.schema";
@@ -27,13 +28,13 @@ const router = Router();
 
 const postRateLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
-  limit: 5,
+  limit: 10,
   message: "Too many posts created. Please try again in 10 minutes.",
 });
 
 const replyRateLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
-  limit: 15,
+  limit: 25,
   message: "Too many replies posted. Please try again in 5 minutes.",
 });
 
@@ -70,15 +71,15 @@ router.post(
   replyToPost,
 );
 
-// PATCH /api/forum/:id/resolve - Mark Post as Resolved
+// PATCH /api/forum/:id/resolve - Mark Post as Resolved or Toggle
 router.patch(
   "/:id/resolve",
   requireAuth,
-  validateRequest(forumIdParamSchema),
+  validateRequest(resolvePostSchema),
   markResolved,
 );
 
-// PATCH /api/forum/:id - Edit Post
+// PATCH /api/forum/:id - Edit / Moderate Post
 router.patch(
   "/:id",
   requireAuth,

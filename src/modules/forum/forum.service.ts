@@ -5,13 +5,26 @@ import {
   CreateResponsePayload,
   UpdatePostPayload,
   UpdateResponsePayload,
+  ResolvePostPayload,
 } from "./forum.schema";
+import {
+  validateAndSanitizePost,
+  validateAndSanitizeResponse,
+} from "./forum.sanitizer";
 
 export const createPostService = async (
   authorId: string,
   data: CreatePostPayload,
 ) => {
-  return await forumRepository.createHelpPost(authorId, data);
+  const validation = validateAndSanitizePost(data);
+  if (validation.error) {
+    throw new AppError(validation.error, 400);
+  }
+
+  return await forumRepository.createHelpPost(authorId, {
+    title: validation.cleanTitle!,
+    description: validation.cleanDescription!,
+  });
 };
 
 export const getAllPostsService = async (
@@ -75,6 +88,7 @@ export const getSinglePostService = async (id: string) => {
 export const createResponseService = async (
   postId: string,
   responderId: string,
+  role: string,
   data: CreateResponsePayload,
 ) => {
   const post = await forumRepository.findHelpPostById(postId);
@@ -83,20 +97,33 @@ export const createResponseService = async (
     throw new AppError("Forum post not found.", 404);
   }
 
+  // Prevent posting replies to resolved threads unless Admin
+  if (post.isResolved && role !== "ADMIN") {
+    throw new AppError(
+      "Cannot reply to a resolved discussion. Please reopen the discussion or start a new topic.",
+      403,
+    );
+  }
+
+  const validation = validateAndSanitizeResponse(data.content);
+  if (validation.error) {
+    throw new AppError(validation.error, 400);
+  }
+
   let finalParentId = data.parentId ?? null;
   if (finalParentId) {
     const parentResponse = await forumRepository.findHelpResponseById(finalParentId);
     if (!parentResponse || parentResponse.postId !== postId) {
       throw new AppError("Parent response not found.", 404);
     }
-    // Flatten if replying to a reply
+    // Flatten if replying to an existing reply (maintains strict 2-tier discussion hierarchy)
     if (parentResponse.parentId) {
       finalParentId = parentResponse.parentId;
     }
   }
 
   return await forumRepository.createHelpResponse(postId, responderId, {
-    ...data,
+    content: validation.cleanContent!,
     parentId: finalParentId,
   });
 };
@@ -105,6 +132,7 @@ export const resolvePostService = async (
   postId: string,
   userId: string,
   role: string,
+  data?: ResolvePostPayload,
 ) => {
   const post = await forumRepository.findHelpPostById(postId);
 
@@ -112,7 +140,7 @@ export const resolvePostService = async (
     throw new AppError("Forum post not found.", 404);
   }
 
-  // Admin Override applied here
+  // Post author or Admin can toggle/set resolution state
   if (post.authorId !== userId && role !== "ADMIN") {
     throw new AppError(
       "You do not have permission to perform this action.",
@@ -120,16 +148,20 @@ export const resolvePostService = async (
     );
   }
 
+  // If specific isResolved provided, use it; otherwise toggle current state
+  const targetResolved =
+    typeof data?.isResolved === "boolean" ? data.isResolved : !post.isResolved;
+
   return await forumRepository.updateHelpPost(postId, {
-    isResolved: true,
+    isResolved: targetResolved,
     updatedAt: post.updatedAt,
   });
 };
 
-// Update Post Service
 export const updatePostService = async (
   postId: string,
   userId: string,
+  role: string,
   data: UpdatePostPayload,
 ) => {
   const post = await forumRepository.findHelpPostById(postId);
@@ -138,15 +170,35 @@ export const updatePostService = async (
     throw new AppError("Forum post not found.", 404);
   }
 
-  // Edit action is strictly for the original author (No Admin override requested here)
-  if (post.authorId !== userId) {
+  // Original author or Admin can edit/moderate post
+  if (post.authorId !== userId && role !== "ADMIN") {
     throw new AppError("You do not have permission to edit this post.", 403);
   }
 
-  return await forumRepository.updateHelpPost(postId, data);
+  // Prevent modifying post content once resolved, unless Admin
+  if (post.isResolved && role !== "ADMIN") {
+    throw new AppError(
+      "Cannot edit a resolved discussion. Please reopen the discussion first.",
+      403,
+    );
+  }
+
+  const validation = validateAndSanitizePost(data);
+  if (validation.error) {
+    throw new AppError(validation.error, 400);
+  }
+
+  const updateData: UpdatePostPayload = {};
+  if (validation.cleanTitle !== undefined) {
+    updateData.title = validation.cleanTitle;
+  }
+  if (validation.cleanDescription !== undefined) {
+    updateData.description = validation.cleanDescription;
+  }
+
+  return await forumRepository.updateHelpPost(postId, updateData);
 };
 
-// Delete Post Service
 export const deletePostService = async (
   postId: string,
   userId: string,
@@ -158,7 +210,7 @@ export const deletePostService = async (
     throw new AppError("Forum post not found.", 404);
   }
 
-  // Admin Override applied here
+  // Author or Admin can delete
   if (post.authorId !== userId && role !== "ADMIN") {
     throw new AppError(
       "You do not have permission to perform this action.",
@@ -185,7 +237,7 @@ export const updateResponseService = async (
     throw new AppError("Forum post not found.", 404);
   }
 
-  if (post.isResolved) {
+  if (post.isResolved && role !== "ADMIN") {
     throw new AppError("Cannot edit responses on a resolved discussion.", 403);
   }
 
@@ -200,7 +252,14 @@ export const updateResponseService = async (
     );
   }
 
-  return await forumRepository.updateHelpResponse(responseId, data);
+  const validation = validateAndSanitizeResponse(data.content);
+  if (validation.error) {
+    throw new AppError(validation.error, 400);
+  }
+
+  return await forumRepository.updateHelpResponse(responseId, {
+    content: validation.cleanContent!,
+  });
 };
 
 export const deleteResponseService = async (
