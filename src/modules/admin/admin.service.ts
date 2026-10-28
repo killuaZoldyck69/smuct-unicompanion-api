@@ -21,6 +21,7 @@ export interface AdminDashboardStats {
   restrictedUsers: number;
   pendingApprovals: number;
   activeNotices: number;
+  totalCourseHubs: number;
   recentActivity: ActivityItem[];
 }
 
@@ -33,6 +34,7 @@ export const getAdminDashboardStatsService = async (): Promise<AdminDashboardSta
     restrictedUsers,
     pendingApprovals,
     activeNotices,
+    totalCourseHubs,
     recentUsers,
     recentRestricted,
     recentNotices,
@@ -44,6 +46,7 @@ export const getAdminDashboardStatsService = async (): Promise<AdminDashboardSta
     prisma.user.count({ where: { isRestricted: true } }),
     prisma.user.count({ where: { emailVerified: false } }),
     prisma.notice.count(),
+    prisma.courseHub.count(),
     // 5 most recent registered users
     prisma.user.findMany({
       take: 5,
@@ -136,6 +139,7 @@ export const getAdminDashboardStatsService = async (): Promise<AdminDashboardSta
     restrictedUsers,
     pendingApprovals,
     activeNotices,
+    totalCourseHubs,
     recentActivity: activities.slice(0, 10),
   };
 };
