@@ -86,8 +86,21 @@ const missingPriceRes = createMarketplaceSchema.safeParse({
     contactPhone: "+8801956014045",
   },
 });
-assert(!missingPriceRes.success, "Missing price should be rejected");
-console.log("  ✓ Missing price is rejected (price is mandatory)");
+assert(missingPriceRes.success, "Missing price should be accepted and default to 0");
+assert(missingPriceRes.data.body.price === 0, "Price should default to 0");
+console.log("  ✓ Missing price is optional and defaults to 0");
+
+// 4. Phone validation: strictly mandatory 14-char BD number (+8801956014045)
+const missingPhoneRes = createMarketplaceSchema.safeParse({
+  body: {
+    type: "SELLING",
+    title: "Test Item",
+    description: "Valid description",
+    category: "TEXTBOOKS",
+  },
+});
+assert(!missingPhoneRes.success, "Missing phone should be rejected (contactPhone is mandatory)");
+console.log("  ✓ Missing phone is rejected (contactPhone is strictly mandatory)");
 
 // 4. Phone validation: mandatory 14-char BD number (+8801956014045)
 const validPhoneNumbers = [
@@ -189,6 +202,48 @@ const updateRes = updateMarketplaceSchema.safeParse({
 });
 assert(updateRes.success, "Valid partial update should be accepted");
 console.log("  ✓ Partial update with new category and price accepted");
+
+// 7. Whitespace trimming & minimum length validation
+const whitespaceTitleRes = createMarketplaceSchema.safeParse({
+  body: {
+    type: "SELLING",
+    title: "   ",
+    description: "Valid description",
+    price: 500,
+    category: "TEXTBOOKS",
+    contactPhone: "+8801956014045",
+  },
+});
+assert(!whitespaceTitleRes.success, "Whitespace-only title should be rejected");
+console.log("  ✓ Whitespace-only title is rejected");
+
+const whitespaceDescRes = createMarketplaceSchema.safeParse({
+  body: {
+    type: "SELLING",
+    title: "Valid Title",
+    description: "   \n\t  ",
+    price: 500,
+    category: "TEXTBOOKS",
+    contactPhone: "+8801956014045",
+  },
+});
+assert(!whitespaceDescRes.success, "Whitespace-only description should be rejected");
+console.log("  ✓ Whitespace-only description is rejected");
+
+// 8. Optional images validation (listings without photos)
+const withoutImagesRes = createMarketplaceSchema.safeParse({
+  body: {
+    type: "BUYING",
+    title: "Looking for Calculus Book",
+    description: "Need Thomas Calculus 14th edition",
+    price: 300,
+    category: "TEXTBOOKS",
+    contactPhone: "+8801956014045",
+  },
+});
+assert(withoutImagesRes.success, "Listing without images field should be accepted");
+assert(Array.isArray(withoutImagesRes.data.body.images), "images should default to an empty array");
+console.log("  ✓ Listing without images is accepted and defaults to empty array");
 
 console.log("\n========================================");
 console.log("Marketplace Unit Tests: ALL PASSED");

@@ -11,12 +11,14 @@ export const createMarketplaceSchema = z.object({
     type: z.enum(LISTING_TYPE_VALUES, {
       message: "Type must be SELLING or BUYING",
     }),
-    title: z.string().min(2, "Title must be at least 2 characters").max(150),
-    description: z.string().min(5, "Description must be at least 5 characters"),
+    title: z.string().trim().min(2, "Title must be at least 2 characters").max(150),
+    description: z.string().trim().min(5, "Description must be at least 5 characters"),
     price: z.coerce
-      .number({ message: "Price is required in BDT" })
+      .number()
       .min(0, "Price must be a non-negative number in BDT")
-      .max(10000000, "Price exceeds allowable limit"),
+      .max(10000000, "Price exceeds allowable limit")
+      .optional()
+      .default(0),
     category: z.enum(MARKETPLACE_CATEGORY_VALUES, {
       message: "Invalid category selected",
     }),
@@ -24,6 +26,7 @@ export const createMarketplaceSchema = z.object({
     images: z
       .array(z.string().url("Invalid image URL"))
       .max(4, "Maximum 4 photos allowed for marketplace listings")
+      .optional()
       .default([]),
     contactPhone: z
       .string({ message: "Contact phone number is required" })
@@ -50,8 +53,8 @@ export const updateMarketplaceStatusSchema = z.object({
 export const updateMarketplaceSchema = z.object({
   body: z.object({
     type: z.enum(LISTING_TYPE_VALUES).optional(),
-    title: z.string().min(2, "Title must be at least 2 characters").max(150).optional(),
-    description: z.string().min(5, "Description must be at least 5 characters").optional(),
+    title: z.string().trim().min(2, "Title must be at least 2 characters").max(150).optional(),
+    description: z.string().trim().min(5, "Description must be at least 5 characters").optional(),
     price: z.coerce
       .number()
       .min(0, "Price must be a non-negative number in BDT")
@@ -81,14 +84,22 @@ export const updateMarketplaceSchema = z.object({
 
 export const createMarketplaceCommentSchema = z.object({
   body: z.object({
-    content: z.string().min(1, "Comment content cannot be empty").max(1000),
+    content: z
+      .string()
+      .trim()
+      .min(1, "Comment content cannot be empty")
+      .max(1000),
     parentId: z.string().optional().nullable(),
   }),
 });
 
 export const updateMarketplaceCommentSchema = z.object({
   body: z.object({
-    content: z.string().min(1, "Comment content cannot be empty").max(1000),
+    content: z
+      .string()
+      .trim()
+      .min(1, "Comment content cannot be empty")
+      .max(1000),
   }),
 });
 

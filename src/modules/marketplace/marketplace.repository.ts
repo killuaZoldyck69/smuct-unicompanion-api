@@ -17,11 +17,8 @@ import {
 const authorSelect = {
   id: true,
   name: true,
-  email: true,
   image: true,
   role: true,
-  phoneNumber: true,
-  bloodGroup: true,
   studentProfile: {
     select: {
       studentId: true,
@@ -98,7 +95,7 @@ export const findMarketplaceFeedInDb = async (
       include: feedQuery.include,
       orderBy: { createdAt: "desc" },
     }),
-    prisma.marketplacePost.count({ where }),
+    cursor ? Promise.resolve(0) : prisma.marketplacePost.count({ where }),
   ]);
 
   const hasNextPage = items.length > limit;
@@ -156,10 +153,10 @@ export const createMarketplacePostInDb = async (
       type: payload.type,
       title: payload.title,
       description: payload.description,
-      price: payload.price ?? null,
+      price: payload.price ?? 0,
       category: payload.category,
       condition: payload.condition ?? null,
-      images: payload.images,
+      images: payload.images ?? [],
       contactPhone: payload.contactPhone ?? null,
     },
     include: { author: { select: authorSelect } },

@@ -46,11 +46,11 @@ model MarketplacePost {
   type         ListingType
   title        String
   description  String
-  price        Float?
+  price        Float?              @default(0)
   category     MarketplaceCategory
   condition    ItemCondition?
   status       ListingStatus       @default(ACTIVE)
-  images       String[]
+  images       String[]            @default([])
   contactPhone String?
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt

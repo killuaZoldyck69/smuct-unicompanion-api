@@ -141,7 +141,8 @@ export const updateCommentService = async (
   const comment = await findMarketplaceCommentByIdInDb(commentId);
   if (!comment) throw new AppError("Comment not found", 404);
 
-  assertOwnership(comment.authorId === userId, userRole === "ADMIN", "edit this comment");
+  // Only the original author can edit their own comment text
+  assertOwnership(comment.authorId === userId, false, "edit this comment");
 
   return updateMarketplaceCommentInDb(commentId, content);
 };
