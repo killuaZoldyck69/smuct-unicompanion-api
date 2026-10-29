@@ -80,10 +80,10 @@ export const createLostFoundPostInDb = async (
       authorId,
       type: payload.type,
       title: payload.title,
-      description: payload.description,
+      description: payload.description || null,
       category: payload.category,
-      location: payload.location,
-      images: payload.images,
+      location: payload.location || null,
+      images: payload.images || [],
       verificationQuestion: payload.verificationQuestion || null,
       verificationAnswer: payload.verificationAnswer || null,
     },
@@ -98,9 +98,34 @@ export const updateLostFoundPostInDb = async (
   id: string,
   data: Partial<CreateLostFoundPayload>
 ) => {
+  const updateData: any = { ...data };
+
+  if (updateData.title !== undefined) {
+    updateData.title = updateData.title.trim();
+  }
+  if (updateData.description !== undefined) {
+    updateData.description = updateData.description?.trim() || null;
+  }
+  if (updateData.location !== undefined) {
+    updateData.location = updateData.location?.trim() || null;
+  }
+  if (updateData.type === "LOST") {
+    updateData.verificationQuestion = null;
+    updateData.verificationAnswer = null;
+  } else if (updateData.type === "FOUND") {
+    if (updateData.verificationQuestion !== undefined) {
+      updateData.verificationQuestion =
+        updateData.verificationQuestion?.trim() || null;
+    }
+    if (updateData.verificationAnswer !== undefined) {
+      updateData.verificationAnswer =
+        updateData.verificationAnswer?.trim() || null;
+    }
+  }
+
   return prisma.lostFoundPost.update({
     where: { id },
-    data,
+    data: updateData,
     include: {
       author: { select: publicAuthorSelection },
       _count: { select: { claims: true } },

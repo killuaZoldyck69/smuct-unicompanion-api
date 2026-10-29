@@ -46,20 +46,19 @@ model LostFoundPost {
   authorId             String
   type                 LostFoundType
   title                String
-  description          String
+  description          String?
   category             LostFoundCategory
-  location             String
+  location             String?
   status               LostFoundStatus   @default(ACTIVE)
-  images               String[]
+  images               String[]          @default([])
   verificationQuestion String?
   verificationAnswer   String?
   resolvedClaimId      String?
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
-  author   User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  claims   LostFoundClaim[]
-  comments LostFoundComment[]
+  author User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  claims LostFoundClaim[]
 
   @@index([authorId])
   @@index([status, type])
@@ -84,25 +83,5 @@ model LostFoundClaim {
   @@index([postId, status])
   @@index([claimantId])
   @@map("lost_found_claim")
-}
-
-model LostFoundComment {
-  id        String   @id @default(uuid())
-  postId    String
-  authorId  String
-  parentId  String?
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  post    LostFoundPost      @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author  User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  parent  LostFoundComment?  @relation("LostFoundCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies LostFoundComment[] @relation("LostFoundCommentReplies")
-
-  @@index([postId])
-  @@index([authorId])
-  @@index([parentId])
-  @@map("lost_found_comment")
 }
 

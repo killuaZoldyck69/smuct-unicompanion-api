@@ -17,7 +17,12 @@ export const globalErrorHandler = (
   // Handle Zod Validation Errors
   if (err instanceof ZodError) {
     statusCode = 400;
-    message = "Validation Error";
+    const errorDetails = err.issues.map((i) => i.message).filter(Boolean);
+    message = errorDetails.length > 0 ? errorDetails.join(". ") : "Validation Error";
+    console.error(
+      `[Zod Validation Error on ${req.method} ${req.originalUrl}]:`,
+      JSON.stringify(err.issues)
+    );
     errorSources = err.issues.map((issue) => ({
       path: issue.path[issue.path.length - 1],
       message: issue.message,

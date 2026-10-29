@@ -64,7 +64,6 @@ model User {
   announcementComments AnnouncementComment[]
   lostFoundPosts       LostFoundPost[]
   lostFoundClaims      LostFoundClaim[]
-  lostFoundComments    LostFoundComment[]
   marketplacePosts     MarketplacePost[]
   marketplaceComments  MarketplaceComment[]
   classNotices         ClassNotice[]

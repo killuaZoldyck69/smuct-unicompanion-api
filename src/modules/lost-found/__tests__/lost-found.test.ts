@@ -1,4 +1,8 @@
-import { createLostFoundSchema, updateLostFoundSchema } from "../lost-found.schema";
+import {
+  createLostFoundSchema,
+  updateLostFoundSchema,
+  createClaimSchema,
+} from "../lost-found.schema";
 import { validateImageFile, MulterFile } from "../../upload/upload.service";
 import { AppError } from "../../../utils/AppError";
 
@@ -141,6 +145,58 @@ async function runTests() {
     );
   }
   assert(threwOversized, "Oversized file threw validation error");
+
+  // Test 7: Claim with 1 proof photo accepted (including Cloudinary transformations with commas)
+  const singleProofClaim = createClaimSchema.safeParse({
+    body: {
+      message: "This is my earbud case lost near UB 111 bench.",
+      proofImage:
+        "https://res.cloudinary.com/gzgfeoqn/image/upload/q_auto,f_auto,w_1000,c_limit/smuct-unicompanion/campus-hub/lost-found/claims/test_ppnmvy",
+    },
+  });
+  assert(singleProofClaim.success, "Claim with Cloudinary transformation URL (with commas) is accepted");
+
+  // Test 8: Claim without proof photo (null) is accepted
+  const nullProofClaim = createClaimSchema.safeParse({
+    body: {
+      message: "This is my earbud case lost near UB 111 bench.",
+      proofImage: null,
+    },
+  });
+  assert(nullProofClaim.success, "Claim without proof photo (null) is accepted");
+
+  // Test 9: Claim with multiple proof photos is rejected (max 1 photo limit)
+  const dualProofClaim = createClaimSchema.safeParse({
+    body: {
+      message: "This is my earbud case, attaching invoice and serial number.",
+      proofImage:
+        "https://res.cloudinary.com/demo/image/upload/proof1.jpg,https://res.cloudinary.com/demo/image/upload/proof2.jpg",
+    },
+  });
+  assert(!dualProofClaim.success, "Claim with multiple proof photos is rejected (max 1 photo limit)");
+
+  // Test 10: Post creation with optional description, location, and images
+  const optionalFieldsPost = createLostFoundSchema.safeParse({
+    body: {
+      type: "LOST",
+      title: "Lost Black Wallet",
+      category: "WALLET",
+    },
+  });
+  assert(optionalFieldsPost.success, "Post creation without description, location, or images is accepted");
+
+  // Test 11: Post creation with null description and location is accepted
+  const nullFieldsPost = createLostFoundSchema.safeParse({
+    body: {
+      type: "FOUND",
+      title: "Found Keys on Campus",
+      description: null,
+      category: "KEYS",
+      location: null,
+      images: [],
+    },
+  });
+  assert(nullFieldsPost.success, "Post creation with null description/location and empty images is accepted");
 
   console.log("\n========================================");
   console.log("Lost & Found Unit Tests: ALL PASSED");

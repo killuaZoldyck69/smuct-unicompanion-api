@@ -423,6 +423,13 @@ export const withdrawClaimService = async (
   }
 
   await withdrawClaimInDb(claimId);
+
+  if (claim.proofImage) {
+    deleteMultipleImagesFromCloudinary([claim.proofImage]).catch((err) =>
+      console.warn("[Cloudinary] Failed to clean up withdrawn claim proof image:", err)
+    );
+  }
+
   return { message: "Claim withdrawn successfully" };
 };
 

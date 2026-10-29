@@ -11,11 +11,11 @@ export const createLostFoundSchema = z.object({
       message: "Type must be LOST or FOUND",
     }),
     title: z.string().min(2, "Title must be at least 2 characters").max(150),
-    description: z.string().min(5, "Description must be at least 5 characters"),
+    description: z.string().max(3000).optional().nullable(),
     category: z.enum(LOST_FOUND_CATEGORY_VALUES, {
       message: "Invalid category selected",
     }),
-    location: z.string().min(2, "Location is required").max(150),
+    location: z.string().max(150).optional().nullable(),
     images: z
       .array(z.string().url("Invalid image URL"))
       .max(2, "Maximum 2 photos allowed for Lost & Found items")
@@ -31,11 +31,11 @@ export const updateLostFoundSchema = z.object({
       message: "Type must be LOST or FOUND",
     }).optional(),
     title: z.string().min(2, "Title must be at least 2 characters").max(150).optional(),
-    description: z.string().min(5, "Description must be at least 5 characters").optional(),
+    description: z.string().max(3000).optional().nullable(),
     category: z.enum(LOST_FOUND_CATEGORY_VALUES, {
       message: "Invalid category selected",
     }).optional(),
-    location: z.string().min(2, "Location is required").max(150).optional(),
+    location: z.string().max(150).optional().nullable(),
     images: z
       .array(z.string().url("Invalid image URL"))
       .max(2, "Maximum 2 photos allowed for Lost & Found items")
@@ -60,7 +60,26 @@ export const createClaimSchema = z.object({
       .min(5, "Message must be at least 5 characters")
       .max(1000, "Message cannot exceed 1000 characters"),
     answer: z.string().max(300).optional().nullable(),
-    proofImage: z.string().url("Invalid proof image URL").optional().nullable(),
+    proofImage: z
+      .string()
+      .max(1000)
+      .refine(
+        (val) => {
+          if (!val || !val.trim()) return true;
+          const trimmed = val.trim();
+          const matches = trimmed.match(/https?:\/\//g);
+          if (!matches || matches.length !== 1) return false;
+          try {
+            const parsed = new URL(trimmed);
+            return parsed.protocol === "http:" || parsed.protocol === "https:";
+          } catch {
+            return false;
+          }
+        },
+        { message: "Invalid proof image URL. Exactly 1 proof photo is allowed." }
+      )
+      .optional()
+      .nullable(),
   }),
 });
 
