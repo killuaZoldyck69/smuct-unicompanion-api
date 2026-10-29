@@ -5,6 +5,7 @@ import { rateLimit } from "../../middleware/rateLimit.middleware";
 import {
   createClaimSchema,
   createLostFoundSchema,
+  getFeedQuerySchema,
   updateLostFoundSchema,
   updateLostFoundStatusSchema,
 } from "./lost-found.schema";
@@ -39,7 +40,7 @@ router.post(
   createPost
 );
 
-router.get("/", requireAuth, getFeed);
+router.get("/", requireAuth, validateRequest(getFeedQuerySchema), getFeed);
 
 router.get("/:id", requireAuth, getPostById);
 

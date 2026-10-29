@@ -45,10 +45,22 @@ export const updateLostFoundSchema = z.object({
   }),
 });
 
+export const getFeedQuerySchema = z.object({
+  query: z.object({
+    type: z.enum(LOST_FOUND_TYPE_VALUES).optional(),
+    status: z.enum(LOST_FOUND_STATUS_VALUES).optional(),
+    category: z.enum(LOST_FOUND_CATEGORY_VALUES).optional(),
+    search: z.string().max(100).optional(),
+    myPosts: z.enum(["true", "false"]).optional(),
+    page: z.string().regex(/^\d+$/).optional(),
+    limit: z.string().regex(/^\d+$/).optional(),
+  }),
+});
+
 export const updateLostFoundStatusSchema = z.object({
   body: z.object({
-    status: z.enum(LOST_FOUND_STATUS_VALUES, {
-      message: "Invalid status",
+    status: z.enum(["ACTIVE", "RESOLVED", "CLOSED"], {
+      message: "Status must be ACTIVE, RESOLVED, or CLOSED",
     }),
   }),
 });

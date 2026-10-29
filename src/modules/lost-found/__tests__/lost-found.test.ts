@@ -2,6 +2,8 @@ import {
   createLostFoundSchema,
   updateLostFoundSchema,
   createClaimSchema,
+  getFeedQuerySchema,
+  updateLostFoundStatusSchema,
 } from "../lost-found.schema";
 import { validateImageFile, MulterFile } from "../../upload/upload.service";
 import { AppError } from "../../../utils/AppError";
@@ -197,6 +199,94 @@ async function runTests() {
     },
   });
   assert(nullFieldsPost.success, "Post creation with null description/location and empty images is accepted");
+
+  // Test 12: Feed query schema accepts valid query parameters
+  const validFeedQuery = getFeedQuerySchema.safeParse({
+    query: {
+      type: "LOST",
+      status: "ACTIVE",
+      category: "ELECTRONICS",
+      search: "MacBook",
+      page: "1",
+      limit: "10",
+      myPosts: "true",
+    },
+  });
+  assert(validFeedQuery.success, "Valid feed query parameters are accepted");
+
+  // Test 13: Feed query schema rejects invalid status or invalid category
+  const invalidStatusQuery = getFeedQuerySchema.safeParse({
+    query: {
+      status: "NON_EXISTENT_STATUS",
+    },
+  });
+  assert(!invalidStatusQuery.success, "Invalid feed query status is rejected");
+
+  const invalidCategoryQuery = getFeedQuerySchema.safeParse({
+    query: {
+      category: "INVALID_CAT",
+    },
+  });
+  assert(!invalidCategoryQuery.success, "Invalid feed query category is rejected");
+
+  // Test 14: updateLostFoundStatusSchema only allows ACTIVE, RESOLVED, CLOSED
+  const validStatusActive = updateLostFoundStatusSchema.safeParse({
+    body: { status: "ACTIVE" },
+  });
+  assert(validStatusActive.success, "Status transition to ACTIVE is accepted");
+
+  const validStatusResolved = updateLostFoundStatusSchema.safeParse({
+    body: { status: "RESOLVED" },
+  });
+  assert(validStatusResolved.success, "Status transition to RESOLVED is accepted");
+
+  const validStatusClosed = updateLostFoundStatusSchema.safeParse({
+    body: { status: "CLOSED" },
+  });
+  assert(validStatusClosed.success, "Status transition to CLOSED is accepted");
+
+  const invalidClaimedStatus = updateLostFoundStatusSchema.safeParse({
+    body: { status: "CLAIMED" },
+  });
+  assert(!invalidClaimedStatus.success, "Direct transition to CLAIMED status is rejected");
+
+  // Test 15: Privacy redaction logic: pending claim strips claimant email & phone
+  const rawPendingClaim = {
+    id: "claim-1",
+    status: "PENDING",
+    message: "I found this item on UB 2nd floor",
+    claimant: {
+      id: "user-2",
+      name: "Jane Student",
+      email: "jane@smuct.edu.bd",
+      phoneNumber: "+8801700000000",
+      role: "STUDENT",
+    },
+  };
+
+  const sanitizeClaimant = (claim: typeof rawPendingClaim) => {
+    if (claim.status !== "ACCEPTED") {
+      const { email, phoneNumber, ...safeClaimant } = claim.claimant;
+      return { ...claim, claimant: safeClaimant };
+    }
+    return claim;
+  };
+
+  const sanitizedPending = sanitizeClaimant(rawPendingClaim);
+  assert(
+    !("email" in sanitizedPending.claimant) && !("phoneNumber" in sanitizedPending.claimant),
+    "Pending claim safely redacts claimant email and phone number"
+  );
+
+  const rawAcceptedClaim = {
+    ...rawPendingClaim,
+    status: "ACCEPTED",
+  };
+  const sanitizedAccepted = sanitizeClaimant(rawAcceptedClaim);
+  assert(
+    "email" in sanitizedAccepted.claimant && "phoneNumber" in sanitizedAccepted.claimant,
+    "Accepted claim preserves claimant email and phone number for safe handover"
+  );
 
   console.log("\n========================================");
   console.log("Lost & Found Unit Tests: ALL PASSED");

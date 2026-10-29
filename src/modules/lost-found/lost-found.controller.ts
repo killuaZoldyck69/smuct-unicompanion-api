@@ -34,6 +34,7 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
 export const getFeed = catchAsync(async (req: Request, res: Response) => {
   const { type, status, category, search, myPosts, page, limit } = req.query;
   const userId = req.user?.id;
+  const userRole = req.user?.role;
 
   const result = await getFeedService({
     type: type as LostFoundType | undefined,
@@ -42,6 +43,7 @@ export const getFeed = catchAsync(async (req: Request, res: Response) => {
     search: typeof search === "string" ? search : undefined,
     myPosts: myPosts === "true",
     viewerId: userId,
+    viewerRole: userRole,
     page: page ? Number(page) : undefined,
     limit: limit ? Number(limit) : undefined,
   });
@@ -64,7 +66,12 @@ export const getPossibleMatches = catchAsync(async (req: Request, res: Response)
 
 export const getPostById = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user!.id;
-  const result = await getPostByIdService(req.params.id as string, userId);
+  const userRole = req.user?.role;
+  const result = await getPostByIdService(
+    req.params.id as string,
+    userId,
+    userRole
+  );
 
   res.status(200).json({
     success: true,
@@ -136,9 +143,10 @@ export const submitClaim = catchAsync(async (req: Request, res: Response) => {
 
 export const getClaims = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user!.id;
+  const userRole = req.user?.role;
   const postId = req.params.id as string;
 
-  const result = await getClaimsForPostService(postId, userId);
+  const result = await getClaimsForPostService(postId, userId, userRole);
 
   res.status(200).json({
     success: true,
@@ -176,10 +184,11 @@ export const rejectClaim = catchAsync(async (req: Request, res: Response) => {
 
 export const withdrawClaim = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user!.id;
+  const userRole = req.user?.role;
   const postId = req.params.id as string;
   const claimId = req.params.claimId as string;
 
-  const result = await withdrawClaimService(postId, claimId, userId);
+  const result = await withdrawClaimService(postId, claimId, userId, userRole);
 
   res.status(200).json({
     success: true,

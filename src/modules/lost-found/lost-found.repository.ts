@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
 import {
   LostFoundCategory,
   LostFoundClaimStatus,
@@ -67,6 +68,7 @@ export interface LostFoundFeedFilters {
   search?: string;
   myPosts?: boolean;
   viewerId?: string;
+  viewerRole?: string;
   page?: number;
   limit?: number;
 }
@@ -163,7 +165,7 @@ export const findLostFoundFeedInDb = async (filters: LostFoundFeedFilters) => {
   const limit = Math.max(1, Math.min(100, Number(filters.limit) || 20));
   const skip = (page - 1) * limit;
 
-  const [posts, total] = await Promise.all([
+  const [posts, total, activeLost, activeFound, resolved] = await Promise.all([
     prisma.lostFoundPost.findMany({
       where,
       skip,
@@ -188,10 +190,21 @@ export const findLostFoundFeedInDb = async (filters: LostFoundFeedFilters) => {
       orderBy: { createdAt: "desc" },
     }),
     prisma.lostFoundPost.count({ where }),
+    prisma.lostFoundPost.count({
+      where: { type: LostFoundType.LOST, status: LostFoundStatus.ACTIVE },
+    }),
+    prisma.lostFoundPost.count({
+      where: { type: LostFoundType.FOUND, status: LostFoundStatus.ACTIVE },
+    }),
+    prisma.lostFoundPost.count({
+      where: {
+        status: { in: [LostFoundStatus.RESOLVED, LostFoundStatus.CLAIMED] },
+      },
+    }),
   ]);
 
   const sanitizedPosts = posts.map((post) => {
-    if (post.authorId !== filters.viewerId) {
+    if (post.authorId !== filters.viewerId && filters.viewerRole !== "ADMIN") {
       const { _count, ...rest } = post;
       return rest;
     }
@@ -206,6 +219,11 @@ export const findLostFoundFeedInDb = async (filters: LostFoundFeedFilters) => {
       total,
       totalPages: Math.ceil(total / limit),
       hasMore: page * limit < total,
+      counts: {
+        activeLost,
+        activeFound,
+        resolved,
+      },
     },
   };
 };
@@ -213,7 +231,7 @@ export const findLostFoundFeedInDb = async (filters: LostFoundFeedFilters) => {
 export const findPossibleMatchesInDb = async (
   postId: string,
   category: LostFoundCategory,
-  location: string,
+  location: string | null | undefined,
   type: LostFoundType
 ) => {
   const counterpartType =
@@ -240,7 +258,7 @@ export const findPossibleMatchesInDb = async (
       author: { select: publicAuthorSelection },
     },
     orderBy: { createdAt: "desc" },
-    take: 2,
+    take: 4,
   });
 };
 
@@ -264,13 +282,31 @@ export const updateLostFoundStatusInDb = async (
   id: string,
   status: LostFoundStatus
 ) => {
-  return prisma.lostFoundPost.update({
-    where: { id },
-    data: { status },
-    include: {
-      author: { select: publicAuthorSelection },
-      _count: { select: { claims: true } },
-    },
+  return prisma.$transaction(async (tx) => {
+    // If status is changed to CLOSED or RESOLVED directly (offline resolution):
+    if (status === LostFoundStatus.CLOSED || status === LostFoundStatus.RESOLVED) {
+      await tx.lostFoundClaim.updateMany({
+        where: {
+          postId: id,
+          status: LostFoundClaimStatus.PENDING,
+        },
+        data: { status: LostFoundClaimStatus.REJECTED },
+      });
+    }
+
+    const data: any = { status };
+    if (status === LostFoundStatus.ACTIVE) {
+      data.resolvedClaimId = null;
+    }
+
+    return tx.lostFoundPost.update({
+      where: { id },
+      data,
+      include: {
+        author: { select: publicAuthorSelection },
+        _count: { select: { claims: true } },
+      },
+    });
   });
 };
 
@@ -332,12 +368,24 @@ export const findClaimByIdInDb = async (claimId: string) => {
 };
 
 export const findClaimsByPostIdInDb = async (postId: string) => {
-  return prisma.lostFoundClaim.findMany({
+  const claims = await prisma.lostFoundClaim.findMany({
     where: { postId },
     include: {
       claimant: { select: privateContactSelection },
     },
     orderBy: { createdAt: "desc" },
+  });
+
+  return claims.map((claim) => {
+    // Only expose private contact information (phone, email) for ACCEPTED claims
+    if (claim.status !== LostFoundClaimStatus.ACCEPTED) {
+      const { email, phoneNumber, ...safeClaimant } = claim.claimant;
+      return {
+        ...claim,
+        claimant: safeClaimant as any,
+      };
+    }
+    return claim;
   });
 };
 
@@ -355,6 +403,20 @@ export const acceptClaimAtomicInDb = async (
   claimId: string
 ) => {
   return prisma.$transaction(async (tx) => {
+    // 0. Verify post exists and is still ACTIVE to prevent concurrent double-acceptance
+    const currentPost = await tx.lostFoundPost.findUnique({
+      where: { id: postId },
+      select: { id: true, status: true, authorId: true },
+    });
+
+    if (!currentPost) {
+      throw new AppError("Lost & Found post not found", 404);
+    }
+
+    if (currentPost.status !== LostFoundStatus.ACTIVE) {
+      throw new AppError("This post has already been resolved or closed", 400);
+    }
+
     // 1. Mark accepted claim
     const acceptedClaim = await tx.lostFoundClaim.update({
       where: { id: claimId },

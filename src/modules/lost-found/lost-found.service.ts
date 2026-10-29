@@ -53,6 +53,26 @@ export const updatePostService = async (
     );
   }
 
+  // Prevent modifying post type if post is already RESOLVED
+  if (
+    post.status === LostFoundStatus.RESOLVED &&
+    payload.type &&
+    payload.type !== post.type
+  ) {
+    throw new AppError("Cannot change item type on a resolved listing", 400);
+  }
+
+  // Storage cleanup optimization: detect any removed images from Cloudinary
+  if (Array.isArray(payload.images) && Array.isArray(post.images)) {
+    const newImageSet = new Set(payload.images);
+    const removedImages = post.images.filter((img) => !newImageSet.has(img));
+    if (removedImages.length > 0) {
+      deleteMultipleImagesFromCloudinary(removedImages).catch((err) =>
+        console.warn("[Cloudinary] Failed to clean up removed post images:", err)
+      );
+    }
+  }
+
   return updateLostFoundPostInDb(id, payload);
 };
 
@@ -73,13 +93,18 @@ export const getPossibleMatchesService = async (postId: string) => {
   );
 };
 
-export const getPostByIdService = async (id: string, viewerId: string) => {
+export const getPostByIdService = async (
+  id: string,
+  viewerId: string,
+  viewerRole?: string
+) => {
   const post = await findLostFoundPostByIdInDb(id);
   if (!post) {
     throw new AppError("Lost & Found post not found", 404);
   }
 
   const isAuthor = post.authorId === viewerId;
+  const isAdmin = viewerRole === "ADMIN";
   const acceptedClaim = post.claims[0];
   const isAcceptedClaimant = acceptedClaim?.claimantId === viewerId;
 
@@ -96,8 +121,8 @@ export const getPostByIdService = async (id: string, viewerId: string) => {
     delete postData.verificationAnswer;
   }
 
-  // Redact author private contact details if viewer is neither author nor accepted claimant
-  if (!isAuthor && !isAcceptedClaimant) {
+  // Redact author private contact details if viewer is neither author nor accepted claimant nor admin
+  if (!isAuthor && !isAcceptedClaimant && !isAdmin) {
     delete postData.author.email;
     delete postData.author.phoneNumber;
     delete postData.claims;
@@ -273,13 +298,20 @@ export const createClaimService = async (
   return claim;
 };
 
-export const getClaimsForPostService = async (postId: string, userId: string) => {
+export const getClaimsForPostService = async (
+  postId: string,
+  userId: string,
+  userRole?: string
+) => {
   const post = await findLostFoundPostByIdInDb(postId);
   if (!post) {
     throw new AppError("Lost & Found post not found", 404);
   }
 
-  if (post.authorId === userId) {
+  const isAuthor = post.authorId === userId;
+  const isAdmin = userRole === "ADMIN";
+
+  if (isAuthor || isAdmin) {
     return findClaimsByPostIdInDb(postId);
   }
 
@@ -407,19 +439,26 @@ export const rejectClaimService = async (
 export const withdrawClaimService = async (
   postId: string,
   claimId: string,
-  userId: string
+  userId: string,
+  userRole?: string
 ) => {
   const claim = await findClaimByIdInDb(claimId);
   if (!claim || claim.postId !== postId) {
     throw new AppError("Claim not found on this post", 404);
   }
 
-  if (claim.claimantId !== userId) {
-    throw new AppError("Unauthorized: You can only withdraw your own claim", 403);
+  const isClaimant = claim.claimantId === userId;
+  const isAdmin = userRole === "ADMIN";
+
+  if (!isClaimant && !isAdmin) {
+    throw new AppError(
+      "Unauthorized: You do not have permission to delete this claim",
+      403
+    );
   }
 
   if (claim.status === LostFoundClaimStatus.ACCEPTED) {
-    throw new AppError("Cannot withdraw an accepted claim", 400);
+    throw new AppError("Cannot withdraw or delete an accepted claim", 400);
   }
 
   await withdrawClaimInDb(claimId);
