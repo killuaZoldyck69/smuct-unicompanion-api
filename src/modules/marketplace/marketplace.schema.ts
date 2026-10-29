@@ -13,13 +13,29 @@ export const createMarketplaceSchema = z.object({
     }),
     title: z.string().min(2, "Title must be at least 2 characters").max(150),
     description: z.string().min(5, "Description must be at least 5 characters"),
-    price: z.number().min(0, "Price must be non-negative").optional().nullable(),
+    price: z.coerce
+      .number({ message: "Price is required in BDT" })
+      .min(0, "Price must be a non-negative number in BDT")
+      .max(10000000, "Price exceeds allowable limit"),
     category: z.enum(MARKETPLACE_CATEGORY_VALUES, {
       message: "Invalid category selected",
     }),
     condition: z.enum(ITEM_CONDITION_VALUES).optional().nullable(),
-    images: z.array(z.string().url("Invalid image URL")).default([]),
-    contactPhone: z.string().max(20).optional().nullable(),
+    images: z
+      .array(z.string().url("Invalid image URL"))
+      .max(4, "Maximum 4 photos allowed for marketplace listings")
+      .default([]),
+    contactPhone: z
+      .string({ message: "Contact phone number is required" })
+      .trim()
+      .length(
+        14,
+        "Phone number must be exactly 14 characters (e.g. +8801956014045)"
+      )
+      .regex(
+        /^\+8801[3-9]\d{8}$/,
+        "Invalid Bangladeshi phone number. Must start with +8801 followed by 9 digits (e.g. +8801956014045)"
+      ),
   }),
 });
 
@@ -36,11 +52,30 @@ export const updateMarketplaceSchema = z.object({
     type: z.enum(LISTING_TYPE_VALUES).optional(),
     title: z.string().min(2, "Title must be at least 2 characters").max(150).optional(),
     description: z.string().min(5, "Description must be at least 5 characters").optional(),
-    price: z.number().min(0, "Price must be non-negative").optional().nullable(),
+    price: z.coerce
+      .number()
+      .min(0, "Price must be a non-negative number in BDT")
+      .max(10000000, "Price exceeds allowable limit")
+      .optional()
+      .nullable(),
     category: z.enum(MARKETPLACE_CATEGORY_VALUES).optional(),
     condition: z.enum(ITEM_CONDITION_VALUES).optional().nullable(),
-    images: z.array(z.string().url("Invalid image URL")).optional(),
-    contactPhone: z.string().max(20).optional().nullable(),
+    images: z
+      .array(z.string().url("Invalid image URL"))
+      .max(4, "Maximum 4 photos allowed for marketplace listings")
+      .optional(),
+    contactPhone: z
+      .string()
+      .trim()
+      .length(
+        14,
+        "Phone number must be exactly 14 characters (e.g. +8801956014045)"
+      )
+      .regex(
+        /^\+8801[3-9]\d{8}$/,
+        "Invalid Bangladeshi phone number. Must start with +8801 followed by 9 digits (e.g. +8801956014045)"
+      )
+      .optional(),
   }),
 });
 

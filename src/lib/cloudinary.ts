@@ -87,8 +87,11 @@ export function buildOptimizedUrl(publicId: string, cloudName?: string): string 
     process.env.CLOUDINARY_CLOUD_NAME ||
     "";
   const isProfile = publicId.toLowerCase().includes("profile");
+  const isMarketplace = publicId.toLowerCase().includes("marketplace");
   const transformation = isProfile
     ? "q_auto:eco,f_auto,w_400,h_400,c_fill,g_face"
+    : isMarketplace
+    ? "q_auto:good,f_auto,w_1200,c_limit"
     : "q_auto,f_auto,w_1000,c_limit";
 
   return `https://res.cloudinary.com/${cName}/image/upload/${transformation}/${publicId}`;
@@ -121,11 +124,20 @@ export async function uploadBufferToCloudinary(
     }
 
     if (resourceType === "image") {
+      const isMarketplace = targetFolder.toLowerCase().includes("marketplace");
       if (isProfile) {
         // High-efficiency avatar compression: 500x500 crop centered on face, WebP format, eco quality
         uploadOptions.transformation = [
           { width: 500, height: 500, crop: "fill", gravity: "face" },
           { quality: "auto:eco" },
+          { fetch_format: "auto" },
+        ];
+        uploadOptions.format = "webp";
+      } else if (isMarketplace) {
+        // High-efficiency marketplace product photo compression: max 1200px limit, WebP format
+        uploadOptions.transformation = [
+          { width: 1200, height: 1200, crop: "limit" },
+          { quality: "auto:good" },
           { fetch_format: "auto" },
         ];
         uploadOptions.format = "webp";
@@ -186,10 +198,18 @@ export async function uploadBase64ToCloudinary(
       resource_type: "image",
     };
 
+    const isMarketplace = targetFolder.toLowerCase().includes("marketplace");
     if (isProfile) {
       uploadOptions.transformation = [
         { width: 500, height: 500, crop: "fill", gravity: "face" },
         { quality: "auto:eco" },
+        { fetch_format: "auto" },
+      ];
+      uploadOptions.format = "webp";
+    } else if (isMarketplace) {
+      uploadOptions.transformation = [
+        { width: 1200, height: 1200, crop: "limit" },
+        { quality: "auto:good" },
         { fetch_format: "auto" },
       ];
       uploadOptions.format = "webp";

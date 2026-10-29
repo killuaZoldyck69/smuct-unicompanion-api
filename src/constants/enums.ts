@@ -140,8 +140,16 @@ export const ITEM_CONDITION_VALUES = [
 export const MARKETPLACE_CATEGORY_VALUES = [
   MarketplaceCategory.TEXTBOOKS,
   MarketplaceCategory.ELECTRONICS,
+  MarketplaceCategory.CALCULATORS,
+  MarketplaceCategory.COMPUTERS_ACCESSORIES,
+  MarketplaceCategory.LAB_DRAWING_TOOLS,
   MarketplaceCategory.STATIONERY,
+  MarketplaceCategory.CYCLES_VEHICLES,
+  MarketplaceCategory.ROOM_HOSTEL_ESSENTIALS,
+  MarketplaceCategory.FURNITURE,
+  MarketplaceCategory.SPORTS_FITNESS,
   MarketplaceCategory.CLOTHING,
+  MarketplaceCategory.MOBILE_ACCESSORIES,
   MarketplaceCategory.OTHER,
 ] as const;
 

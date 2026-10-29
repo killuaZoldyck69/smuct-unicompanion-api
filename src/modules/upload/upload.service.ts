@@ -83,10 +83,15 @@ export async function uploadMultipleImagesService(
   folder: string = PROJECT_ROOT_FOLDER
 ): Promise<UploadResult[]> {
   const isLostFound = folder.toLowerCase().includes("lost-found");
+  const isMarketplace = folder.toLowerCase().includes("marketplace");
   const totalCount = (files?.length || 0) + (base64List?.length || 0);
 
   if (isLostFound && totalCount > 2) {
     throw new AppError("A maximum of 2 photos can be uploaded for Lost & Found items.", 400);
+  }
+
+  if (isMarketplace && totalCount > 4) {
+    throw new AppError("A maximum of 4 photos can be uploaded for marketplace listings.", 400);
   }
 
   const uploadPromises: Promise<UploadResult>[] = [];
