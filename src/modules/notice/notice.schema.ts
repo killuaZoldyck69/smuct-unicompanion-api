@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+export const NOTICE_CATEGORIES = [
+  "ACADEMIC",
+  "HOLIDAY",
+  "TRANSPORT",
+  "GENERAL",
+] as const;
+
+export const noticeCategoryEnum = z.enum(NOTICE_CATEGORIES);
+
 export const createNoticeSchema = z.object({
   body: z.object({
     referenceNo: z
@@ -7,6 +16,12 @@ export const createNoticeSchema = z.object({
       .trim()
       .min(1, "Reference / Memo number is required"),
     title: z.string().trim().min(1, "Title is required"),
+    category: z
+      .preprocess(
+        (val) => (typeof val === "string" ? val.trim().toUpperCase() : val),
+        noticeCategoryEnum.default("GENERAL"),
+      )
+      .default("GENERAL"),
     body: z.string().trim().min(1, "Body is required"),
     issuerName: z.string().trim().min(1, "Issuer name is required"),
     issuerDesignation: z.string().trim().min(1, "Issuer designation is required"),
@@ -30,6 +45,12 @@ export const updateNoticeSchema = z.object({
       .optional()
       .nullable(),
     title: z.string().trim().min(1, "Title cannot be empty").optional(),
+    category: z
+      .preprocess(
+        (val) => (typeof val === "string" ? val.trim().toUpperCase() : val),
+        noticeCategoryEnum.optional(),
+      )
+      .optional(),
     body: z.string().trim().min(1, "Body cannot be empty").optional(),
     issuerName: z.string().trim().min(1, "Issuer name cannot be empty").optional(),
     issuerDesignation: z
@@ -64,4 +85,3 @@ export const getNoticesQuerySchema = z.object({
 });
 
 export type GetNoticesQuery = z.infer<typeof getNoticesQuerySchema>["query"];
-

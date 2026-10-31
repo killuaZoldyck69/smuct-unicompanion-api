@@ -6,6 +6,7 @@ export const createNotice = async (data: CreateNoticePayload) => {
     data: {
       referenceNo: data.referenceNo,
       title: data.title,
+      category: data.category || "GENERAL",
       body: data.body,
       issuerName: data.issuerName,
       issuerDesignation: data.issuerDesignation,
@@ -18,6 +19,7 @@ export interface FindPaginatedNoticesParams {
   page?: number;
   limit?: number;
   search?: string;
+  category?: string;
   sortBy?: "createdAt" | "issueDate" | "title";
   sortOrder?: "asc" | "desc";
 }
@@ -29,10 +31,19 @@ export const findPaginatedNotices = async (
   const limit = Math.max(1, Math.min(100, params?.limit || 20));
   const skip = (page - 1) * limit;
   const search = params?.search?.trim();
+  const category = params?.category?.trim();
   const sortBy = params?.sortBy || "createdAt";
   const sortOrder = params?.sortOrder || "desc";
 
   const where: any = {};
+
+  if (category && category.toUpperCase() !== "ALL") {
+    where.category = {
+      equals: category.toUpperCase(),
+      mode: "insensitive",
+    };
+  }
+
   if (search) {
     where.OR = [
       { title: { contains: search, mode: "insensitive" } },
@@ -96,6 +107,7 @@ export const updateNoticeById = async (
     data: {
       ...(data.referenceNo !== undefined ? { referenceNo: data.referenceNo } : {}),
       ...(data.title !== undefined ? { title: data.title } : {}),
+      ...(data.category !== undefined ? { category: data.category } : {}),
       ...(data.body !== undefined ? { body: data.body } : {}),
       ...(data.issuerName !== undefined ? { issuerName: data.issuerName } : {}),
       ...(data.issuerDesignation !== undefined

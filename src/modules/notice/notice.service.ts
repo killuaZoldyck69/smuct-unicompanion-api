@@ -17,10 +17,11 @@ export const getAllNoticesService = async (query?: GetNoticesQuery) => {
   const page = query?.page || 1;
   const limit = query?.limit || 20;
   const search = query?.search?.trim() || "";
+  const category = query?.category?.trim() || "";
   const sortBy = query?.sortBy || "createdAt";
   const sortOrder = query?.sortOrder || "desc";
 
-  const cacheKey = `notices:${search}:${page}:${limit}:${sortBy}:${sortOrder}`;
+  const cacheKey = `notices:${category}:${search}:${page}:${limit}:${sortBy}:${sortOrder}`;
   const cached = noticeCache.get<any>(cacheKey);
   if (cached) {
     return cached;
@@ -30,6 +31,7 @@ export const getAllNoticesService = async (query?: GetNoticesQuery) => {
     page,
     limit,
     search,
+    category,
     sortBy,
     sortOrder,
   });
@@ -82,4 +84,3 @@ export const deleteNoticeService = async (id: string) => {
   noticeCache.invalidateAll();
   return result;
 };
-

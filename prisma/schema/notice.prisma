@@ -6,6 +6,7 @@ model Notice {
   id                String   @id @default(uuid())
   referenceNo       String?
   title             String
+  category          String   @default("GENERAL")
   body              String
   issuerName        String
   issuerDesignation String
@@ -17,6 +18,7 @@ model Notice {
 
   @@index([createdAt])
   @@index([issueDate])
+  @@index([category])
 }
 
 model CampusEvent {
