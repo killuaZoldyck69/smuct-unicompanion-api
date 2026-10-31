@@ -227,28 +227,37 @@ export const toggleMemeReactionInDb = async (
     if (existing) {
       if (existing.type === type) {
         // Toggle off (unreact)
-        await tx.memeReaction.delete({
-          where: { id: existing.id },
+        await tx.memeReaction.deleteMany({
+          where: { memeId, userId },
         });
         finalReaction = null;
       } else {
         // Switch reaction (e.g. from LIKE to DISLIKE or vice-versa)
-        await tx.memeReaction.update({
-          where: { id: existing.id },
+        await tx.memeReaction.updateMany({
+          where: { memeId, userId },
           data: { type },
         });
         finalReaction = type;
       }
     } else {
-      // New reaction
-      await tx.memeReaction.create({
-        data: {
+      // New reaction: safe upsert handles any concurrent creation race condition cleanly
+      const upserted = await tx.memeReaction.upsert({
+        where: {
+          memeId_userId: {
+            memeId,
+            userId,
+          },
+        },
+        create: {
           memeId,
           userId,
           type,
         },
+        update: {
+          type,
+        },
       });
-      finalReaction = type;
+      finalReaction = upserted.type;
     }
 
     const [likesCount, dislikesCount] = await Promise.all([
