@@ -20,6 +20,21 @@ export const getAllUsers = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+export const updateGoogleDriveConnectionStatus = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await userService.updateGoogleDriveConnectionStatusService(
+      req.user.id,
+      req.body.isConnected,
+    );
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({
+      success: true,
+      message: "Google Drive connection status updated.",
+      data: result,
+    });
+  },
+);
+
 export const restrictUser = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
   const callerId = req.user?.id;
@@ -158,4 +173,3 @@ export const runMaintenanceCleanup = catchAsync(
     });
   },
 );
-

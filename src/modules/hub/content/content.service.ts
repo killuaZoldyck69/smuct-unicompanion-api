@@ -7,6 +7,7 @@ import {
   CreateDiscussionPayload,
 } from "./content.schema";
 import { appCache } from "../../../lib/cache";
+import { assertNoNewCloudinaryAttachments } from "../hub-attachments";
 
 export const createAnnouncement = async (
   userId: string,
@@ -14,6 +15,7 @@ export const createAnnouncement = async (
   data: CreateAnnouncementPayload,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
+  assertNoNewCloudinaryAttachments(data.attachments);
   return await contentRepository.createHubAnnouncement(userId, hubId, data);
 };
 
@@ -41,6 +43,10 @@ export const updateAnnouncement = async (
     throw new AppError("You can only edit your own announcements", 403);
   }
 
+  assertNoNewCloudinaryAttachments(
+    data.attachments,
+    announcement.attachments as { url?: string }[] | null,
+  );
   return await contentRepository.updateHubAnnouncement(announcementId, data);
 };
 

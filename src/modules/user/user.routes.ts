@@ -12,6 +12,7 @@ import {
   restrictUserSchema,
   updateTeacherPositionSchema,
   adminUpdateStudentProfileSchema,
+  updateGoogleDriveStatusSchema,
 } from "./user.schema";
 import { updateTeacherProfileSchema } from "../teacher/teacher.schema";
 import {
@@ -23,6 +24,7 @@ import {
   adminUpdateTeacherProfile,
   adminUpdateStudentProfile,
   updateUserProfileImage,
+  updateGoogleDriveConnectionStatus,
   runMaintenanceCleanup,
 } from "./user.controller";
 
@@ -43,6 +45,13 @@ router.patch(
   singleUpload,
   normalizeSingleFile,
   updateUserProfileImage,
+);
+
+router.patch(
+  "/me/google-drive-status",
+  requireAuth,
+  validateRequest(updateGoogleDriveStatusSchema),
+  updateGoogleDriveConnectionStatus,
 );
 
 // GET /api/users - Get All Users with filtering, pagination, search, and caching (Admin Only)
@@ -103,4 +112,3 @@ router.patch(
 );
 
 export const userRoutes = router;
-

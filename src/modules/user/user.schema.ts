@@ -15,6 +15,12 @@ export const restrictUserSchema = z.object({
   }),
 });
 
+export const updateGoogleDriveStatusSchema = z.object({
+  body: z.object({
+    isConnected: z.boolean(),
+  }),
+});
+
 export type RestrictUserPayload = z.infer<typeof restrictUserSchema>["body"];
 
 export type UpdateRolePayload = z.infer<typeof updateRoleSchema>["body"];

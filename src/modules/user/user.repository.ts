@@ -126,6 +126,17 @@ export const updateUserImageById = async (id: string, image: string) => {
   });
 };
 
+export const updateGoogleDriveConnectionStatus = async (
+  userId: string,
+  isConnected: boolean,
+) => {
+  const result = await prisma.user.updateMany({
+    where: { id: userId, googleDriveConnected: { not: isConnected } },
+    data: { googleDriveConnected: isConnected },
+  });
+  return result.count > 0;
+};
+
 export const setUserRestrictedById = async (id: string, isRestricted: boolean) => {
   return await prisma.user.update({
     where: { id },
@@ -145,4 +156,3 @@ export const revokeAllUserSessions = async (userId: string) => {
     where: { userId },
   });
 };
-

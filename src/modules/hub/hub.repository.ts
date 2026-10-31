@@ -271,6 +271,7 @@ export const findHubWithMembersAndDetails = async (hubId: string) => {
               name: true,
               image: true,
               role: true,
+              googleDriveConnected: true,
               email: true,
               phoneNumber: true,
               studentProfile: {
@@ -445,4 +446,3 @@ export const deleteClassNoticeById = async (noticeId: string) => {
     data: { isActive: false },
   });
 };
-

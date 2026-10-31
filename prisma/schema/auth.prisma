@@ -33,6 +33,7 @@ model User {
   phoneNumber   String      @default("")
   bloodGroup    BloodGroup?
   isRestricted  Boolean     @default(false)
+  googleDriveConnected Boolean @default(false)
 
   // Better Auth Relations
   sessions Session[]

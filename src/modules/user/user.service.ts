@@ -174,6 +174,20 @@ export const getAllUsersService = async (query?: GetUsersQuery) => {
   );
 };
 
+export const updateGoogleDriveConnectionStatusService = async (
+  userId: string,
+  isConnected: boolean,
+) => {
+  const changed = await userRepository.updateGoogleDriveConnectionStatus(
+    userId,
+    isConnected,
+  );
+  if (changed) {
+    appCache.delPattern(/^hub:/);
+  }
+  return { isConnected, changed };
+};
+
 export const restrictUserService = async (
   id: string,
   callerId?: string,
@@ -391,4 +405,3 @@ export const updateUserProfileImageService = async (
     user: updatedUser,
   };
 };
-

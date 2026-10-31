@@ -64,6 +64,7 @@ export const findMembersByHubId = async (hubId: string) => {
           name: true,
           image: true,
           role: true,
+          googleDriveConnected: true,
           email: true,
           phoneNumber: true,
           studentProfile: {

@@ -3,6 +3,10 @@ import { deleteFileFromCloudinary } from "../../../lib/cloudinary";
 import { verifyHubRole, getUserHubRole } from "../hub.service";
 import * as resourcesRepository from "./resources.repository";
 import { CreateResourcePayload } from "./resources.schema";
+import {
+  assertNoNewCloudinaryAttachments,
+  assertNoNewCloudinaryUrl,
+} from "../hub-attachments";
 
 export const createResourceService = async (
   userId: string,
@@ -13,6 +17,9 @@ export const createResourceService = async (
   if (!role) {
     throw new AppError("You are not a member of this hub", 403);
   }
+
+  assertNoNewCloudinaryUrl(data.driveUrl);
+  assertNoNewCloudinaryAttachments(data.attachments);
 
   // Official materials can only be uploaded by Teacher or CR
   if (!data.isStudentNote && !["TEACHER", "CR"].includes(role)) {

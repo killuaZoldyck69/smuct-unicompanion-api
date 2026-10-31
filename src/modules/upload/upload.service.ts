@@ -53,6 +53,7 @@ export async function uploadSingleImageService(
   base64?: string,
   folder: string = PROJECT_ROOT_FOLDER
 ): Promise<UploadResult> {
+  assertUploadFolderIsEnabled(folder);
   const isProfile = folder.toLowerCase().includes("profile");
   const maxLimit = isProfile ? MAX_PROFILE_IMAGE_SIZE : MAX_FILE_SIZE;
 
@@ -82,6 +83,7 @@ export async function uploadMultipleImagesService(
   base64List: string[] = [],
   folder: string = PROJECT_ROOT_FOLDER
 ): Promise<UploadResult[]> {
+  assertUploadFolderIsEnabled(folder);
   const isLostFound = folder.toLowerCase().includes("lost-found");
   const isMarketplace = folder.toLowerCase().includes("marketplace");
   const totalCount = (files?.length || 0) + (base64List?.length || 0);
@@ -140,6 +142,15 @@ const ALLOWED_FILE_MIME_TYPES = new Set([
 
 const MAX_DOCUMENT_FILE_SIZE = 25 * 1024 * 1024; // 25MB
 
+function assertUploadFolderIsEnabled(folder: string): void {
+  if (folder.split(/[\\/]/).some((part) => part.toLowerCase() === "hubs")) {
+    throw new AppError(
+      "Course Hub files must be uploaded to Google Drive.",
+      403,
+    );
+  }
+}
+
 export function validateGenericFile(file: MulterFile): void {
   const mime = file.mimetype.toLowerCase();
   const ext = file.originalname.split(".").pop()?.toLowerCase();
@@ -167,6 +178,7 @@ export async function uploadSingleFileService(
   file?: MulterFile,
   folder: string = PROJECT_ROOT_FOLDER
 ): Promise<UploadResult & { originalName: string; size: number; mimeType: string; format?: string }> {
+  assertUploadFolderIsEnabled(folder);
   if (!file) {
     throw new AppError("No file provided", 400);
   }
@@ -193,6 +205,7 @@ export async function uploadMultipleFilesService(
   files: MulterFile[] = [],
   folder: string = PROJECT_ROOT_FOLDER
 ): Promise<(UploadResult & { originalName: string; size: number; mimeType: string; format?: string })[]> {
+  assertUploadFolderIsEnabled(folder);
   if (!files || files.length === 0) {
     throw new AppError("No files provided for upload", 400);
   }

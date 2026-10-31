@@ -1,0 +1,2 @@
+ALTER TABLE "user"
+ADD COLUMN IF NOT EXISTS "googleDriveConnected" BOOLEAN NOT NULL DEFAULT false;

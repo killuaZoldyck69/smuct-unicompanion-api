@@ -8,6 +8,7 @@ import {
   GradeSubmissionPayload,
   BulkGradePayload,
 } from "./assessments.schema";
+import { assertNoNewCloudinaryAttachments } from "../hub-attachments";
 
 export const createAssessment = async (
   userId: string,
@@ -15,6 +16,7 @@ export const createAssessment = async (
   data: CreateAssessmentPayload,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
+  assertNoNewCloudinaryAttachments(data.attachments);
   return await assessmentsRepository.createAssessment(userId, hubId, data);
 };
 
@@ -60,6 +62,14 @@ export const submitAssessment = async (
     payload.status === "HAND_SUBMISSION"
       ? (isLate ? "LATE_HAND_SUBMISSION" : "HAND_SUBMISSION")
       : (isLate ? "LATE" : "SUBMITTED");
+
+  const previousSubmission = assessment.submissions.find(
+    (submission) => submission.studentId === userId,
+  );
+  assertNoNewCloudinaryAttachments(
+    payload.attachments,
+    previousSubmission?.attachments as { url?: string }[] | null,
+  );
 
   return await assessmentsRepository.upsertSubmission(
     assessmentId,
@@ -142,6 +152,10 @@ export const updateAssessment = async (
 
   await verifyHubRole(userId, assessment.hubId, ["TEACHER", "CR"]);
 
+  assertNoNewCloudinaryAttachments(
+    data.attachments,
+    assessment.attachments as { url?: string }[] | null,
+  );
   return await assessmentsRepository.updateAssessment(assessmentId, data);
 };
 
