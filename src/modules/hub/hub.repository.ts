@@ -1,11 +1,70 @@
 import { prisma } from "../../lib/prisma";
 import { HubRole } from "../../constants/enums";
+import { Prisma } from "../../../generated/prisma/client";
 import { CreateHubPayload, UpdateHubPayload } from "./hub.schema";
 
+const hubMemberUserSelect = {
+  id: true,
+  name: true,
+  image: true,
+  role: true,
+  googleDriveConnected: true,
+  email: true,
+  phoneNumber: true,
+  studentProfile: {
+    select: {
+      studentId: true,
+      department: true,
+      batch: true,
+      currentSemester: true,
+      section: true,
+      program: true,
+    },
+  },
+  teacherProfile: {
+    select: {
+      teacherId: true,
+      department: true,
+      designation: true,
+      faculty: true,
+      officeRoom: true,
+      consultationSlots: true,
+    },
+  },
+} satisfies Prisma.UserSelect;
+
+// Normalize legacy database rows while the TA-removal migration is pending.
+const normalizeHubRole = (role: string): HubRole => {
+  switch (role) {
+    case "TEACHER":
+      return HubRole.TEACHER;
+    case "CR":
+      return HubRole.CR;
+    case "STUDENT":
+    case "TA":
+      return HubRole.STUDENT;
+    default:
+      throw new Error(`Unexpected Course Hub membership role: ${role}`);
+  }
+};
+
 export const findHubMember = async (userId: string, hubId: string) => {
-  return await prisma.hubMember.findUnique({
-    where: { userId_hubId: { userId, hubId } },
-  });
+  const [member] = await prisma.$queryRaw<
+    Array<{
+      id: string;
+      userId: string;
+      hubId: string;
+      role: string;
+      isActive: boolean;
+    }>
+  >`
+    SELECT id, "userId", "hubId", "role"::text AS role, "isActive"
+    FROM "HubMember"
+    WHERE "userId" = ${userId} AND "hubId" = ${hubId}
+    LIMIT 1
+  `;
+
+  return member ? { ...member, role: normalizeHubRole(member.role) } : null;
 };
 
 export interface FindAvailableTeachersQuery {
@@ -260,55 +319,57 @@ export const findAllHubsForAdmin = async (adminUserId: string) => {
 };
 
 export const findHubWithMembersAndDetails = async (hubId: string) => {
-  return await prisma.courseHub.findUnique({
-    where: { id: hubId },
-    include: {
-      members: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-              role: true,
-              googleDriveConnected: true,
-              email: true,
-              phoneNumber: true,
-              studentProfile: {
-                select: {
-                  studentId: true,
-                  department: true,
-                  batch: true,
-                  currentSemester: true,
-                  section: true,
-                  program: true,
-                },
-              },
-              teacherProfile: {
-                select: {
-                  teacherId: true,
-                  department: true,
-                  designation: true,
-                  faculty: true,
-                  officeRoom: true,
-                  consultationSlots: true,
-                },
-              },
+  const [hub, legacyMembers] = await Promise.all([
+    prisma.courseHub.findUnique({
+      where: { id: hubId },
+      include: {
+        members: {
+          where: { role: { in: [HubRole.TEACHER, HubRole.CR, HubRole.STUDENT] } },
+          include: { user: { select: hubMemberUserSelect } },
+        },
+        classNotices: {
+          where: { isActive: true },
+          include: {
+            author: {
+              select: { id: true, name: true, image: true, role: true },
             },
           },
+          orderBy: { createdAt: "desc" },
         },
       },
-      classNotices: {
-        where: { isActive: true },
-        include: {
-          author: {
-            select: { id: true, name: true, image: true, role: true },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-      },
-    },
+    }),
+    prisma.$queryRaw<
+      Array<{
+        id: string;
+        userId: string;
+        hubId: string;
+        isActive: boolean;
+      }>
+    >`
+      SELECT id, "userId", "hubId", "isActive"
+      FROM "HubMember"
+      WHERE "hubId" = ${hubId} AND "role"::text = 'TA'
+    `,
+  ]);
+
+  if (!hub || legacyMembers.length === 0) return hub;
+
+  const legacyUsers = await prisma.user.findMany({
+    where: { id: { in: legacyMembers.map((member) => member.userId) } },
+    select: hubMemberUserSelect,
   });
+  const usersById = new Map(legacyUsers.map((user) => [user.id, user]));
+
+  const migratedMembers = legacyMembers.map((member) => {
+    const user = usersById.get(member.userId);
+    if (!user) {
+      throw new Error(`Course Hub member ${member.id} has no associated user`);
+    }
+
+    return { ...member, role: HubRole.STUDENT, user };
+  });
+
+  return { ...hub, members: [...hub.members, ...migratedMembers] };
 };
 
 export const findHubMemberById = async (memberId: string) => {

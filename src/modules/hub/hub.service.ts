@@ -48,9 +48,6 @@ export const verifyHubRole = async (
   }
 
   if (!allowedRoles.includes(effectiveRole)) {
-    if (effectiveRole === "TA" && allowedRoles.includes("STUDENT")) {
-      return { ...member, role: effectiveRole as any };
-    }
     throw new AppError(
       "You do not have permission to perform this action in this hub.",
       403,
@@ -290,4 +287,3 @@ export const deleteClassNoticeService = async (
 
   return await hubRepository.deleteClassNoticeById(noticeId);
 };
-

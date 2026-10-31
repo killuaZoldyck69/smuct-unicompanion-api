@@ -40,7 +40,6 @@ export const getHubDetails = catchAsync(async (req: Request, res: Response) => {
   await verifyHubRole(req.user.id, req.params.id as string, [
     "TEACHER",
     "CR",
-    "TA",
     "STUDENT",
     "ADMIN",
   ]);
@@ -155,4 +154,3 @@ export const deleteClassNotice = catchAsync(
     });
   },
 );
-

@@ -36,9 +36,6 @@ export const verifyMembershipRole = async (
   }
 
   if (!allowedRoles.includes(membership.role as HubRole)) {
-    if (membership.role === "TA" && allowedRoles.includes("STUDENT" as any)) {
-      return membership;
-    }
     throw new AppError(
       "Access denied: You do not have permission to perform this action.",
       403,
@@ -52,7 +49,6 @@ export const getHubMembersService = async (userId: string, hubId: string) => {
   await verifyMembershipRole(userId, hubId, [
     "TEACHER",
     "CR",
-    "TA",
     "STUDENT",
     "ADMIN" as any,
   ]);
@@ -81,6 +77,20 @@ export const updateMemberRoleService = async (
   const targetMember = await membersRepo.findMemberByHubAndId(hubId, memberId);
   if (!targetMember) {
     throw new AppError("Member not found in this course hub.", 404);
+  }
+
+  if (newRole === "TEACHER" && targetMember.user.role !== "TEACHER") {
+    throw new AppError(
+      "Only users with a Teacher account can be course instructors.",
+      403,
+    );
+  }
+
+  if (targetMember.user.role === "TEACHER" && newRole !== "TEACHER") {
+    throw new AppError(
+      "A Teacher account must retain the course instructor role.",
+      403,
+    );
   }
 
   const isRequesterLeadershipOnly = requester.role === "CR";

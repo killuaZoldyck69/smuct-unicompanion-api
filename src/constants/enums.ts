@@ -56,7 +56,6 @@ export const SYSTEM_ROLE_VALUES = [
 export const HUB_ROLE_VALUES = [
   HubRole.TEACHER,
   HubRole.CR,
-  HubRole.TA,
   HubRole.STUDENT,
 ] as const;
 
@@ -152,4 +151,3 @@ export const MARKETPLACE_CATEGORY_VALUES = [
   MarketplaceCategory.MOBILE_ACCESSORIES,
   MarketplaceCategory.OTHER,
 ] as const;
-
