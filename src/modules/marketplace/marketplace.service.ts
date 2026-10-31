@@ -72,6 +72,17 @@ export const updatePostService = async (
 
   assertOwnership(post.authorId === userId, userRole === "ADMIN", "modify this listing");
 
+  // Storage cleanup optimization: detect any removed images from Cloudinary
+  if (Array.isArray(payload.images) && Array.isArray(post.images)) {
+    const newImageSet = new Set(payload.images);
+    const removedImages = post.images.filter((img) => !newImageSet.has(img));
+    if (removedImages.length > 0) {
+      deleteMultipleImagesFromCloudinary(removedImages).catch((err) =>
+        console.warn("[Cloudinary] Failed to clean up removed marketplace images:", err)
+      );
+    }
+  }
+
   return updateMarketplacePostInDb(id, payload);
 };
 
@@ -99,12 +110,17 @@ export const deletePostService = async (
 
   assertOwnership(post.authorId === userId, userRole === "ADMIN", "delete this listing");
 
+  // Collect post images before deleting from DB
+  const imagesToDelete: string[] = Array.isArray(post.images)
+    ? [...post.images]
+    : [];
+
   const result = await deleteMarketplacePostFromDb(id);
 
-  // Fire-and-forget: clean up Cloudinary storage without blocking response
-  if (post.images.length > 0) {
-    deleteMultipleImagesFromCloudinary(post.images).catch((err) =>
-      console.warn("[Cloudinary] Failed to clean up marketplace images:", err)
+  // Storage cleanup optimization: delete associated images from Cloudinary
+  if (imagesToDelete.length > 0) {
+    deleteMultipleImagesFromCloudinary(imagesToDelete).catch((err) =>
+      console.warn("[Cloudinary] Failed to clean up marketplace post images on deletion:", err)
     );
   }
 

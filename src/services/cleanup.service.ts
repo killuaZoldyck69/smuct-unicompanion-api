@@ -1,5 +1,9 @@
 import { prisma } from "../lib/prisma";
 import { deleteImageFromCloudinary } from "../lib/cloudinary";
+import {
+  cleanupMarketplaceOrphanImages,
+  cleanupLostFoundOrphanImages,
+} from "./orphan-cleanup.service";
 
 export interface CleanupResult {
   unverifiedUsersDeleted: number;
@@ -103,5 +107,44 @@ export function startCleanupScheduler(intervalMs: number = 60 * 60 * 1000): void
     recurringTimer.unref();
   }
 
+  // Daily Cloudinary orphan cleanup for Campus Hub (scans assets older than 24h)
+  const orphanIntervalMs = 24 * 60 * 60 * 1000;
+  const runCampusHubOrphanCleanups = async () => {
+    try {
+      const marketReport = await cleanupMarketplaceOrphanImages(24);
+      console.log(
+        `🧹 [Marketplace-Cleanup] Scanned ${marketReport.scannedCount} images, purged ${marketReport.deletedCount} orphans (${(marketReport.freedBytes / (1024 * 1024)).toFixed(2)} MB freed).`
+      );
+    } catch (err) {
+      console.warn("[Marketplace-Cleanup] Cleanup encountered an issue:", err);
+    }
+
+    try {
+      const lostFoundReport = await cleanupLostFoundOrphanImages(24);
+      console.log(
+        `🧹 [LostFound-Cleanup] Scanned ${lostFoundReport.scannedCount} images, purged ${lostFoundReport.deletedCount} orphans (${(lostFoundReport.freedBytes / (1024 * 1024)).toFixed(2)} MB freed).`
+      );
+    } catch (err) {
+      console.warn("[LostFound-Cleanup] Cleanup encountered an issue:", err);
+    }
+  };
+
+  const initialOrphanTimer = setTimeout(() => {
+    runCampusHubOrphanCleanups();
+  }, 20000);
+
+  if (initialOrphanTimer.unref) {
+    initialOrphanTimer.unref();
+  }
+
+  const recurringOrphanTimer = setInterval(() => {
+    runCampusHubOrphanCleanups();
+  }, orphanIntervalMs);
+
+  if (recurringOrphanTimer.unref) {
+    recurringOrphanTimer.unref();
+  }
+
   console.log("🛡️ Stale unverified account cleanup scheduler initialized (Interval: 1 hour).");
+  console.log("🧹 Campus Hub Cloudinary orphan cleanup scheduler initialized (Interval: 24 hours).");
 }

@@ -8,7 +8,10 @@
     "build": "prisma generate && tsup src/server.ts --format esm --clean",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
-    "seed": "tsx src/scripts/admin-seed.ts"
+    "seed": "tsx src/scripts/admin-seed.ts",
+    "cleanup:marketplace": "tsx src/scripts/cleanup-marketplace-orphans.ts",
+    "cleanup:lost-found": "tsx src/scripts/cleanup-lost-found-orphans.ts",
+    "cleanup:all": "tsx src/scripts/cleanup-all-orphans.ts"
   },
   "keywords": [],
   "author": "",
