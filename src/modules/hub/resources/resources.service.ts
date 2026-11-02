@@ -7,6 +7,7 @@ import {
   assertNoNewCloudinaryAttachments,
   assertNoNewCloudinaryUrl,
 } from "../hub-attachments";
+import { createHubNotifications } from "../../notification/notification.service";
 
 export const createResourceService = async (
   userId: string,
@@ -29,7 +30,15 @@ export const createResourceService = async (
     );
   }
 
-  return await resourcesRepository.createResource(userId, hubId, data);
+  const resource = await resourcesRepository.createResource(userId, hubId, data);
+  await createHubNotifications(hubId, userId, {
+    type: "MATERIAL",
+    title: data.isStudentNote ? "New student-shared material" : "New course material",
+    body: resource.title,
+    route: `/hub/${hubId}?tab=materials`,
+    dedupeKey: `resource:${resource.id}`,
+  });
+  return resource;
 };
 
 export const getResourcesService = async (

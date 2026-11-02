@@ -106,11 +106,17 @@ export const createHubNotifications = async (
   hubId: string,
   actorId: string,
   payload: Omit<NotificationPayload, "dedupeKey"> & { dedupeKey: string },
+  recipientRoles?: Array<"TEACHER" | "CR" | "STUDENT">,
 ) => {
   try {
     const [members, course] = await Promise.all([
       prisma.hubMember.findMany({
-        where: { hubId, isActive: true, userId: { not: actorId } },
+        where: {
+          hubId,
+          isActive: true,
+          userId: { not: actorId },
+          ...(recipientRoles?.length ? { role: { in: recipientRoles } } : {}),
+        },
         select: { userId: true },
       }),
       findCourseHubContext(hubId).catch((error: unknown) => {
@@ -148,6 +154,8 @@ const attachCourseHubContext = async <
     "CLASS_NOTICE",
     "ASSESSMENT",
     "GRADE",
+    "MATERIAL",
+    "REVIEW_OPEN",
   ]);
   const hubIds = [
     ...new Set(

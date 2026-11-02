@@ -6,6 +6,7 @@ import {
   UpdateReviewSettingsPayload,
   EditReviewPayload,
 } from "./reviews.schema";
+import { createHubNotifications } from "../../notification/notification.service";
 
 export const updateReviewSettings = async (
   userId: string,
@@ -14,7 +15,20 @@ export const updateReviewSettings = async (
 ) => {
   // Only TEACHER can active reviews and add optional questions
   await verifyHubRole(userId, hubId, ["TEACHER"]);
-  return await reviewsRepository.updateHubReviewSettings(hubId, data);
+  const existingHub = await reviewsRepository.findHubById(hubId);
+  if (!existingHub) throw new AppError("Course hub not found", 404);
+
+  const updatedHub = await reviewsRepository.updateHubReviewSettings(hubId, data);
+  if (!existingHub.isReviewOpen && updatedHub.isReviewOpen) {
+    await createHubNotifications(hubId, userId, {
+      type: "REVIEW_OPEN",
+      title: "Course review is open",
+      body: "The review period is open. Share your feedback for this course.",
+      route: `/hub/${hubId}?tab=review`,
+      dedupeKey: `review-open:${hubId}:${Date.now()}`,
+    }, ["STUDENT", "CR"]);
+  }
+  return updatedHub;
 };
 
 export const submitReview = async (
