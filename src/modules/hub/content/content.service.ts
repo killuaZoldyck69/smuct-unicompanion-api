@@ -8,6 +8,7 @@ import {
 } from "./content.schema";
 import { appCache } from "../../../lib/cache";
 import { assertNoNewCloudinaryAttachments } from "../hub-attachments";
+import { createHubNotifications } from "../../notification/notification.service";
 
 export const createAnnouncement = async (
   userId: string,
@@ -16,7 +17,19 @@ export const createAnnouncement = async (
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
   assertNoNewCloudinaryAttachments(data.attachments);
-  return await contentRepository.createHubAnnouncement(userId, hubId, data);
+  const announcement = await contentRepository.createHubAnnouncement(
+    userId,
+    hubId,
+    data,
+  );
+  await createHubNotifications(hubId, userId, {
+    type: "HUB_ANNOUNCEMENT",
+    title: "New course hub announcement",
+    body: announcement.content.replace(/<[^>]*>/g, " ").trim().slice(0, 180),
+    route: `/hub/${hubId}`,
+    dedupeKey: `hub-announcement:${announcement.id}`,
+  });
+  return announcement;
 };
 
 export const updateAnnouncement = async (

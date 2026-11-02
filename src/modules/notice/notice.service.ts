@@ -6,9 +6,32 @@ import {
   GetNoticesQuery,
 } from "./notice.schema";
 import { noticeCache } from "./notice.cache";
+import { prisma } from "../../lib/prisma";
+import { createNotifications } from "../notification/notification.service";
 
-export const createNoticeService = async (data: CreateNoticePayload) => {
+export const createNoticeService = async (
+  data: CreateNoticePayload,
+  creatorId?: string,
+) => {
   const newNotice = await noticeRepository.createNotice(data);
+  try {
+    const recipients = await prisma.user.findMany({
+      where: creatorId ? { id: { not: creatorId } } : undefined,
+      select: { id: true },
+    });
+    await createNotifications(
+      recipients.map((user) => user.id),
+      {
+        type: "NOTICE",
+        title: "New campus notice",
+        body: newNotice.title,
+        route: `/(tabs)/notices?noticeId=${newNotice.id}`,
+        dedupeKey: `notice:${newNotice.id}`,
+      },
+    );
+  } catch (error) {
+    console.error("Failed to find notice notification recipients:", error);
+  }
   noticeCache.invalidateAll();
   return newNotice;
 };

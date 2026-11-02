@@ -9,6 +9,10 @@ import {
   BulkGradePayload,
 } from "./assessments.schema";
 import { assertNoNewCloudinaryAttachments } from "../hub-attachments";
+import {
+  createHubNotifications,
+  createCourseNotificationsForRecipients,
+} from "../../notification/notification.service";
 
 export const createAssessment = async (
   userId: string,
@@ -17,7 +21,19 @@ export const createAssessment = async (
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
   assertNoNewCloudinaryAttachments(data.attachments);
-  return await assessmentsRepository.createAssessment(userId, hubId, data);
+  const assessment = await assessmentsRepository.createAssessment(
+    userId,
+    hubId,
+    data,
+  );
+  await createHubNotifications(hubId, userId, {
+    type: "ASSESSMENT",
+    title: "New coursework posted",
+    body: assessment.title,
+    route: `/hub/${hubId}/assessments`,
+    dedupeKey: `assessment:${assessment.id}`,
+  });
+  return assessment;
 };
 
 export const getAssessments = async (
@@ -106,11 +122,33 @@ export const gradeSubmission = async (
     );
   }
 
-  return await assessmentsRepository.updateSubmissionGrade(submissionId, {
-    marks: data.marks,
-    feedback: data.feedback,
-    gradedById: userId,
-  });
+  const feedbackAfterSave =
+    data.feedback === undefined ? submission.feedback : data.feedback;
+  const gradeChanged =
+    submission.marks !== data.marks ||
+    (submission.feedback ?? null) !== (feedbackAfterSave ?? null);
+
+  const gradedSubmission = await assessmentsRepository.updateSubmissionGrade(
+    submissionId,
+    {
+      marks: data.marks,
+      feedback: data.feedback,
+      gradedById: userId,
+    },
+  );
+  if (gradeChanged) {
+    await createCourseNotificationsForRecipients(submission.assessment.hubId, [
+      {
+        userId: submission.studentId,
+        type: "GRADE",
+        title: submission.marks === null ? "Grade posted" : "Grade updated",
+        body: `Your grade for ${submission.assessment.title} is available.`,
+        route: `/hub/${submission.assessment.hubId}/assessments?assessmentId=${submission.assessment.id}`,
+        dedupeKey: `assessment-grade:${gradedSubmission.id}:${gradedSubmission.updatedAt.toISOString()}`,
+      },
+    ]);
+  }
+  return gradedSubmission;
 };
 
 export const bulkGrade = async (
@@ -122,6 +160,25 @@ export const bulkGrade = async (
   if (!assessment) throw new AppError("Assessment not found", 404);
 
   await verifyHubRole(userId, assessment.hubId, ["TEACHER"]);
+
+  const uniqueStudentIds = new Set(grades.map((grade) => grade.studentId));
+  if (uniqueStudentIds.size !== grades.length) {
+    throw new AppError("A student can only appear once in a bulk grade request", 400);
+  }
+
+  const activeHubStudentIds = await assessmentsRepository.findActiveHubStudentIds(
+    assessment.hubId,
+    [...uniqueStudentIds],
+  );
+  const invalidStudentId = grades.find(
+    (grade) => !activeHubStudentIds.has(grade.studentId),
+  )?.studentId;
+  if (invalidStudentId) {
+    throw new AppError(
+      `Student ${invalidStudentId} is not an active student in this course hub`,
+      403,
+    );
+  }
 
   for (const grade of grades) {
     if (grade.marks < 0) {
@@ -135,11 +192,45 @@ export const bulkGrade = async (
     }
   }
 
-  return await assessmentsRepository.bulkUpsertGrades(
+  const previousSubmissionsByStudent = new Map(
+    assessment.submissions.map((submission) => [submission.studentId, submission]),
+  );
+  const changedStudentIds = new Set(
+    grades
+      .filter((grade) => {
+        const previous = previousSubmissionsByStudent.get(grade.studentId);
+        if (!previous) return true;
+
+        const feedbackAfterSave =
+          grade.feedback === undefined ? previous.feedback : grade.feedback;
+        return (
+          previous.marks !== grade.marks ||
+          (previous.feedback ?? null) !== (feedbackAfterSave ?? null)
+        );
+      })
+      .map((grade) => grade.studentId),
+  );
+
+  const savedGrades = await assessmentsRepository.bulkUpsertGrades(
     assessmentId,
     userId,
     grades,
   );
+  const gradeNotifications = savedGrades
+    .filter((submission) => changedStudentIds.has(submission.studentId))
+    .map((submission) => {
+      const previous = previousSubmissionsByStudent.get(submission.studentId);
+      return {
+        userId: submission.studentId,
+        type: "GRADE",
+        title: !previous || previous.marks === null ? "Grade posted" : "Grade updated",
+        body: `Your grade for ${assessment.title} is available.`,
+        route: `/hub/${assessment.hubId}/assessments?assessmentId=${assessment.id}`,
+        dedupeKey: `assessment-grade:${submission.id}:${submission.updatedAt.toISOString()}`,
+      };
+    });
+  await createCourseNotificationsForRecipients(assessment.hubId, gradeNotifications);
+  return savedGrades;
 };
 
 export const updateAssessment = async (

@@ -113,6 +113,22 @@ export const findAssessmentById = async (assessmentId: string) => {
   });
 };
 
+export const findActiveHubStudentIds = async (
+  hubId: string,
+  studentIds: string[],
+) => {
+  const members = await prisma.hubMember.findMany({
+    where: {
+      hubId,
+      userId: { in: studentIds },
+      isActive: true,
+      role: { in: ["STUDENT", "CR"] },
+    },
+    select: { userId: true },
+  });
+  return new Set(members.map((member) => member.userId));
+};
+
 export const findAssessmentSubmissions = async (assessmentId: string) => {
   return await prisma.submission.findMany({
     where: { assessmentId },

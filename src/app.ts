@@ -22,6 +22,7 @@ import { lostFoundRoutes } from "./modules/lost-found/lost-found.routes";
 import { marketplaceRoutes } from "./modules/marketplace/marketplace.routes";
 import { memeRoutes } from "./modules/meme/meme.routes";
 import { adminRoutes } from "./modules/admin/admin.routes";
+import { notificationRoutes } from "./modules/notification/notification.routes";
 
 import { envConfig } from "./config/env";
 import {
@@ -107,6 +108,7 @@ app.use("/api/calendars", calendarRoutes);
 app.use("/api/buses", busRoutes);
 app.use("/api/notices", noticeRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/notifications", notificationRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/forum", forumRoutes);
 app.use("/api/blood", bloodRoutes);

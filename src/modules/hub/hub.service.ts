@@ -8,6 +8,7 @@ import {
   CreateClassNoticePayload,
 } from "./hub.schema";
 import { appCache } from "../../lib/cache";
+import { createHubNotifications } from "../notification/notification.service";
 import {
   updateMemberRoleService as memberUpdateRoleService,
   removeMemberService as memberRemoveService,
@@ -266,11 +267,19 @@ export const createClassNoticeService = async (
     }
   }
 
-  return await hubRepository.createClassNotice(hubId, userId, {
+  const notice = await hubRepository.createClassNotice(hubId, userId, {
     ...data,
     message: resolvedMessage,
     effectiveDate,
   });
+  await createHubNotifications(hubId, userId, {
+    type: "CLASS_NOTICE",
+    title: "Class schedule update",
+    body: resolvedMessage.slice(0, 180),
+    route: `/hub/${hubId}`,
+    dedupeKey: `class-notice:${notice.id}`,
+  });
+  return notice;
 };
 
 export const deleteClassNoticeService = async (

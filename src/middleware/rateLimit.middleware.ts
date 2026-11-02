@@ -103,7 +103,7 @@ export const rateLimit = (options: RateLimitOptions) => {
  * 100 requests per 15 minutes per IP address.
  */
 export const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 20 * 60 * 1000, // 15 minutes
   limit: 100,
   message: {
     success: false,
@@ -118,7 +118,7 @@ export const globalLimiter = rateLimit({
  */
 export const authActionLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 10,
+  limit: 20,
   message: {
     success: false,
     message:
@@ -135,8 +135,7 @@ export const onboardLimiter = rateLimit({
   limit: 10,
   message: {
     success: false,
-    message:
-      "Too many onboarding attempts. Please try again after 15 minutes.",
+    message: "Too many onboarding attempts. Please try again after 15 minutes.",
   },
 });
 

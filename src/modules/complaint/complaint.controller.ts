@@ -117,6 +117,7 @@ export const updateComplaintStatus = catchAsync(
         req.params.id as string,
         req.body.status,
         req.body.adminRemarks,
+        req.user.id,
       );
     res.status(200).json({
       success: true,

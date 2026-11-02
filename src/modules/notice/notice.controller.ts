@@ -3,7 +3,7 @@ import { catchAsync } from "../../utils/catchAsync";
 import * as noticeService from "./notice.service";
 
 export const createNotice = catchAsync(async (req: Request, res: Response) => {
-  const newNotice = await noticeService.createNoticeService(req.body);
+  const newNotice = await noticeService.createNoticeService(req.body, req.user.id);
 
   res.status(201).json({
     success: true,

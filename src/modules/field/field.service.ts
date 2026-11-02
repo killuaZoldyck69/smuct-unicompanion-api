@@ -1,5 +1,6 @@
 import { AppError } from "../../utils/AppError";
 import * as fieldRepository from "./field.repository";
+import { createNotifications } from "../notification/notification.service";
 import {
   UpdateFieldSettingsPayload,
   BookFieldPayload,
@@ -163,7 +164,17 @@ export const updateBookingStatusService = async (
     }
   }
 
-  return await fieldRepository.updateBookingStatus(id, status);
+  const updatedBooking = await fieldRepository.updateBookingStatus(id, status);
+  if (booking.status !== status) {
+    await createNotifications([booking.userId], {
+      type: "BOOKING_STATUS",
+      title: `Field booking ${status.toLowerCase()}`,
+      body: `Your field booking for ${booking.purpose} was ${status.toLowerCase()}.`,
+      route: "/(tabs)/field-booking",
+      dedupeKey: `field-booking:${booking.id}:${updatedBooking.updatedAt.toISOString()}`,
+    });
+  }
+  return updatedBooking;
 };
 
 export const deleteBookingService = async (

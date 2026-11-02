@@ -69,6 +69,28 @@ model FieldSetting {
 }
 
 // ==============================
+// USER NOTIFICATIONS
+// ==============================
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  route     String
+  dedupeKey String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, readAt, createdAt(sort: Desc)])
+  @@map("notification")
+}
+
+// ==============================
 // BUS TRANSPORTATION
 // ==============================
 

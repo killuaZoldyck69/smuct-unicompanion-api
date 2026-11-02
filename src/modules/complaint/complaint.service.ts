@@ -5,6 +5,7 @@ import {
   UpdateComplaintPayload,
   UpdateComplaintStatusPayload,
 } from "./complaint.schema";
+import { createNotifications } from "../notification/notification.service";
 
 /**
  * Sanitizes anonymous complaints to protect complainant identity.
@@ -105,6 +106,7 @@ export const updateComplaintStatusService = async (
   id: string,
   newStatus: UpdateComplaintStatusPayload["status"],
   adminRemarks?: string | null,
+  actorId?: string,
 ) => {
   const complaint = await complaintRepository.findComplaintById(id);
   if (!complaint || complaint.deletedAt) {
@@ -178,6 +180,16 @@ export const updateComplaintStatusService = async (
     newStatus,
     adminRemarks,
   );
+
+  if (updated.userId !== actorId) {
+    await createNotifications([updated.userId], {
+      type: "COMPLAINT_STATUS",
+      title: "Complaint status updated",
+      body: `Your complaint "${updated.title}" is now ${newStatus.toLowerCase()}.`,
+      route: "/(tabs)/complaints",
+      dedupeKey: `complaint:${updated.id}:status:${newStatus}`,
+    });
+  }
 
   return sanitizeComplaint(updated);
 };
