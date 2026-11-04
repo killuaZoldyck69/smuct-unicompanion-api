@@ -4,6 +4,7 @@ import { envConfig } from "./config/env";
 import { Server } from "http";
 
 import { startCleanupScheduler } from "./services/cleanup.service";
+import { startAcademicReminderScheduler } from "./services/academic-reminder.service";
 
 let server: Server;
 
@@ -14,6 +15,7 @@ const startServer = async () => {
 
     // Start background cleanup scheduler for stale unverified accounts and expired OTPs
     startCleanupScheduler();
+    startAcademicReminderScheduler();
 
     server = app.listen(envConfig.PORT, "0.0.0.0", () => {
       console.log(

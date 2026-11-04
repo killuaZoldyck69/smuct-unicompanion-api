@@ -341,6 +341,14 @@ export const findCampusEventById = async (id: string, currentUserId?: string) =>
   };
 };
 
+export const findInterestedUserIds = async (eventId: string) => {
+  const interested = await prisma.eventInterested.findMany({
+    where: { eventId },
+    select: { userId: true },
+  });
+  return interested.map(({ userId }) => userId);
+};
+
 export const toggleEventInterested = async (eventId: string, userId: string) => {
   return await prisma.$transaction(async (tx) => {
     const existing = await tx.eventInterested.findUnique({

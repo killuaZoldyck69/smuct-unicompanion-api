@@ -1,4 +1,6 @@
 import { AppError } from "../../utils/AppError";
+import { prisma } from "../../lib/prisma";
+import { createNotifications } from "../notification/notification.service";
 import * as bloodRepository from "./blood.repository";
 import {
   CreateBloodPostPayload,
@@ -29,7 +31,19 @@ export const createBloodPostService = async (
     );
   }
 
-  return await bloodRepository.createBloodPost(authorId, data);
+  const post = await bloodRepository.createBloodPost(authorId, data);
+  const donors = await prisma.user.findMany({
+    where: { id: { not: authorId }, bloodGroup: data.bloodGroup },
+    select: { id: true },
+  });
+  await createNotifications(donors.map(({ id }) => id), {
+    type: "BLOOD_REQUEST",
+    title: "New blood request matching your group",
+    body: `${post.bloodGroup} blood is needed at ${post.location}.`,
+    route: `/blood/${post.id}`,
+    dedupeKey: `blood-request:${post.id}`,
+  });
+  return post;
 };
 
 export const getBloodFeedService = async (
@@ -200,11 +214,19 @@ export const respondToBloodPostService = async (
     throw new AppError("You have already responded to this request.", 409);
   }
 
-  return await bloodRepository.createBloodResponse(
+  const response = await bloodRepository.createBloodResponse(
     postId,
     responderId,
     data.message,
   );
+  await createNotifications([post.authorId], {
+    type: "BLOOD_RESPONSE",
+    title: "Someone responded to your blood request",
+    body: `A donor responded to your ${post.bloodGroup} blood request.`,
+    route: `/blood/${post.id}`,
+    dedupeKey: `blood-response:${response.id}`,
+  });
+  return response;
 };
 
 export const resolveBloodPostService = async (

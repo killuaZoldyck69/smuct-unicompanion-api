@@ -7,7 +7,7 @@ import {
 } from "./notice.schema";
 import { noticeCache } from "./notice.cache";
 import { prisma } from "../../lib/prisma";
-import { createNotifications } from "../notification/notification.service";
+import { createNotifications, createNotificationsForAllUsers } from "../notification/notification.service";
 
 export const createNoticeService = async (
   data: CreateNoticePayload,
@@ -92,6 +92,13 @@ export const updateNoticeService = async (
   }
 
   const updatedNotice = await noticeRepository.updateNoticeById(id, data);
+  await createNotificationsForAllUsers({
+    type: "NOTICE_UPDATED",
+    title: "Campus notice updated",
+    body: updatedNotice.title,
+    route: `/(tabs)/notices?noticeId=${updatedNotice.id}`,
+    dedupeKey: `notice:${updatedNotice.id}:updated:${updatedNotice.updatedAt.toISOString()}`,
+  });
   noticeCache.invalidateAll();
   return updatedNotice;
 };
@@ -104,6 +111,13 @@ export const deleteNoticeService = async (id: string) => {
   }
 
   const result = await noticeRepository.deleteNoticeById(id);
+  await createNotificationsForAllUsers({
+    type: "NOTICE_REMOVED",
+    title: "Campus notice removed",
+    body: existingNotice.title,
+    route: "/(tabs)/notices",
+    dedupeKey: `notice:${id}:removed`,
+  });
   noticeCache.invalidateAll();
   return result;
 };

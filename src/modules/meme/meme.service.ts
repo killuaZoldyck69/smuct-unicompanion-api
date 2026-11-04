@@ -1,4 +1,5 @@
 import { AppError } from "../../utils/AppError";
+import { createNotifications } from "../notification/notification.service";
 import { MemeReactionType } from "../../constants/enums";
 import { deleteImageFromCloudinary } from "../../lib/cloudinary";
 import { CreateMemePayload, QueryMemesQuery, UpdateMemePayload } from "./meme.schema";
@@ -64,7 +65,20 @@ export const reactMemeService = async (
     throw new AppError("Meme not found", 404);
   }
 
-  return toggleMemeReactionInDb(memeId, userId, type);
+  const result = await toggleMemeReactionInDb(memeId, userId, type);
+  const likesMilestone = result.userReaction === "LIKE" && result.likesCount > 0 && result.likesCount % 5 === 0;
+  const dislikesMilestone = result.userReaction === "DISLIKE" && result.dislikesCount > 0 && result.dislikesCount % 5 === 0;
+  if (meme.authorId !== userId && (likesMilestone || dislikesMilestone)) {
+    const count = likesMilestone ? result.likesCount : result.dislikesCount;
+    await createNotifications([meme.authorId], {
+      type: "MEME_REACTION_MILESTONE",
+      title: `Your meme reached ${count} ${likesMilestone ? "likes" : "dislikes"}`,
+      body: `“${meme.caption?.trim() || "Your meme"}” reached ${count} ${likesMilestone ? "likes" : "dislikes"}.`,
+      route: "/(tabs)/forum?section=MEMES",
+      dedupeKey: `meme:${memeId}:${likesMilestone ? "likes" : "dislikes"}:${count}`,
+    });
+  }
+  return result;
 };
 
 export const deleteMemeService = async (

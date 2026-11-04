@@ -2,9 +2,17 @@ import { AppError } from "../../utils/AppError";
 import * as eventRepository from "./event.repository";
 import { CreateEventPayload, UpdateEventPayload, GetEventsQuery } from "./event.schema";
 import { eventCache } from "./event.cache";
+import { createNotifications, createNotificationsForAllUsers } from "../notification/notification.service";
 
 export const createEventService = async (data: CreateEventPayload) => {
   const newEvent = await eventRepository.createCampusEvent(data);
+  await createNotificationsForAllUsers({
+    type: "CAMPUS_EVENT",
+    title: "New campus event",
+    body: newEvent.title,
+    route: `/(tabs)/events?eventId=${newEvent.id}`,
+    dedupeKey: `campus-event:${newEvent.id}`,
+  });
   eventCache.invalidateAll();
   return newEvent;
 };
@@ -91,6 +99,13 @@ export const updateEventService = async (id: string, data: UpdateEventPayload) =
   }
 
   const updatedEvent = await eventRepository.updateCampusEvent(id, data);
+  await createNotificationsForAllUsers({
+    type: "CAMPUS_EVENT_UPDATED",
+    title: "Campus event updated",
+    body: updatedEvent.title,
+    route: `/(tabs)/events?eventId=${updatedEvent.id}`,
+    dedupeKey: `campus-event:${updatedEvent.id}:updated:${updatedEvent.updatedAt.toISOString()}`,
+  });
   eventCache.invalidateAll();
   return updatedEvent;
 };
@@ -102,7 +117,15 @@ export const deleteEventService = async (id: string) => {
     throw new AppError("Campus event not found.", 404);
   }
 
+  const interestedUserIds = await eventRepository.findInterestedUserIds(id);
   const deleted = await eventRepository.deleteCampusEventById(id);
+  await createNotifications(interestedUserIds, {
+    type: "CAMPUS_EVENT_CANCELLED",
+    title: "Campus event cancelled",
+    body: existingEvent.title,
+    route: "/(tabs)/events",
+    dedupeKey: `campus-event:${id}:cancelled`,
+  });
   eventCache.invalidateAll();
   return deleted;
 };

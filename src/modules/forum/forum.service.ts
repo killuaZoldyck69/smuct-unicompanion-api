@@ -1,4 +1,8 @@
 import { AppError } from "../../utils/AppError";
+import {
+  createNotifications,
+  createNotificationsForAllUsers,
+} from "../notification/notification.service";
 import * as forumRepository from "./forum.repository";
 import {
   CreatePostPayload,
@@ -21,10 +25,18 @@ export const createPostService = async (
     throw new AppError(validation.error, 400);
   }
 
-  return await forumRepository.createHelpPost(authorId, {
+  const post = await forumRepository.createHelpPost(authorId, {
     title: validation.cleanTitle!,
     description: validation.cleanDescription!,
   });
+  await createNotificationsForAllUsers({
+    type: "FORUM_POST",
+    title: "New forum discussion",
+    body: post.title,
+    route: `/(tabs)/forum/${post.id}`,
+    dedupeKey: `forum-post:${post.id}`,
+  }, [authorId]);
+  return post;
 };
 
 export const getAllPostsService = async (
@@ -122,10 +134,24 @@ export const createResponseService = async (
     }
   }
 
-  return await forumRepository.createHelpResponse(postId, responderId, {
+  const response = await forumRepository.createHelpResponse(postId, responderId, {
     content: validation.cleanContent!,
     parentId: finalParentId,
   });
+  const recipientIds = new Set<string>([post.authorId]);
+  if (finalParentId) {
+    const parent = await forumRepository.findHelpResponseById(finalParentId);
+    if (parent) recipientIds.add(parent.responderId);
+  }
+  recipientIds.delete(responderId);
+  await createNotifications([...recipientIds], {
+    type: "FORUM_REPLY",
+    title: "New forum reply",
+    body: `Someone replied to “${post.title}”.`,
+    route: `/(tabs)/forum/${postId}`,
+    dedupeKey: `forum-reply:${response.id}`,
+  });
+  return response;
 };
 
 export const resolvePostService = async (

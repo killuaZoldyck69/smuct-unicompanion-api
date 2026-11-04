@@ -1,4 +1,5 @@
 import { AppError } from "../../utils/AppError";
+import { createNotifications } from "../notification/notification.service";
 import { LostFoundClaimStatus, LostFoundStatus } from "../../constants/enums";
 import { sendEmail } from "../../lib/email";
 import { deleteMultipleImagesFromCloudinary } from "../../lib/cloudinary";
@@ -274,6 +275,13 @@ export const createClaimService = async (
   }
 
   const claim = await createClaimInDb(postId, claimantId, payload);
+  await createNotifications([post.authorId], {
+    type: "LOST_FOUND_CLAIM",
+    title: "New item claim",
+    body: `Someone submitted a claim for “${post.title}”.`,
+    route: `/campus-hub/lost-found/${postId}`,
+    dedupeKey: `lost-found-claim:${claim.id}`,
+  });
 
   // Send notification email to post author
   if (post.author.email) {
@@ -347,6 +355,13 @@ export const acceptClaimService = async (
   }
 
   const result = await acceptClaimAtomicInDb(postId, claimId);
+  await createNotifications([result.acceptedClaim.claimantId, result.post.authorId], {
+    type: "LOST_FOUND_HANDOVER",
+    title: "Claim accepted",
+    body: `The claim for “${post.title}” was accepted. Arrange the handover in the app.`,
+    route: `/campus-hub/lost-found/${postId}`,
+    dedupeKey: `lost-found-handover:${claimId}`,
+  });
 
   // Send mutual handover notification emails
   if (result.acceptedClaim.claimant.email) {
@@ -416,6 +431,13 @@ export const rejectClaimService = async (
   }
 
   const updatedClaim = await rejectClaimInDb(claimId);
+  await createNotifications([claim.claimantId], {
+    type: "LOST_FOUND_CLAIM",
+    title: "Claim update",
+    body: `Your claim for “${post.title}” was not accepted.`,
+    route: `/campus-hub/lost-found/${postId}`,
+    dedupeKey: `lost-found-rejection:${claimId}`,
+  });
 
   // Notify claimant via Brevo
   if (claim.claimant.email) {

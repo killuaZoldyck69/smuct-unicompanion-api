@@ -79,6 +79,25 @@ export const createNotifications = async (
     userIds.map((userId) => ({ userId, ...payload })),
   );
 
+export const createNotificationsForAllUsers = async (
+  payload: NotificationPayload,
+  excludedUserIds: string[] = [],
+) => {
+  try {
+    const recipients = await prisma.user.findMany({
+      where: excludedUserIds.length ? { id: { notIn: excludedUserIds } } : undefined,
+      select: { id: true },
+    });
+    await createNotifications(recipients.map(({ id }) => id), payload);
+  } catch (error) {
+    console.error(JSON.stringify({
+      level: "error",
+      event: "notifications.all_recipients_failed",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    }));
+  }
+};
+
 export const createCourseNotificationsForRecipients = async (
   hubId: string,
   notifications: RecipientNotification[],

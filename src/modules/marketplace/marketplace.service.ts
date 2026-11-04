@@ -1,4 +1,5 @@
 import { AppError } from "../../utils/AppError";
+import { createNotifications, createNotificationsForAllUsers } from "../notification/notification.service";
 import { ListingStatus } from "../../constants/enums";
 import { deleteMultipleImagesFromCloudinary } from "../../lib/cloudinary";
 import {
@@ -59,7 +60,17 @@ const assertOwnership = (
 export const createPostService = async (
   userId: string,
   payload: CreateMarketplacePayload
-) => createMarketplacePostInDb(userId, payload);
+) => {
+  const post = await createMarketplacePostInDb(userId, payload);
+  await createNotificationsForAllUsers({
+    type: "MARKETPLACE_LISTING",
+    title: post.type === "BUYING" ? "New item wanted" : "New item listed for sale",
+    body: post.title,
+    route: `/campus-hub/marketplace/${post.id}`,
+    dedupeKey: `marketplace-listing:${post.id}`,
+  }, [userId]);
+  return post;
+};
 
 export const updatePostService = async (
   id: string,
@@ -145,7 +156,21 @@ export const createCommentService = async (
     }
   }
 
-  return createMarketplaceCommentInDb(postId, userId, payload);
+  const comment = await createMarketplaceCommentInDb(postId, userId, payload);
+  const recipients = new Set<string>([post.authorId]);
+  if (payload.parentId) {
+    const parent = await findMarketplaceCommentByIdInDb(payload.parentId);
+    if (parent) recipients.add(parent.authorId);
+  }
+  recipients.delete(userId);
+  await createNotifications([...recipients], {
+    type: "MARKETPLACE_COMMENT",
+    title: "New buy & sell comment",
+    body: `Someone commented on “${post.title}”.`,
+    route: `/campus-hub/marketplace/${postId}`,
+    dedupeKey: `marketplace-comment:${comment.id}`,
+  });
+  return comment;
 };
 
 export const updateCommentService = async (
