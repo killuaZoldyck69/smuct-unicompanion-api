@@ -82,6 +82,12 @@ export const submitAssessment = async (
   const previousSubmission = assessment.submissions.find(
     (submission) => submission.studentId === userId,
   );
+  if (previousSubmission?.status === "UNSUBMITTED" && isLate && !assessment.allowLateSubmission) {
+    throw new AppError(
+      "This coursework cannot be resubmitted after the deadline.",
+      400,
+    );
+  }
   assertNoNewCloudinaryAttachments(
     payload.attachments,
     previousSubmission?.attachments as { url?: string }[] | null,
@@ -99,6 +105,33 @@ export const submitAssessment = async (
       status,
     },
   );
+};
+
+export const unsubmitAssessment = async (
+  userId: string,
+  assessmentId: string,
+) => {
+  const assessment = await assessmentsRepository.findAssessmentById(assessmentId);
+  if (!assessment) throw new AppError("Assessment not found", 404);
+
+  await verifyHubRole(userId, assessment.hubId, ["STUDENT", "CR"]);
+  if (assessment.submissionType === "HAND") {
+    throw new AppError("Only online coursework can be unsubmitted.", 400);
+  }
+  const isOverdue = Date.now() >= new Date(assessment.deadline).getTime();
+  if (isOverdue && !assessment.allowLateSubmission) {
+    throw new AppError("Coursework can only be unsubmitted before its deadline.", 400);
+  }
+
+  const submission = await assessmentsRepository.findStudentSubmission(assessmentId, userId);
+  if (!submission || !["SUBMITTED", "LATE", "HAND_SUBMISSION", "LATE_HAND_SUBMISSION"].includes(submission.status)) {
+    throw new AppError("No submitted coursework is available to unsubmit.", 400);
+  }
+  if (submission.marks !== null || submission.status === "GRADED") {
+    throw new AppError("Graded coursework cannot be unsubmitted.", 400);
+  }
+
+  return assessmentsRepository.markSubmissionUnsubmitted(submission.id);
 };
 
 export const gradeSubmission = async (

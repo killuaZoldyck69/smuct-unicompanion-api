@@ -129,10 +129,14 @@ export const updateUserImageById = async (id: string, image: string) => {
 export const updateGoogleDriveConnectionStatus = async (
   userId: string,
   isConnected: boolean,
+  email?: string | null,
 ) => {
   const result = await prisma.user.updateMany({
-    where: { id: userId, googleDriveConnected: { not: isConnected } },
-    data: { googleDriveConnected: isConnected },
+    where: { id: userId },
+    data: {
+      googleDriveConnected: isConnected,
+      googleDriveEmail: isConnected ? (email ?? null) : null,
+    },
   });
   return result.count > 0;
 };

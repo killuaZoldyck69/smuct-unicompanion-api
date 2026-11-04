@@ -18,6 +18,7 @@ export const restrictUserSchema = z.object({
 export const updateGoogleDriveStatusSchema = z.object({
   body: z.object({
     isConnected: z.boolean(),
+    email: z.string().email("Invalid Google Drive email").optional().nullable(),
   }),
 });
 

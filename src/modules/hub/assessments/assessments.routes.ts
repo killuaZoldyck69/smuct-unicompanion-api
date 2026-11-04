@@ -15,6 +15,7 @@ import {
   deleteAssessment,
   getAssessmentSubmissions,
   submitAssessment,
+  unsubmitAssessment,
   gradeSubmission,
   bulkGrade,
 } from "./assessments.controller";
@@ -27,6 +28,14 @@ router.post(
   requireAuth,
   validateRequest(createAssessmentSchema),
   createAssessment,
+);
+router.patch(
+  [
+    "/:id/assessments/:assessmentId/unsubmit",
+    "/assessments/:assessmentId/unsubmit",
+  ],
+  requireAuth,
+  unsubmitAssessment,
 );
 router.get("/:id/assessments", requireAuth, getAssessments);
 router.patch(

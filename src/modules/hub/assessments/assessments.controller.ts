@@ -42,6 +42,16 @@ export const submitAssessment = catchAsync(
   },
 );
 
+export const unsubmitAssessment = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await assessmentService.unsubmitAssessment(
+      req.user.id,
+      req.params.assessmentId as string,
+    );
+    res.status(200).json({ success: true, message: "Coursework unsubmitted", data });
+  },
+);
+
 export const gradeSubmission = catchAsync(
   async (req: Request, res: Response) => {
     const data = await assessmentService.gradeSubmission(

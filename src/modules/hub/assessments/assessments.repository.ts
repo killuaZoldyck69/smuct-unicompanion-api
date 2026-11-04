@@ -205,6 +205,19 @@ export const findSubmissionById = async (submissionId: string) => {
   });
 };
 
+export const findStudentSubmission = async (
+  assessmentId: string,
+  studentId: string,
+) => prisma.submission.findUnique({
+  where: { assessmentId_studentId: { assessmentId, studentId } },
+});
+
+export const markSubmissionUnsubmitted = async (submissionId: string) =>
+  prisma.submission.update({
+    where: { id: submissionId },
+    data: { status: "UNSUBMITTED", isLate: false },
+  });
+
 export const updateSubmissionGrade = async (
   submissionId: string,
   data: { marks: number; feedback?: string | null; gradedById: string },

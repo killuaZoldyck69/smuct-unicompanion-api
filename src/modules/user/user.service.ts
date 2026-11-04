@@ -177,15 +177,17 @@ export const getAllUsersService = async (query?: GetUsersQuery) => {
 export const updateGoogleDriveConnectionStatusService = async (
   userId: string,
   isConnected: boolean,
+  email?: string | null,
 ) => {
   const changed = await userRepository.updateGoogleDriveConnectionStatus(
     userId,
     isConnected,
+    email,
   );
   if (changed) {
     appCache.delPattern(/^hub:/);
   }
-  return { isConnected, changed };
+  return { isConnected, email: isConnected ? email : null, changed };
 };
 
 export const restrictUserService = async (

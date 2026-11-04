@@ -25,6 +25,7 @@ export const updateGoogleDriveConnectionStatus = catchAsync(
     const result = await userService.updateGoogleDriveConnectionStatusService(
       req.user.id,
       req.body.isConnected,
+      req.body.email,
     );
     res.setHeader("Cache-Control", "no-store");
     res.status(200).json({

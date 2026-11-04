@@ -34,6 +34,7 @@ model User {
   bloodGroup    BloodGroup?
   isRestricted  Boolean     @default(false)
   googleDriveConnected Boolean @default(false)
+  googleDriveEmail     String?
 
   // Better Auth Relations
   sessions Session[]
