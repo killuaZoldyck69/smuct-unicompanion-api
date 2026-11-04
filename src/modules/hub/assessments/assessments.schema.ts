@@ -80,6 +80,8 @@ export const gradeSubmissionSchema = z.object({
   body: z.object({
     marks: z.number().min(0, "Marks cannot be negative"),
     feedback: z.string().optional().nullable(),
+    studentId: z.string().optional(),
+    assessmentId: z.string().optional(),
   }),
 });
 

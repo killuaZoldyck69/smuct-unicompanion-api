@@ -137,9 +137,52 @@ export const unsubmitAssessment = async (
 export const gradeSubmission = async (
   userId: string,
   submissionId: string,
-  data: GradeSubmissionPayload,
+  data: GradeSubmissionPayload & { studentId?: string; assessmentId?: string },
 ) => {
-  const submission = await assessmentsRepository.findSubmissionById(submissionId);
+  let submission = await assessmentsRepository.findSubmissionById(submissionId);
+
+  if (!submission && (data.assessmentId || data.studentId)) {
+    const targetAssessmentId = data.assessmentId;
+    const targetStudentId = data.studentId || submissionId;
+    if (targetAssessmentId && targetStudentId) {
+      const assessment = await assessmentsRepository.findAssessmentById(targetAssessmentId);
+      if (assessment) {
+        await verifyHubRole(userId, assessment.hubId, ["TEACHER"]);
+        if (data.marks < 0) throw new AppError("Marks cannot be negative", 400);
+        if (data.marks > assessment.totalMarks) {
+          throw new AppError(
+            `Marks (${data.marks}) cannot exceed the maximum allowed marks (${assessment.totalMarks})`,
+            400,
+          );
+        }
+        const upserted = await assessmentsRepository.upsertSubmission(
+          targetAssessmentId,
+          targetStudentId,
+          { status: "GRADED" },
+        );
+        const gradedSubmission = await assessmentsRepository.updateSubmissionGrade(
+          upserted.id,
+          {
+            marks: data.marks,
+            feedback: data.feedback,
+            gradedById: userId,
+          },
+        );
+        await createCourseNotificationsForRecipients(assessment.hubId, [
+          {
+            userId: targetStudentId,
+            type: "GRADE",
+            title: "Grade posted",
+            body: `Your grade for ${assessment.title} is available.`,
+            route: `/hub/${assessment.hubId}/assessments?assessmentId=${assessment.id}`,
+            dedupeKey: `assessment-grade:${gradedSubmission.id}:${gradedSubmission.updatedAt.toISOString()}`,
+          },
+        ]);
+        return gradedSubmission;
+      }
+    }
+  }
+
   if (!submission) throw new AppError("Submission not found", 404);
 
   await verifyHubRole(userId, submission.assessment.hubId, ["TEACHER"]);
