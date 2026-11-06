@@ -30,17 +30,53 @@ export const createAssessment = async (
     type: "ASSESSMENT",
     title: "New coursework posted",
     body: assessment.title,
-    route: `/hub/${hubId}/assessments`,
+    route: `/hub/${hubId}?tab=classwork&assessmentId=${assessment.id}&fromNotification=true`,
     dedupeKey: `assessment:${assessment.id}`,
   });
   return assessment;
 };
 
 export const getAssessments = async (
+  userId: string,
   hubId: string,
   filters?: { type?: string; status?: string },
 ) => {
-  return await assessmentsRepository.findAssessmentsByHubId(hubId, filters);
+  const member = await verifyHubRole(userId, hubId, [
+    "TEACHER",
+    "CR",
+    "STUDENT",
+    "ADMIN",
+  ]);
+  const isTeacherOrAdmin = member.role === "TEACHER" || member.role === "ADMIN";
+  const studentIdForFilter = isTeacherOrAdmin ? null : userId;
+
+  return await assessmentsRepository.findAssessmentsByHubId(
+    hubId,
+    filters,
+    studentIdForFilter,
+  );
+};
+
+export const getAssessmentById = async (
+  userId: string,
+  assessmentId: string,
+) => {
+  const assessment = await assessmentsRepository.findAssessmentById(assessmentId);
+  if (!assessment) throw new AppError("Assessment not found", 404);
+
+  const member = await verifyHubRole(userId, assessment.hubId, [
+    "TEACHER",
+    "CR",
+    "STUDENT",
+    "ADMIN",
+  ]);
+  const isTeacherOrAdmin = member.role === "TEACHER" || member.role === "ADMIN";
+  const studentIdForFilter = isTeacherOrAdmin ? null : userId;
+
+  return await assessmentsRepository.findAssessmentById(
+    assessmentId,
+    studentIdForFilter,
+  );
 };
 
 export const getAssessmentSubmissions = async (
@@ -174,7 +210,7 @@ export const gradeSubmission = async (
             type: "GRADE",
             title: "Grade posted",
             body: `Your grade for ${assessment.title} is available.`,
-            route: `/hub/${assessment.hubId}/assessments?assessmentId=${assessment.id}`,
+            route: `/hub/${assessment.hubId}?tab=classwork&assessmentId=${assessment.id}&fromNotification=true`,
             dedupeKey: `assessment-grade:${gradedSubmission.id}:${gradedSubmission.updatedAt.toISOString()}`,
           },
         ]);
@@ -219,7 +255,7 @@ export const gradeSubmission = async (
         type: "GRADE",
         title: submission.marks === null ? "Grade posted" : "Grade updated",
         body: `Your grade for ${submission.assessment.title} is available.`,
-        route: `/hub/${submission.assessment.hubId}/assessments?assessmentId=${submission.assessment.id}`,
+        route: `/hub/${submission.assessment.hubId}?tab=classwork&assessmentId=${submission.assessment.id}&fromNotification=true`,
         dedupeKey: `assessment-grade:${gradedSubmission.id}:${gradedSubmission.updatedAt.toISOString()}`,
       },
     ]);
@@ -301,7 +337,7 @@ export const bulkGrade = async (
         type: "GRADE",
         title: !previous || previous.marks === null ? "Grade posted" : "Grade updated",
         body: `Your grade for ${assessment.title} is available.`,
-        route: `/hub/${assessment.hubId}/assessments?assessmentId=${assessment.id}`,
+        route: `/hub/${assessment.hubId}?tab=classwork&assessmentId=${assessment.id}&fromNotification=true`,
         dedupeKey: `assessment-grade:${submission.id}:${submission.updatedAt.toISOString()}`,
       };
     });

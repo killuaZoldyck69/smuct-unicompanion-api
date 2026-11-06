@@ -22,8 +22,19 @@ export const getAssessments = catchAsync(
       status: req.query.status as string | undefined,
     };
     const data = await assessmentService.getAssessments(
+      req.user.id,
       req.params.id as string,
       filters,
+    );
+    res.status(200).json({ success: true, data });
+  },
+);
+
+export const getAssessmentById = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await assessmentService.getAssessmentById(
+      req.user.id,
+      req.params.assessmentId as string,
     );
     res.status(200).json({ success: true, data });
   },

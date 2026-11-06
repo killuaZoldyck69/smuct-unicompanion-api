@@ -34,6 +34,7 @@ export const createAssessment = async (
 export const findAssessmentsByHubId = async (
   hubId: string,
   filters?: { type?: string; status?: string },
+  studentIdForFilter?: string | null,
 ) => {
   const where: any = { hubId };
   if (filters?.type && filters.type !== "ALL") {
@@ -48,22 +49,40 @@ export const findAssessmentsByHubId = async (
     orderBy: { deadline: "asc" },
     include: {
       creator: { select: { id: true, name: true, image: true, role: true } },
-      submissions: {
-        include: {
-          student: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-              studentProfile: true,
+      submissions: studentIdForFilter
+        ? {
+            where: { studentId: studentIdForFilter },
+            include: {
+              student: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  image: true,
+                  studentProfile: true,
+                },
+              },
+              gradedBy: {
+                select: { id: true, name: true },
+              },
+            },
+          }
+        : {
+            include: {
+              student: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  image: true,
+                  studentProfile: true,
+                },
+              },
+              gradedBy: {
+                select: { id: true, name: true },
+              },
             },
           },
-          gradedBy: {
-            select: { id: true, name: true },
-          },
-        },
-      },
       _count: {
         select: { submissions: true },
       },
@@ -71,11 +90,13 @@ export const findAssessmentsByHubId = async (
   });
 
   return items.map((item) => {
-    const totalSubmissions = item.submissions.length;
+    const totalSubmissions = item._count.submissions;
     const gradedCount = item.submissions.filter(
       (s) => s.marks !== null && s.marks !== undefined,
     ).length;
-    const pendingCount = totalSubmissions - gradedCount;
+    const pendingCount = studentIdForFilter
+      ? item.submissions.filter((s) => s.marks === null || s.marks === undefined).length
+      : totalSubmissions - gradedCount;
 
     return {
       ...item,
@@ -88,26 +109,50 @@ export const findAssessmentsByHubId = async (
   });
 };
 
-export const findAssessmentById = async (assessmentId: string) => {
+export const findAssessmentById = async (
+  assessmentId: string,
+  studentIdForFilter?: string | null,
+) => {
   return await prisma.assessment.findUnique({
     where: { id: assessmentId },
     include: {
       creator: { select: { id: true, name: true, image: true, role: true } },
-      submissions: {
-        include: {
-          student: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-              studentProfile: true,
+      submissions: studentIdForFilter
+        ? {
+            where: { studentId: studentIdForFilter },
+            include: {
+              student: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  image: true,
+                  studentProfile: true,
+                },
+              },
+              gradedBy: {
+                select: { id: true, name: true },
+              },
+            },
+          }
+        : {
+            include: {
+              student: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  image: true,
+                  studentProfile: true,
+                },
+              },
+              gradedBy: {
+                select: { id: true, name: true },
+              },
             },
           },
-          gradedBy: {
-            select: { id: true, name: true },
-          },
-        },
+      _count: {
+        select: { submissions: true },
       },
     },
   });

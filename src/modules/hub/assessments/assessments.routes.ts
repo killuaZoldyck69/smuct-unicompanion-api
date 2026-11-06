@@ -11,6 +11,7 @@ import {
 import {
   createAssessment,
   getAssessments,
+  getAssessmentById,
   updateAssessment,
   deleteAssessment,
   getAssessmentSubmissions,
@@ -38,6 +39,14 @@ router.patch(
   unsubmitAssessment,
 );
 router.get("/:id/assessments", requireAuth, getAssessments);
+router.get(
+  [
+    "/:id/assessments/:assessmentId",
+    "/assessments/:assessmentId",
+  ],
+  requireAuth,
+  getAssessmentById,
+);
 router.patch(
   [
     "/:id/assessments/:assessmentId",
