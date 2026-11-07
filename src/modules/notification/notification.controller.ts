@@ -49,3 +49,42 @@ export const markAllNotificationsRead = catchAsync(
     res.status(200).json({ success: true, data: { updatedCount } });
   },
 );
+
+export const registerPushToken = catchAsync(
+  async (req: Request, res: Response) => {
+    const { token, platform = "android" } = req.body;
+    if (!token || typeof token !== "string" || !token.trim()) {
+      res.status(400).json({
+        success: false,
+        message: "Valid push token is required.",
+      });
+      return;
+    }
+
+    const record = await notificationService.registerPushToken(
+      req.user.id,
+      token.trim(),
+      typeof platform === "string" ? platform : "android",
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Push token registered successfully.",
+      data: record,
+    });
+  },
+);
+
+export const unregisterPushToken = catchAsync(
+  async (req: Request, res: Response) => {
+    const { token } = req.body;
+    await notificationService.unregisterPushToken(
+      req.user.id,
+      typeof token === "string" ? token.trim() : undefined,
+    );
+    res.status(200).json({
+      success: true,
+      message: "Push token unregistered successfully.",
+    });
+  },
+);

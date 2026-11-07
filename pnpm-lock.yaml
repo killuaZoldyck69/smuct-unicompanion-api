@@ -32,6 +32,9 @@ importers:
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
+      expo-server-sdk:
+        specifier: ^8.0.0
+        version: 8.0.0
       express:
         specifier: ^5.2.1
         version: 5.2.1
@@ -1251,6 +1254,9 @@ packages:
     resolution: {integrity: sha512-dtJUTepzMW3Lm/NPxRf3wP4642UWhjL2sQxc+ym2YMj1m/H2zDNQOlezafzkHwn6sMstjHTwG6iQQsctDW/b1A==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
+  err-code@2.0.3:
+    resolution: {integrity: sha512-2bmlRpNKBxT/CRmPOlyISQpNj+qSeYvcym/uT0Jx2bMOlKLtSy1ZmLuVxSEKKyor/N5yhvp/ZiG1oE3DEYMSFA==}
+
   es-define-property@1.0.1:
     resolution: {integrity: sha512-e3nRfgfUZ4rNGL232gUgX06QNyyez04KdjFrF+LTRoOXmrOgFKDg4BCdsjW8EnT69eqdYGmRpJwiPVYNrCaW3g==}
     engines: {node: '>= 0.4'}
@@ -1279,6 +1285,10 @@ packages:
   etag@1.8.1:
     resolution: {integrity: sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg==}
     engines: {node: '>= 0.6'}
+
+  expo-server-sdk@8.0.0:
+    resolution: {integrity: sha512-AN0JuacmrO32hxv95EPqPfPIRqj0neCnh0ooxQFAd3lkJXu4ytWduvxzawzHEOSn4jV/1vx8xbtOXpuVV9Tg3Q==}
+    engines: {node: '>=22.12.0'}
 
   express-rate-limit@7.5.1:
     resolution: {integrity: sha512-7iN8iPMDzOMHPUYllBEsQdWVB6fPDMPqwjBaFrgr4Jgr/+okjvzAy+UHlYYL/Vs0OsOrMkwS6PJDkFlJwoxUnw==}
@@ -1671,6 +1681,13 @@ packages:
         optional: true
       typescript:
         optional: true
+
+  promise-limit@2.7.0:
+    resolution: {integrity: sha512-7nJ6v5lnJsXwGprnGXga4wx6d1POjvi5Qmf1ivTRxTjH4Z/9Czja/UCMLVmB9N93GeWOU93XaFaEt6jbuoagNw==}
+
+  promise-retry@2.0.1:
+    resolution: {integrity: sha512-y+WKFlBR8BGXnsNlIHFGPZmyDf3DFMoLhaflAnyZgV6rG6xu+JwesTo2Q9R6XwYmtmwAFCkAk3e35jEdoeh/3g==}
+    engines: {node: '>=10'}
 
   proper-lockfile@4.1.2:
     resolution: {integrity: sha512-TjNPblN4BwAWMXU8s9AEz4JmQxnD1NNL7bNOY/AKUzyamc379FWASUhc/K1pL2noVb+XmZKLL68cjzLsiOAMaA==}
@@ -2883,6 +2900,8 @@ snapshots:
 
   env-paths@3.0.0: {}
 
+  err-code@2.0.3: {}
+
   es-define-property@1.0.1: {}
 
   es-errors@1.3.0: {}
@@ -2952,6 +2971,11 @@ snapshots:
   escape-html@1.0.3: {}
 
   etag@1.8.1: {}
+
+  expo-server-sdk@8.0.0:
+    dependencies:
+      promise-limit: 2.7.0
+      promise-retry: 2.0.1
 
   express-rate-limit@7.5.1(express@5.2.1):
     dependencies:
@@ -3321,6 +3345,13 @@ snapshots:
       - magicast
       - react
       - react-dom
+
+  promise-limit@2.7.0: {}
+
+  promise-retry@2.0.1:
+    dependencies:
+      err-code: 2.0.3
+      retry: 0.12.0
 
   proper-lockfile@4.1.2:
     dependencies:

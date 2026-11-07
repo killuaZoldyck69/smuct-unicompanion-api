@@ -73,6 +73,7 @@ model User {
   memeReactions        MemeReaction[]
   eventInterested      EventInterested[]
   notifications        Notification[]
+  pushTokens           PushToken[]
 
   @@map("user")
 }

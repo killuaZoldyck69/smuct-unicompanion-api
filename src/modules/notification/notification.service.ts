@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { sendPushNotifications } from "../../services/push-notification.service";
 
 export type NotificationPayload = {
   type: string;
@@ -65,6 +66,46 @@ export const createNotificationsForRecipients = async (
       JSON.stringify({
         level: "error",
         event: "notifications.create_failed",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
+  }
+
+  // Dispatch push notifications to registered devices (non-blocking)
+  try {
+    const batches = new Map<
+      string,
+      { userIds: string[]; title: string; body: string; route: string }
+    >();
+
+    for (const notif of uniqueNotifications) {
+      const key = `${notif.title}\u0000${notif.body}\u0000${notif.route}`;
+      const existing = batches.get(key);
+      if (existing) {
+        existing.userIds.push(notif.userId);
+      } else {
+        batches.set(key, {
+          userIds: [notif.userId],
+          title: notif.title,
+          body: notif.body,
+          route: notif.route,
+        });
+      }
+    }
+
+    for (const batch of batches.values()) {
+      sendPushNotifications({
+        userIds: batch.userIds,
+        title: batch.title,
+        body: batch.body,
+        route: batch.route,
+      });
+    }
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        event: "notifications.push_trigger_failed",
         errorType: error instanceof Error ? error.name : "UnknownError",
       }),
     );
@@ -269,4 +310,25 @@ export const markAllNotificationsRead = async (userId: string) => {
     data: { readAt: new Date() },
   });
   return result.count;
+};
+
+export const registerPushToken = async (
+  userId: string,
+  token: string,
+  platform = "android",
+) => {
+  return prisma.pushToken.upsert({
+    where: { token },
+    update: { userId, platform, updatedAt: new Date() },
+    create: { userId, token, platform },
+  });
+};
+
+export const unregisterPushToken = async (userId: string, token?: string) => {
+  if (!token) {
+    return prisma.pushToken.deleteMany({ where: { userId } });
+  }
+  return prisma.pushToken.deleteMany({
+    where: { userId, token },
+  });
 };
