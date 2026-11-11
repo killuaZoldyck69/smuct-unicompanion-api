@@ -235,38 +235,110 @@ export const createHubMember = async (
   });
 };
 
-export const findMyHubMemberships = async (userId: string) => {
-  return await prisma.hubMember.findMany({
-    where: { userId },
-    include: {
-      hub: {
-        include: {
-          _count: { select: { members: true } },
-          members: {
-            where: { role: "TEACHER" },
-            select: {
-              id: true,
-              role: true,
-              user: { select: { id: true, name: true, image: true, email: true } },
-            },
-            take: 1,
-          },
-          assessments: {
-            where: { deadline: { gt: new Date() } },
-            orderBy: { deadline: "asc" },
-            take: 1,
-            select: { id: true, title: true, type: true, deadline: true },
-          },
-          classNotices: {
-            where: { isActive: true },
-            include: {
-              author: {
-                select: { id: true, name: true, image: true, role: true },
-              },
-            },
-            orderBy: { createdAt: "desc" },
-          },
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+export const getActiveNoticeCutoff = (now: Date = new Date()): Date =>
+  new Date(now.getTime() - ONE_DAY_MS);
+
+/**
+ * Shared CourseHub projection for /api/hubs/my.
+ * Excludes reviewQuestions and teacher email PII in both modes,
+ * and omits assessments/termExams/joinCode when view is "schedule".
+ */
+export const buildMyHubSelect = (
+  view: "default" | "schedule" = "default",
+  now: Date = new Date(),
+) => {
+  const noticeCutoff = getActiveNoticeCutoff(now);
+
+  const baseSelect = {
+    id: true,
+    courseCode: true,
+    courseName: true,
+    department: true,
+    batch: true,
+    section: true,
+    semesterNumber: true,
+    termOffer: true,
+    weeklyClassSchedule: true,
+    isArchived: true,
+    meetUrl: true,
+    isClassLive: true,
+    createdAt: true,
+    members: {
+      where: { role: HubRole.TEACHER, isActive: true },
+      select: {
+        id: true,
+        role: true,
+        user: { select: { id: true, name: true, image: true } },
+      },
+      take: 1,
+    },
+    classNotices: {
+      where: {
+        isActive: true,
+        effectiveDate: { gte: noticeCutoff },
+      },
+      select: {
+        id: true,
+        hubId: true,
+        type: true,
+        message: true,
+        targetDay: true,
+        effectiveDate: true,
+        newRoom: true,
+        newTime: true,
+        meetUrl: true,
+        isActive: true,
+        createdAt: true,
+        author: {
+          select: { id: true, name: true, image: true, role: true },
         },
+      },
+      orderBy: { createdAt: "desc" as const },
+    },
+  };
+
+  if (view === "schedule") {
+    return baseSelect;
+  }
+
+  return {
+    ...baseSelect,
+    credit: true,
+    joinCode: true,
+    isReviewOpen: true,
+    termExams: true,
+    _count: { select: { members: true } },
+    assessments: {
+      where: { deadline: { gt: now } },
+      orderBy: { deadline: "asc" as const },
+      take: 1,
+      select: { id: true, title: true, type: true, deadline: true },
+    },
+  };
+};
+
+export const findMyHubMemberships = async (
+  userId: string,
+  view: "default" | "schedule" = "default",
+) => {
+  const hubSelect = buildMyHubSelect(view);
+
+  return await prisma.hubMember.findMany({
+    where: {
+      userId,
+      isActive: true,
+      ...(view === "schedule" ? { hub: { isArchived: false } } : {}),
+    },
+    select: {
+      id: true,
+      userId: true,
+      hubId: true,
+      role: true,
+      isActive: true,
+      hub: {
+        select: hubSelect,
       },
     },
   });
@@ -276,36 +348,16 @@ export const findMyHubMemberships = async (userId: string) => {
  * Returns all course hubs across the university for administrative overview.
  * Mapped to standard HubMember structure so clients consume it seamlessly in read-only mode.
  */
-export const findAllHubsForAdmin = async (adminUserId: string) => {
+export const findAllHubsForAdmin = async (
+  adminUserId: string,
+  view: "default" | "schedule" = "default",
+) => {
+  const hubSelect = buildMyHubSelect(view);
+
   const hubs = await prisma.courseHub.findMany({
+    ...(view === "schedule" ? { where: { isArchived: false } } : {}),
     orderBy: { createdAt: "desc" },
-    include: {
-      _count: { select: { members: true } },
-      members: {
-        where: { role: "TEACHER" },
-        select: {
-          id: true,
-          role: true,
-          user: { select: { id: true, name: true, image: true, email: true } },
-        },
-        take: 1,
-      },
-      assessments: {
-        where: { deadline: { gt: new Date() } },
-        orderBy: { deadline: "asc" },
-        take: 1,
-        select: { id: true, title: true, type: true, deadline: true },
-      },
-      classNotices: {
-        where: { isActive: true },
-        include: {
-          author: {
-            select: { id: true, name: true, image: true, role: true },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-      },
-    },
+    select: hubSelect,
   });
 
   return hubs.map((hub) => ({
@@ -313,6 +365,7 @@ export const findAllHubsForAdmin = async (adminUserId: string) => {
     userId: adminUserId,
     hubId: hub.id,
     role: "ADMIN" as any,
+    isActive: true,
     joinedAt: hub.createdAt,
     hub,
   }));

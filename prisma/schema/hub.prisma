@@ -53,6 +53,9 @@ model CourseHub {
   classNotices  ClassNotice[]
 
   createdAt DateTime @default(now())
+
+  @@index([isArchived, createdAt(sort: Desc)])
+  @@index([department])
 }
 
 model HubMember {
@@ -68,6 +71,8 @@ model HubMember {
   @@unique([userId, hubId])
   @@index([hubId])
   @@index([userId])
+  @@index([userId, isActive])
+  @@index([hubId, role, isActive])
 }
 
 // ==============================
@@ -166,6 +171,7 @@ model Assessment {
   updatedAt   DateTime @default(now()) @updatedAt
 
   @@index([hubId])
+  @@index([hubId, deadline])
 }
 
 model Submission {
@@ -273,4 +279,5 @@ model ClassNotice {
 
   @@index([hubId])
   @@index([effectiveDate])
+  @@index([hubId, isActive, effectiveDate])
 }

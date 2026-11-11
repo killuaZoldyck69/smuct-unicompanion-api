@@ -32,7 +32,8 @@ export const joinHub = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getMyHubs = catchAsync(async (req: Request, res: Response) => {
-  const hubs = await hubService.getMyHubsService(req.user.id);
+  const view = req.query.view === "schedule" ? "schedule" : "default";
+  const hubs = await hubService.getMyHubsService(req.user.id, view);
   res.status(200).json({ success: true, data: hubs });
 });
 

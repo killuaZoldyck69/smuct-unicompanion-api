@@ -25,6 +25,7 @@ import { adminRoutes } from "./modules/admin/admin.routes";
 import { notificationRoutes } from "./modules/notification/notification.routes";
 
 import { envConfig } from "./config/env";
+import { prisma } from "./lib/prisma";
 import {
   globalLimiter,
   authLimiter,
@@ -32,7 +33,47 @@ import {
   otpEmailLimiter,
 } from "./middleware/rateLimit.middleware";
 
+export const createReadinessHandler = (
+  checkDb: () => Promise<unknown>,
+  timeoutMs: number = 3000,
+) => {
+  return async (_req: Request, res: Response): Promise<void> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        checkDb(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error("Readiness check timed out")),
+            timeoutMs,
+          );
+        }),
+      ]);
+      res.status(200).json({
+        status: "ok",
+        db: "connected",
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error(
+        "[Health Readiness Error]:",
+        error instanceof Error ? error.message : "Database readiness check failed",
+      );
+      res.status(503).json({
+        status: "degraded",
+        db: "unavailable",
+        timestamp: new Date().toISOString(),
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
+};
+
 const app: Application = express();
+
+// Trust single upstream reverse proxy (Render) so req.ip reflects real client IP without trusting raw headers
+app.set("trust proxy", 1);
 
 // Parse and construct the CORS allowed origins whitelist
 const parsedTrustedOrigins = envConfig.TRUSTED_ORIGINS
@@ -101,6 +142,11 @@ app.get("/health", (req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+app.get(
+  "/health/ready",
+  createReadinessHandler(() => prisma.$queryRaw`SELECT 1`),
+);
 
 app.use("/api/students", studentRoutes);
 app.use("/api/teachers", teacherRoutes);

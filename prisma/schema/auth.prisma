@@ -75,6 +75,9 @@ model User {
   notifications        Notification[]
   pushTokens           PushToken[]
 
+  @@index([role, isRestricted])
+  @@index([isRestricted, updatedAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
   @@map("user")
 }
 

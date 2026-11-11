@@ -21,65 +21,65 @@ export interface AdminDashboardStats {
   totalTeachers: number;
   totalUsers: number;
   restrictedUsers: number;
-  pendingApprovals: number;
-  activeNotices: number;
   totalCourseHubs: number;
   recentActivity: ActivityItem[];
 }
 
-export const getAdminDashboardStatsService = async (): Promise<AdminDashboardStats> => {
-  // Run aggregate count queries and recent entity fetches in parallel
-  const [
-    totalStudents,
-    totalTeachers,
-    totalUsers,
-    restrictedUsers,
-    pendingApprovals,
-    activeNotices,
-    totalCourseHubs,
-    recentUsers,
-    recentRestricted,
-    recentNotices,
-    recentComplaints,
-  ] = await Promise.all([
-    prisma.user.count({ where: { role: "STUDENT" } }),
-    prisma.user.count({ where: { role: "TEACHER" } }),
-    prisma.user.count(),
-    prisma.user.count({ where: { isRestricted: true } }),
-    prisma.user.count({ where: { emailVerified: false } }),
-    prisma.notice.count(),
-    prisma.courseHub.count(),
-    // 5 most recent registered users
-    prisma.user.findMany({
-      take: 5,
-      orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, email: true, role: true, createdAt: true },
-    }),
-    // 5 most recent restricted users
-    prisma.user.findMany({
-      where: { isRestricted: true },
-      take: 5,
-      orderBy: { updatedAt: "desc" },
-      select: { id: true, name: true, email: true, updatedAt: true },
-    }),
-    // 5 most recent notices
-    prisma.notice.findMany({
-      take: 5,
-      orderBy: { createdAt: "desc" },
-      select: { id: true, title: true, issuerName: true, createdAt: true },
-    }),
-    // 5 most recent complaints
-    prisma.complaint.findMany({
-      where: { deletedAt: null },
-      take: 5,
-      orderBy: { createdAt: "desc" },
-      select: { id: true, title: true, category: true, createdAt: true },
-    }),
-  ]);
+export interface RawAdminStatsInput {
+  userStats: Array<{
+    role: string | null;
+    isRestricted: boolean;
+    _count: { _all: number };
+  }>;
+  totalCourseHubs: number;
+  recentUsers: Array<{
+    id: string;
+    name: string;
+    role: string | null;
+    createdAt: Date;
+  }>;
+  recentRestricted: Array<{
+    id: string;
+    name: string;
+    updatedAt: Date;
+  }>;
+  recentNotices: Array<{
+    id: string;
+    title: string;
+    issuerName: string;
+    createdAt: Date;
+  }>;
+  recentComplaints: Array<{
+    id: string;
+    title: string;
+    category: string;
+    createdAt: Date;
+  }>;
+}
+
+/**
+ * Pure aggregator transforming grouped user counts and recent activity slices
+ * into the AdminDashboardStats API response shape without unnecessary PII.
+ */
+export const aggregateAdminDashboardStats = (
+  input: RawAdminStatsInput,
+): AdminDashboardStats => {
+  let totalStudents = 0;
+  let totalTeachers = 0;
+  let totalUsers = 0;
+  let restrictedUsers = 0;
+
+  for (const bucket of input.userStats) {
+    const count = bucket._count._all;
+    totalUsers += count;
+    if (bucket.role === "STUDENT") totalStudents += count;
+    else if (bucket.role === "TEACHER") totalTeachers += count;
+    if (bucket.isRestricted) restrictedUsers += count;
+  }
 
   const activities: ActivityItem[] = [];
 
-  for (const u of recentUsers) {
+  for (const u of input.recentUsers) {
     if (u.role === "TEACHER") {
       activities.push({
         id: `teacher-${u.id}`,
@@ -99,7 +99,7 @@ export const getAdminDashboardStatsService = async (): Promise<AdminDashboardSta
     }
   }
 
-  for (const r of recentRestricted) {
+  for (const r of input.recentRestricted) {
     activities.push({
       id: `restricted-${r.id}`,
       type: "USER_RESTRICTED",
@@ -109,7 +109,7 @@ export const getAdminDashboardStatsService = async (): Promise<AdminDashboardSta
     });
   }
 
-  for (const n of recentNotices) {
+  for (const n of input.recentNotices) {
     activities.push({
       id: `notice-${n.id}`,
       type: "NOTICE_POSTED",
@@ -119,7 +119,7 @@ export const getAdminDashboardStatsService = async (): Promise<AdminDashboardSta
     });
   }
 
-  for (const c of recentComplaints) {
+  for (const c of input.recentComplaints) {
     activities.push({
       id: `complaint-${c.id}`,
       type: "COMPLAINT_FILED",
@@ -129,9 +129,9 @@ export const getAdminDashboardStatsService = async (): Promise<AdminDashboardSta
     });
   }
 
-  // Sort unified activity list by descending timestamp
   activities.sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    (a, b) =>
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
   );
 
   return {
@@ -139,11 +139,68 @@ export const getAdminDashboardStatsService = async (): Promise<AdminDashboardSta
     totalTeachers,
     totalUsers,
     restrictedUsers,
-    pendingApprovals,
-    activeNotices,
-    totalCourseHubs,
+    totalCourseHubs: input.totalCourseHubs,
     recentActivity: activities.slice(0, 10),
   };
+};
+
+export const getAdminDashboardStatsService = async (): Promise<AdminDashboardStats> => {
+  return await appCache.getOrSet(
+    "admin:dashboard-stats",
+    async () => {
+      // Consolidate User counts into one groupBy query and fetch recent activity in parallel
+      const [
+        userStats,
+        totalCourseHubs,
+        recentUsers,
+        recentRestricted,
+        recentNotices,
+        recentComplaints,
+      ] = await Promise.all([
+        prisma.user.groupBy({
+          by: ["role", "isRestricted"],
+          _count: { _all: true },
+        }),
+        prisma.courseHub.count(),
+        // 5 most recent registered users
+        prisma.user.findMany({
+          take: 5,
+          orderBy: { createdAt: "desc" },
+          select: { id: true, name: true, role: true, createdAt: true },
+        }),
+        // 5 most recent restricted users
+        prisma.user.findMany({
+          where: { isRestricted: true },
+          take: 5,
+          orderBy: { updatedAt: "desc" },
+          select: { id: true, name: true, updatedAt: true },
+        }),
+        // 5 most recent notices
+        prisma.notice.findMany({
+          take: 5,
+          orderBy: { createdAt: "desc" },
+          select: { id: true, title: true, issuerName: true, createdAt: true },
+        }),
+        // 5 most recent complaints
+        prisma.complaint.findMany({
+          where: { deletedAt: null },
+          take: 5,
+          orderBy: { createdAt: "desc" },
+          select: { id: true, title: true, category: true, createdAt: true },
+        }),
+      ]);
+
+      return aggregateAdminDashboardStats({
+        userStats,
+        totalCourseHubs,
+        recentUsers,
+        recentRestricted,
+        recentNotices,
+        recentComplaints,
+      });
+    },
+    20,
+  );
 };
 
 export const getAdminCourseHubsService = async (query: AdminCourseHubsQuery) => {

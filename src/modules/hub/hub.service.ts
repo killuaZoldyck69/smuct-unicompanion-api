@@ -150,12 +150,17 @@ export const joinHubService = async (userId: string, joinCode: string) => {
   return membership;
 };
 
-export const getMyHubsService = async (userId: string) => {
+export type MyHubsView = "default" | "schedule";
+
+export const getMyHubsService = async (
+  userId: string,
+  view: MyHubsView = "default",
+) => {
   const user = await hubRepository.findUserWithStudentProfile(userId);
   if (user?.role === "ADMIN") {
-    return await hubRepository.findAllHubsForAdmin(userId);
+    return await hubRepository.findAllHubsForAdmin(userId, view);
   }
-  return await hubRepository.findMyHubMemberships(userId);
+  return await hubRepository.findMyHubMemberships(userId, view);
 };
 
 export const getHubDetailsService = async (hubId: string) => {

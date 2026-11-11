@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { auth } from "../lib/auth";
+import { authenticatedUserLimiter } from "./rateLimit.middleware";
 
 declare global {
   namespace Express {
@@ -46,7 +47,8 @@ export const requireAuth = async (
     }
 
     req.user = session.user;
-    next();
+    authenticatedUserLimiter(req, res, next);
+    return;
   } catch (error) {
     res.status(500).json({
       success: false,

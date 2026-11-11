@@ -4,6 +4,8 @@ interface RateLimitOptions {
   windowMs: number;
   limit: number;
   message?: string | object;
+  keyGenerator?: (req: Request) => string;
+  skip?: (req: Request) => boolean;
 }
 
 interface ClientRecord {
@@ -12,6 +14,13 @@ interface ClientRecord {
 }
 
 const MAX_ENTRIES = 50000;
+
+/**
+ * Derive client IP from Express (`trust proxy` configured on app) and socket address,
+ * ignoring raw spoofable `x-forwarded-for` headers directly.
+ */
+export const resolveClientIp = (req: Request): string =>
+  req.ip || req.socket?.remoteAddress || "unknown";
 
 export const rateLimit = (options: RateLimitOptions) => {
   const hits = new Map<string, ClientRecord>();
@@ -31,29 +40,29 @@ export const rateLimit = (options: RateLimitOptions) => {
   }
 
   return (req: Request, res: Response, next: NextFunction): void => {
-    const forwardedFor = req.headers["x-forwarded-for"];
-    const ip =
-      (typeof forwardedFor === "string"
-        ? forwardedFor.split(",")[0].trim()
-        : req.ip) ||
-      req.socket.remoteAddress ||
-      "unknown";
+    if (options.skip?.(req)) {
+      return next();
+    }
+
+    const key = options.keyGenerator
+      ? options.keyGenerator(req)
+      : resolveClientIp(req);
 
     const now = Date.now();
-    const record = hits.get(ip);
+    const record = hits.get(key);
 
     if (!record || now > record.resetTime) {
       // Memory protection: if map exceeds max entries, evict oldest or expired
       if (hits.size >= MAX_ENTRIES) {
-        for (const [key, val] of hits.entries()) {
+        for (const [entryKey, val] of hits.entries()) {
           if (now > val.resetTime || hits.size >= MAX_ENTRIES) {
-            hits.delete(key);
+            hits.delete(entryKey);
           }
           if (hits.size < MAX_ENTRIES * 0.9) break;
         }
       }
 
-      hits.set(ip, {
+      hits.set(key, {
         count: 1,
         resetTime: now + options.windowMs,
       });
@@ -100,15 +109,39 @@ export const rateLimit = (options: RateLimitOptions) => {
 
 /**
  * Global Rate Limiter:
- * 100 requests per 15 minutes per IP address.
+ * 1000 requests per 15 minutes per IP address (NAT-safe coarse shield; /api/auth excluded to avoid double counting).
  */
 export const globalLimiter = rateLimit({
-  windowMs: 20 * 60 * 1000, // 15 minutes
-  limit: 100,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 1000,
+  skip: (req) => {
+    const cleanOriginal = req.originalUrl?.split("?")[0] ?? "";
+    return (
+      cleanOriginal.startsWith("/api/auth") ||
+      req.path === "/auth" ||
+      req.path.startsWith("/auth/")
+    );
+  },
   message: {
     success: false,
     message:
       "Too many requests from this IP, please try again after 15 minutes.",
+  },
+});
+
+/**
+ * Authenticated Per-User Rate Limiter:
+ * 200 requests per 15 minutes keyed by verified req.user.id so university NAT users are isolated from one another.
+ */
+export const authenticatedUserLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 200,
+  keyGenerator: (req) =>
+    req.user?.id ? `user:${req.user.id}` : `ip:${resolveClientIp(req)}`,
+  message: {
+    success: false,
+    message:
+      "Too many requests from your account, please try again after 15 minutes.",
   },
 });
 
