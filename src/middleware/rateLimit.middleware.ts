@@ -208,20 +208,13 @@ export const authenticatedUserLimiter = rateLimit({
 
 /**
  * Strict Auth Actions Rate Limiter (Login, Register, Verify OTP, Reset Password):
- * Campus-NAT-safe IP ceiling (150 per 15m per IP) paired with per-email enforcement (10 per 15m)
- * inside authBeforeHook ( or composite IP+email key when req.body.email is parsed).
+ * Campus-NAT-safe IP shield (150 per 15m per IP); strict per-email enforcement (10 per 15m)
+ * runs inside authBeforeHook once Better Auth parses the JSON request body.
  */
 export const authActionLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 150,
-  keyGenerator: (req) => {
-    const email =
-      typeof req.body?.email === "string"
-        ? req.body.email.trim().toLowerCase()
-        : "";
-    const ip = resolveClientIp(req);
-    return email ? `auth-action:ip:${ip}:email:${email}` : `auth-action:ip:${ip}`;
-  },
+  keyGenerator: (req) => `auth-action:ip:${resolveClientIp(req)}`,
   message: {
     success: false,
     message:
@@ -247,20 +240,13 @@ export const onboardLimiter = rateLimit({
 
 /**
  * OTP Email Dispatch Rate Limiter:
- * Campus-NAT-safe IP ceiling (60 per 15m per IP) paired with strict per-email limit (3 per 15m)
- * enforced in authBeforeHook so campus Wi-Fi cohorts do not collide (API-8).
+ * Campus-NAT-safe IP shield (60 per 15m per IP); strict per-email limit (3 per 15m)
+ * runs inside authBeforeHook once Better Auth parses the JSON request body (API-8).
  */
 export const otpEmailLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 60,
-  keyGenerator: (req) => {
-    const email =
-      typeof req.body?.email === "string"
-        ? req.body.email.trim().toLowerCase()
-        : "";
-    const ip = resolveClientIp(req);
-    return email ? `otp:ip:${ip}:email:${email}` : `otp:ip:${ip}`;
-  },
+  keyGenerator: (req) => `otp:ip:${resolveClientIp(req)}`,
   message: {
     success: false,
     message:

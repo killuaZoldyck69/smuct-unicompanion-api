@@ -47,7 +47,7 @@ export const auth = betterAuth({
   plugins: [
     bearer(),
     emailOTP({
-      expiresIn: 180, // 3 minutes validity window
+      expiresIn: 300, // 5 minutes validity window (matches email copy & SHARED_CONTRACT.md)
       sendVerificationOnSignUp: true,
       sendVerificationOTP: sendAuthVerificationOTP,
     }),
