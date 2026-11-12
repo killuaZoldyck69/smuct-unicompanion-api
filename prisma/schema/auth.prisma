@@ -77,6 +77,7 @@ model User {
 
   @@index([role, isRestricted])
   @@index([isRestricted, updatedAt(sort: Desc)])
+  @@index([emailVerified, createdAt])
   @@index([createdAt(sort: Desc)])
   @@map("user")
 }
@@ -93,6 +94,7 @@ model Session {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([expiresAt])
   @@map("session")
 }
 
@@ -125,6 +127,7 @@ model Verification {
   updatedAt  DateTime @updatedAt
 
   @@index([identifier])
+  @@index([expiresAt])
   @@map("verification")
 }
 
@@ -167,6 +170,9 @@ model StudentProfile {
   personalWebsiteUrl String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([department, batch, section])
+  @@index([isCR])
 }
 
 model TeacherProfile {
@@ -192,4 +198,6 @@ model TeacherProfile {
   personalWebsiteUrl String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([department])
 }

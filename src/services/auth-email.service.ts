@@ -1,39 +1,151 @@
-import { sendEmail } from "../lib/email";
+import { APIError } from "better-auth/api";
+import { maskEmail, sendEmail } from "../lib/email";
 import { prisma } from "../lib/prisma";
+
+export const UNICOMPANION_SPLASH_LOGO_URL =
+  "https://res.cloudinary.com/gzgfeoqn/image/upload/v1794486793/smuct-unicompanion/branding/unicompanion-splash-logo.png";
+
+export const DEVELOPER_CREDIT = {
+  name: "Nahid Hassan Tanver",
+  githubUrl: "https://github.com/killuaZoldyck69",
+  linkedInUrl: "https://www.linkedin.com/in/nahid-hassan-tanver-582132436",
+} as const;
+
+function escapeHtml(value: string): string {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderEmailBrandHeader(badgeText: string, subtitleText: string): string {
+  return `
+    <div style="text-align: center; padding-bottom: 22px; border-bottom: 1px solid #e2e8f0; margin-bottom: 24px;">
+      <div style="margin: 0 auto 14px; width: 76px; height: 76px;">
+        <img
+          src="${UNICOMPANION_SPLASH_LOGO_URL}"
+          width="76"
+          height="76"
+          alt="SMUCT UniCompanion Logo"
+          style="display: block; width: 76px; height: 76px; margin: 0 auto; border: 0; outline: none; text-decoration: none; border-radius: 20px;"
+        />
+      </div>
+      <div style="display: inline-block; background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 999px; padding: 4px 12px; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #1d4ed8; margin-bottom: 10px;">
+        ${escapeHtml(badgeText)}
+      </div>
+      <h1 style="color: #0f172a; font-size: 24px; font-weight: 800; margin: 0 0 6px; letter-spacing: -0.5px; line-height: 1.25;">
+        SMUCT UniCompanion
+      </h1>
+      <p style="color: #64748b; font-size: 13.5px; font-weight: 500; margin: 0; line-height: 1.4;">
+        ${escapeHtml(subtitleText)}
+      </p>
+    </div>
+  `.trim();
+}
+
+function renderEmailFooter(securityNote: string): string {
+  return `
+    <div style="border-top: 1px solid #e2e8f0; padding-top: 18px; margin-top: 22px;">
+      <p style="color: #64748b; font-size: 12.5px; line-height: 1.55; margin: 0 0 16px;">
+        ${escapeHtml(securityNote)}
+      </p>
+
+      <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; text-align: center;">
+        <p style="margin: 0 0 4px; font-size: 12px; font-weight: 700; color: #0f172a;">
+          SMUCT UniCompanion • Shanto-Mariam University of Creative Technology
+        </p>
+        <p style="margin: 0 0 12px; font-size: 11.5px; color: #64748b;">
+          Uttara, Dhaka, Bangladesh
+        </p>
+
+        <div style="border-top: 1px solid #e2e8f0; padding-top: 12px;">
+          <p style="margin: 0 0 10px; font-size: 12px; color: #475569;">
+            Developed by <strong style="color: #0f172a;">${DEVELOPER_CREDIT.name}</strong>
+          </p>
+          <div>
+            <a
+              href="${DEVELOPER_CREDIT.githubUrl}"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="display: inline-block; background-color: #0f172a; color: #ffffff; text-decoration: none; font-size: 12px; font-weight: 700; padding: 7px 14px; border-radius: 999px; margin: 0 4px;"
+            >
+              GitHub
+            </a>
+            <a
+              href="${DEVELOPER_CREDIT.linkedInUrl}"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="display: inline-block; background-color: #0a66c2; color: #ffffff; text-decoration: none; font-size: 12px; font-weight: 700; padding: 7px 14px; border-radius: 999px; margin: 0 4px;"
+            >
+              LinkedIn
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  `.trim();
+}
 
 /**
  * HTML Email Template for Email Verification OTP
  */
 export function renderVerificationOtpEmail(otp: string): string {
+  const safeOtp = escapeHtml(otp);
   return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Email Verification</title>
+      <meta name="x-apple-disable-message-reformatting">
+      <title>Verify Your SMUCT UniCompanion Account</title>
     </head>
-    <body style="margin: 0; padding: 24px 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-      <div style="max-width: 520px; margin: 0 auto; padding: 36px 28px; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-        <div style="text-align: center; margin-bottom: 28px;">
-          <h1 style="color: #131b2e; font-size: 24px; font-weight: 800; margin: 0 0 8px; letter-spacing: -0.5px;">SMUCT UniCompanion</h1>
-          <p style="color: #64748b; font-size: 15px; margin: 0;">Verify your academic account</p>
+    <body style="margin: 0; padding: 16px 10px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+      <div style="max-width: 480px; margin: 0 auto; padding: 28px 20px; background-color: #ffffff; border-radius: 20px; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);">
+        ${renderEmailBrandHeader(
+          "Account Verification",
+          "Your campus life, organized in one place.",
+        )}
+
+        <div style="margin-bottom: 20px; text-align: center;">
+          <h2 style="color: #0f172a; font-size: 18px; font-weight: 700; margin: 0 0 8px;">
+            Verify Your Email Address
+          </h2>
+          <p style="color: #475569; font-size: 14px; line-height: 1.55; margin: 0;">
+            Welcome to SMUCT UniCompanion! Enter the 6-digit verification code below in the mobile app to activate your account and complete student onboarding.
+          </p>
         </div>
 
-        <div style="background: #f8fafc; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px; border: 1px solid #e2e8f0;">
-          <p style="color: #475569; font-size: 14px; margin: 0 0 12px; font-weight: 500;">Here is your 6-digit verification code:</p>
-          <div style="font-size: 38px; font-weight: 800; letter-spacing: 8px; color: #131b2e; font-family: 'Courier New', Courier, monospace; padding: 10px 0;">
-            ${otp}
+        <div style="background-color: #f8fafc; border-radius: 16px; padding: 20px 16px; text-align: center; margin-bottom: 20px; border: 1px solid #cbd5e1;">
+          <p style="color: #475569; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 12px;">
+            One-Time Verification Code
+          </p>
+          <div style="background-color: #ffffff; border: 1.5px solid #93c5fd; border-radius: 12px; padding: 14px 10px; margin: 0 auto 12px; max-width: 280px;">
+            <div style="font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #0f172a; font-family: 'Courier New', Courier, monospace; line-height: 1.2;">
+              ${safeOtp}
+            </div>
           </div>
-          <p style="color: #94a3b8; font-size: 13px; margin: 12px 0 0;">⏱️ Valid for 3 minutes</p>
+          <p style="color: #64748b; font-size: 12.5px; font-weight: 600; margin: 0;">
+            ⏱️ Valid for 5 minutes • Do not share this code
+          </p>
         </div>
 
-        <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 0 0 12px;">
-          Enter this code in your mobile application to verify your account and proceed to the student onboarding.
-        </p>
-        <p style="color: #94a3b8; font-size: 12px; line-height: 1.5; margin: 0; border-top: 1px solid #f1f5f9; padding-top: 16px;">
-          If you did not request this verification code, please disregard this email. Your account remains completely secure.
-        </p>
+        <div style="background-color: #eff6ff; border-radius: 12px; padding: 14px 16px; border: 1px solid #dbeafe;">
+          <p style="margin: 0 0 6px; font-size: 12.5px; font-weight: 700; color: #1e3a8a;">
+            Next Steps:
+          </p>
+          <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #334155;">
+            1. Open the <strong>SMUCT UniCompanion</strong> mobile app.<br/>
+            2. Enter the 6-digit verification code above.<br/>
+            3. Complete your academic profile to access your routine, course hubs, and campus services.
+          </p>
+        </div>
+
+        ${renderEmailFooter(
+          "If you did not create an account on SMUCT UniCompanion, please ignore this email. No further action is required and your email address will not be used.",
+        )}
       </div>
     </body>
     </html>
@@ -44,35 +156,58 @@ export function renderVerificationOtpEmail(otp: string): string {
  * HTML Email Template for Password Reset OTP
  */
 export function renderPasswordResetOtpEmail(otp: string): string {
+  const safeOtp = escapeHtml(otp);
   return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Reset Your Password</title>
+      <meta name="x-apple-disable-message-reformatting">
+      <title>Reset Your SMUCT UniCompanion Password</title>
     </head>
-    <body style="margin: 0; padding: 24px 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-      <div style="max-width: 520px; margin: 0 auto; padding: 36px 28px; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-        <div style="text-align: center; margin-bottom: 28px;">
-          <h1 style="color: #131b2e; font-size: 24px; font-weight: 800; margin: 0 0 8px; letter-spacing: -0.5px;">SMUCT UniCompanion</h1>
-          <p style="color: #64748b; font-size: 15px; margin: 0;">Password Reset Request</p>
+    <body style="margin: 0; padding: 16px 10px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+      <div style="max-width: 480px; margin: 0 auto; padding: 28px 20px; background-color: #ffffff; border-radius: 20px; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);">
+        ${renderEmailBrandHeader(
+          "Security & Password Reset",
+          "Your campus life, organized in one place.",
+        )}
+
+        <div style="margin-bottom: 20px; text-align: center;">
+          <h2 style="color: #0f172a; font-size: 18px; font-weight: 700; margin: 0 0 8px;">
+            Password Reset Request
+          </h2>
+          <p style="color: #475569; font-size: 14px; line-height: 1.55; margin: 0;">
+            We received a request to reset the password for your SMUCT UniCompanion account. Use the 6-digit security code below to set a new password.
+          </p>
         </div>
 
-        <div style="background: #f8fafc; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px; border: 1px solid #e2e8f0;">
-          <p style="color: #475569; font-size: 14px; margin: 0 0 12px; font-weight: 500;">Use the following 6-digit code to reset your password:</p>
-          <div style="font-size: 38px; font-weight: 800; letter-spacing: 8px; color: #131b2e; font-family: 'Courier New', Courier, monospace; padding: 10px 0;">
-            ${otp}
+        <div style="background-color: #f8fafc; border-radius: 16px; padding: 20px 16px; text-align: center; margin-bottom: 20px; border: 1px solid #cbd5e1;">
+          <p style="color: #475569; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 12px;">
+            Password Reset Code
+          </p>
+          <div style="background-color: #ffffff; border: 1.5px solid #93c5fd; border-radius: 12px; padding: 14px 10px; margin: 0 auto 12px; max-width: 280px;">
+            <div style="font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #0f172a; font-family: 'Courier New', Courier, monospace; line-height: 1.2;">
+              ${safeOtp}
+            </div>
           </div>
-          <p style="color: #94a3b8; font-size: 13px; margin: 12px 0 0;">⏱️ Valid for 3 minutes</p>
+          <p style="color: #64748b; font-size: 12.5px; font-weight: 600; margin: 0;">
+            ⏱️ Valid for 5 minutes • Single-use security code
+          </p>
         </div>
 
-        <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 0 0 12px;">
-          Enter this code along with your new password in the UniCompanion mobile app.
-        </p>
-        <p style="color: #94a3b8; font-size: 12px; line-height: 1.5; margin: 0; border-top: 1px solid #f1f5f9; padding-top: 16px;">
-          If you did not request a password reset, your account remains secure and no changes were made.
-        </p>
+        <div style="background-color: #fffbeb; border-radius: 12px; padding: 14px 16px; border: 1px solid #fde68a;">
+          <p style="margin: 0 0 4px; font-size: 12.5px; font-weight: 700; color: #92400e;">
+            🔒 Security Notice
+          </p>
+          <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #78350f;">
+            Enter this code along with your new password in the <strong>SMUCT UniCompanion</strong> mobile app. University staff will never ask you for this code.
+          </p>
+        </div>
+
+        ${renderEmailFooter(
+          "If you did not request a password reset, you can safely disregard this email. Your account remains secure and no changes were made.",
+        )}
       </div>
     </body>
     </html>
@@ -92,6 +227,50 @@ export interface SendOtpPayload {
 export const pendingTeacherRegistrationEmails = new Set<string>();
 
 /**
+ * Tracks timestamps of successfully delivered verification OTP emails so
+ * unverified re-registration cannot overwrite an active OTP in progress,
+ * while failed email deliveries never lock the user out from retrying.
+ */
+const lastVerificationOtpDeliveredAt = new Map<string, number>();
+const MAX_TRACKED_OTP_EMAILS = 5_000;
+export const UNVERIFIED_OTP_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
+
+export function recordVerificationOtpDelivered(
+  email: string,
+  nowMs: number = Date.now(),
+): void {
+  const key = email.toLowerCase().trim();
+  if (lastVerificationOtpDeliveredAt.size >= MAX_TRACKED_OTP_EMAILS) {
+    const cutoff = nowMs - UNVERIFIED_OTP_COOLDOWN_MS;
+    for (const [k, ts] of lastVerificationOtpDeliveredAt.entries()) {
+      if (ts < cutoff) {
+        lastVerificationOtpDeliveredAt.delete(k);
+      }
+    }
+  }
+  lastVerificationOtpDeliveredAt.set(key, nowMs);
+}
+
+export function clearVerificationOtpDelivered(email: string): void {
+  lastVerificationOtpDeliveredAt.delete(email.toLowerCase().trim());
+}
+
+export function hasActiveVerificationOtpCooldown(
+  email: string,
+  nowMs: number = Date.now(),
+  cooldownMs: number = UNVERIFIED_OTP_COOLDOWN_MS,
+): boolean {
+  const key = email.toLowerCase().trim();
+  const sentAt = lastVerificationOtpDeliveredAt.get(key);
+  if (!sentAt) return false;
+  if (nowMs - sentAt >= cooldownMs) {
+    lastVerificationOtpDeliveredAt.delete(key);
+    return false;
+  }
+  return true;
+}
+
+/**
  * Handles sending authentication OTP emails with robust validation and error handling.
  */
 export async function sendAuthVerificationOTP({
@@ -100,6 +279,7 @@ export async function sendAuthVerificationOTP({
   type,
 }: SendOtpPayload): Promise<void> {
   const normalizedEmail = email.toLowerCase().trim();
+  const masked = maskEmail(normalizedEmail);
 
   // Defense-in-depth: Never send verification OTP if user is an existing verified TEACHER
   // or is currently being created and auto-verified by an Admin
@@ -114,27 +294,44 @@ export async function sendAuthVerificationOTP({
   });
 
   if (
-    (existingUser?.role === "TEACHER" && existingUser.emailVerified && type === "email-verification") ||
-    (pendingTeacherRegistrationEmails.has(normalizedEmail) && type === "email-verification")
+    (existingUser?.role === "TEACHER" &&
+      existingUser.emailVerified &&
+      type === "email-verification") ||
+    (pendingTeacherRegistrationEmails.has(normalizedEmail) &&
+      type === "email-verification")
   ) {
-    console.log(`[AuthEmail] Skipping verification OTP for teacher: ${normalizedEmail}`);
+    console.log(`[AuthEmail] Skipping verification OTP for teacher: ${masked}`);
     return;
   }
 
+  let delivered = false;
   if (type === "email-verification") {
-    await sendEmail({
+    delivered = await sendEmail({
       to: normalizedEmail,
       subject: "Your SMUCT UniCompanion Verification Code 🚀",
       html: renderVerificationOtpEmail(otp),
     });
+    if (delivered) {
+      recordVerificationOtpDelivered(normalizedEmail);
+    } else {
+      clearVerificationOtpDelivered(normalizedEmail);
+    }
   } else if (type === "forget-password") {
-    await sendEmail({
+    delivered = await sendEmail({
       to: normalizedEmail,
       subject: "Reset Your Password - SMUCT UniCompanion 🔒",
       html: renderPasswordResetOtpEmail(otp),
     });
   } else {
-    console.warn(`[AuthEmail] Unhandled OTP email type: ${type} for ${normalizedEmail}`);
+    console.warn(`[AuthEmail] Unhandled OTP email type: ${type} for ${masked}`);
+    return;
+  }
+
+  if (!delivered) {
+    throw new APIError("SERVICE_UNAVAILABLE", {
+      message:
+        "Unable to send verification email right now. Please try again shortly.",
+    });
   }
 }
 
@@ -152,104 +349,116 @@ export interface TeacherWelcomeEmailPayload {
 /**
  * HTML Email Template for Admin-created Faculty Account Welcome & Credentials
  */
-export function renderTeacherWelcomeEmail(data: TeacherWelcomeEmailPayload): string {
+export function renderTeacherWelcomeEmail(
+  data: TeacherWelcomeEmailPayload,
+): string {
+  const safeName = escapeHtml(data.name);
+  const safeEmail = escapeHtml(data.email);
+  const safeTeacherId = escapeHtml(data.teacherId);
+  const safePassword = escapeHtml(data.temporaryPassword);
+  const safeDesignation = escapeHtml(data.designation);
+  const safeDepartment = escapeHtml(data.department);
+  const safeFaculty = escapeHtml(data.faculty);
+  const safeOfficeRoom = data.officeRoom ? escapeHtml(data.officeRoom) : "";
+
   return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta name="x-apple-disable-message-reformatting">
       <title>Welcome to SMUCT UniCompanion - Faculty Account Credentials</title>
     </head>
-    <body style="margin: 0; padding: 32px 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
-      <div style="max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-        
-        <!-- Header Banner -->
-        <div style="background: linear-gradient(135deg, #065f46 0%, #047857 100%); padding: 32px 28px; text-align: center; color: #ffffff;">
-          <h1 style="margin: 0 0 6px; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">SMUCT UniCompanion</h1>
-          <p style="margin: 0; font-size: 14px; color: #a7f3d0; font-weight: 500;">Faculty & Academic Staff Portal</p>
+    <body style="margin: 0; padding: 16px 10px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; -webkit-font-smoothing: antialiased;">
+      <div style="max-width: 520px; margin: 0 auto; padding: 28px 20px; background-color: #ffffff; border-radius: 20px; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);">
+        ${renderEmailBrandHeader(
+          "Faculty & Academic Staff Portal",
+          "Your campus life, organized in one place.",
+        )}
+
+        <div style="margin-bottom: 20px;">
+          <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin: 0 0 10px;">
+            Dear ${safeName},
+          </p>
+          <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0;">
+            Welcome to Shanto-Mariam University of Creative Technology's digital campus platform. Your faculty account has been provisioned by the university administration. You can now manage your class schedules, course hubs, and student consultations through the <strong>SMUCT UniCompanion</strong> mobile app.
+          </p>
         </div>
 
-        <div style="padding: 32px 28px;">
-          <p style="font-size: 16px; font-weight: 600; color: #0f172a; margin: 0 0 12px;">Dear ${data.name},</p>
-          <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 24px;">
-            Welcome to Shanto-Mariam University of Creative Technology's digital companion. Your faculty account has been created by the university administration. You can now access your timetable, consultation schedule, and university hub through the UniCompanion platform.
-          </p>
+        <!-- Faculty Profile Summary Card -->
+        <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 14px; padding: 16px; margin-bottom: 18px;">
+          <div style="font-size: 11.5px; font-weight: 700; text-transform: uppercase; color: #475569; letter-spacing: 0.8px; margin-bottom: 12px;">
+            Academic Profile Summary
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 13.5px;">
+            <tr>
+              <td style="padding: 5px 0; color: #64748b; width: 120px; vertical-align: top;">Teacher ID:</td>
+              <td style="padding: 5px 0; color: #0f172a; font-weight: 700;">${safeTeacherId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 0; color: #64748b; vertical-align: top;">Designation:</td>
+              <td style="padding: 5px 0; color: #0f172a; font-weight: 600;">${safeDesignation}</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 0; color: #64748b; vertical-align: top;">Department:</td>
+              <td style="padding: 5px 0; color: #0f172a; font-weight: 600;">${safeDepartment}</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 0; color: #64748b; vertical-align: top;">Faculty:</td>
+              <td style="padding: 5px 0; color: #0f172a; font-weight: 600;">${safeFaculty}</td>
+            </tr>
+            ${
+              safeOfficeRoom
+                ? `
+            <tr>
+              <td style="padding: 5px 0; color: #64748b; vertical-align: top;">Office Room:</td>
+              <td style="padding: 5px 0; color: #0f172a; font-weight: 600;">${safeOfficeRoom}</td>
+            </tr>
+            `
+                : ""
+            }
+          </table>
+        </div>
 
-          <!-- Faculty Profile Summary Card -->
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-            <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; margin-bottom: 14px;">Academic Profile Information</div>
-            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-              <tr>
-                <td style="padding: 6px 0; color: #64748b; width: 140px;">Teacher ID:</td>
-                <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">${data.teacherId}</td>
-              </tr>
-              <tr>
-                <td style="padding: 6px 0; color: #64748b;">Designation:</td>
-                <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">${data.designation}</td>
-              </tr>
-              <tr>
-                <td style="padding: 6px 0; color: #64748b;">Department:</td>
-                <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">${data.department}</td>
-              </tr>
-              <tr>
-                <td style="padding: 6px 0; color: #64748b;">Faculty:</td>
-                <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">${data.faculty}</td>
-              </tr>
-              ${
-                data.officeRoom
-                  ? `
-              <tr>
-                <td style="padding: 6px 0; color: #64748b;">Office Room:</td>
-                <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">${data.officeRoom}</td>
-              </tr>
-              `
-                  : ""
-              }
-            </table>
+        <!-- Credentials Box -->
+        <div style="background-color: #ecfdf5; border: 1.5px solid #6ee7b7; border-radius: 14px; padding: 16px; margin-bottom: 18px;">
+          <div style="font-size: 12.5px; font-weight: 700; color: #065f46; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
+            🔑 Your Initial Login Credentials
           </div>
 
-          <!-- Credentials Box -->
-          <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-            <div style="font-size: 13px; font-weight: 700; color: #166534; margin-bottom: 12px;">
-              🔑 Your Login Credentials
-            </div>
-            
-            <div style="margin-bottom: 12px;">
-              <span style="display: block; font-size: 12px; color: #475569; margin-bottom: 4px;">Registered Email:</span>
-              <div style="background: #ffffff; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 14px; font-size: 14px; font-weight: 600; color: #0f172a;">
-                ${data.email}
-              </div>
-            </div>
-
-            <div>
-              <span style="display: block; font-size: 12px; color: #475569; margin-bottom: 4px;">Temporary Password:</span>
-              <div style="background: #ffffff; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 14px; font-size: 16px; font-weight: 700; color: #047857; font-family: 'Courier New', Courier, monospace; letter-spacing: 1px;">
-                ${data.temporaryPassword}
-              </div>
+          <div style="margin-bottom: 12px;">
+            <span style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">
+              Registered Email:
+            </span>
+            <div style="background-color: #ffffff; border: 1px solid #a7f3d0; border-radius: 10px; padding: 10px 12px; font-size: 13.5px; font-weight: 600; color: #0f172a; word-break: break-all;">
+              ${safeEmail}
             </div>
           </div>
 
-          <!-- Security Warning Alert -->
-          <div style="background: #fef2f2; border-left: 4px solid #ef4444; border-radius: 0 10px 10px 0; padding: 16px; margin-bottom: 28px;">
-            <p style="margin: 0 0 6px; font-size: 13px; font-weight: 700; color: #991b1b;">
-              ⚠️ IMPORTANT SECURITY WARNING:
-            </p>
-            <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #b91c1c;">
-              This temporary password was generated by the administration for your initial login. For institutional security and protection of academic records, you <strong>MUST change your password immediately</strong> upon your first login. Do not share this temporary password with anyone.
-            </p>
-          </div>
-
-          <!-- Instructions & Action -->
-          <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 24px;">
-            To log in, please open the SMUCT UniCompanion mobile application using the credentials provided above. Once logged in, navigate to your Profile settings to set a permanent, confidential password.
-          </p>
-
-          <div style="border-top: 1px solid #f1f5f9; padding-top: 20px; font-size: 12px; color: #94a3b8; line-height: 1.5;">
-            <p style="margin: 0 0 4px;">This is an automated system notification from the SMUCT IT Administration.</p>
-            <p style="margin: 0;">Shanto-Mariam University of Creative Technology • Uttara, Dhaka</p>
+          <div>
+            <span style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">
+              Temporary Password:
+            </span>
+            <div style="background-color: #ffffff; border: 1px solid #a7f3d0; border-radius: 10px; padding: 10px 12px; font-size: 15px; font-weight: 800; color: #047857; font-family: 'Courier New', Courier, monospace; letter-spacing: 1px; word-break: break-all;">
+              ${safePassword}
+            </div>
           </div>
         </div>
+
+        <!-- Security Warning Alert -->
+        <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; border-radius: 0 12px 12px 0; padding: 14px 16px;">
+          <p style="margin: 0 0 4px; font-size: 12.5px; font-weight: 700; color: #991b1b;">
+            ⚠️ Mandatory Password Update
+          </p>
+          <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #b91c1c;">
+            This temporary password is for your initial sign-in only. For institutional security, please <strong>update your password immediately</strong> after signing in via the SMUCT UniCompanion app.
+          </p>
+        </div>
+
+        ${renderEmailFooter(
+          "This is an automated institutional notification from SMUCT UniCompanion Administration. Do not share your login credentials with anyone.",
+        )}
       </div>
     </body>
     </html>

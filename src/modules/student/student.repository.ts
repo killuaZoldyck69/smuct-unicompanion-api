@@ -7,14 +7,29 @@ export const findStudentProfileByUserId = async (userId: string) => {
   });
 };
 
+export const findStudentProfileByStudentId = async (studentId: string) => {
+  return await prisma.studentProfile.findUnique({
+    where: { studentId: studentId.trim() },
+    select: { id: true, userId: true, studentId: true },
+  });
+};
+
 export const createStudentProfileWithRole = async (
   userId: string,
   data: OnboardStudentPayload,
 ) => {
   return await prisma.$transaction(async (tx) => {
+    const userUpdateData: Record<string, any> = { role: "STUDENT" };
+    if (data.phoneNumber !== undefined) {
+      userUpdateData.phoneNumber = data.phoneNumber?.trim() || "";
+    }
+    if (data.bloodGroup !== undefined) {
+      userUpdateData.bloodGroup = data.bloodGroup || null;
+    }
+
     await tx.user.update({
       where: { id: userId },
-      data: { role: "STUDENT" },
+      data: userUpdateData,
     });
 
     return await tx.studentProfile.create({

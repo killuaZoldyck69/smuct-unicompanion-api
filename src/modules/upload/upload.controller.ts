@@ -118,6 +118,7 @@ export const deleteUploadedFile = catchAsync(
         `${PROJECT_ROOT_FOLDER}/notices`,
         `${PROJECT_ROOT_FOLDER}/calendars`,
         `${PROJECT_ROOT_FOLDER}/buses`,
+        `${PROJECT_ROOT_FOLDER}/branding`,
       ];
       const isProtected = protectedAdminFolders.some((f) => publicId.startsWith(f));
       if (isProtected) {

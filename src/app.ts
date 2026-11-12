@@ -103,23 +103,24 @@ app.use(
 );
 
 // Apply Targeted Rate Limiters
-// 1. Strict OTP Email Dispatch Limiter (Max 3 requests per 15 minutes window)
+// 1. OTP Email Dispatch Limiter (Campus-NAT-safe IP shield + per-email 3/15m limit in authBeforeHook)
 app.use(
   [
     "/api/auth/email-otp/send-verification-otp",
     "/api/auth/email-otp/request-password-reset",
+    "/api/auth/forget-password/email-otp",
   ],
   otpEmailLimiter,
 );
 
-// 2. Auth Actions Limiter for Login, Register, Verify OTP, Reset Password & Onboard (Max 10 requests per 15 minutes window)
+// 2. Auth Actions Limiter for Login, Register, Verify OTP & Reset Password
+// (Note: /api/students/onboard is rate-limited per authenticated user by onboardLimiter in student.routes.ts)
 app.use(
   [
     "/api/auth/sign-in/email",
     "/api/auth/sign-up/email",
     "/api/auth/email-otp/verify-email",
     "/api/auth/email-otp/reset-password",
-    "/api/students/onboard",
   ],
   authActionLimiter,
 );

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.middleware";
-import { requireAdmin } from "../../middleware/admin.middleware";
+import { requireAdmin } from "../../middleware/role.middleware";
 import { validateRequest } from "../../middleware/validateRequest";
 import { createBusSchema } from "./bus.schema";
 import { createBusRoute, getBusRoutes, deleteBusRoute } from "./bus.controller";

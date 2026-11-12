@@ -51,7 +51,24 @@ export const onboardStudentService = async (
     throw new AppError(guardCheck.message, 403);
   }
 
-  return await studentRepository.createStudentProfileWithRole(userId, data);
+  const existingByStudentId =
+    await studentRepository.findStudentProfileByStudentId(data.studentId);
+  if (existingByStudentId && existingByStudentId.userId !== userId) {
+    throw new AppError(
+      "This Student ID is already registered to another account.",
+      409,
+    );
+  }
+
+  const created = await studentRepository.createStudentProfileWithRole(
+    userId,
+    data,
+  );
+
+  appCache.delPattern(/^users:list/);
+  appCache.delPattern(/^directory:students/);
+
+  return created;
 };
 
 export const updateProfileImageService = async (

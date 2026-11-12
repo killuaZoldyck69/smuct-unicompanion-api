@@ -4,17 +4,31 @@ import { phoneNumberSanitizer, urlSanitizer } from "../../utils/url-validators";
 
 export const onboardStudentSchema = z.object({
   body: z.object({
-    studentId: z.string().min(1, "Student ID is required"),
-    faculty: z.string().min(1, "Faculty is required"),
-    department: z.string().min(1, "Department is required"),
-    program: z.string().min(1, "Program is required"),
-    batch: z.string().min(1, "Batch is required"),
+    studentId: z
+      .string()
+      .trim()
+      .regex(/^\d{9}$/, "Student ID must be exactly 9 digits"),
+    faculty: z.string().trim().min(2, "Faculty is required").max(120),
+    department: z.string().trim().min(2, "Department is required").max(120),
+    program: z.string().trim().min(2, "Program is required").max(150),
+    batch: z
+      .string()
+      .trim()
+      .regex(/^\d{1,3}$/, "Batch must be 1 to 3 digits"),
     currentSemester: z
       .number()
+      .int()
       .min(1)
       .max(12, "Semester must be between 1 and 12"),
-    section: z.string().min(1, "Section is required"),
-    currentTerm: z.string().optional(),
+    section: z
+      .string()
+      .trim()
+      .min(1, "Section is required")
+      .max(10, "Section cannot exceed 10 characters")
+      .transform((val) => val.toUpperCase()),
+    currentTerm: z.string().trim().max(40).optional(),
+    phoneNumber: phoneNumberSanitizer.optional().nullable(),
+    bloodGroup: z.enum(BLOOD_GROUP_VALUES).nullable().optional(),
   }),
 });
 

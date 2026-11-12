@@ -22,6 +22,67 @@ const MAX_ENTRIES = 50000;
 export const resolveClientIp = (req: Request): string =>
   req.ip || req.socket?.remoteAddress || "unknown";
 
+/**
+ * Enforces an in-memory per-identifier rate limit (used by Better Auth hooks where
+ * JSON body is parsed inside Better Auth rather than Express middleware).
+ */
+const emailRateLimitStore = new Map<string, ClientRecord>();
+
+export function consumeIdentifierRateLimit(
+  identifier: string,
+  bucket: string,
+  limit: number,
+  windowMs: number,
+  nowMs: number = Date.now(),
+): { allowed: boolean; retryAfterSeconds: number; remaining: number } {
+  const normalized = identifier.trim().toLowerCase();
+  const key = `${bucket}:${normalized}`;
+  const existing = emailRateLimitStore.get(key);
+
+  if (!existing || nowMs > existing.resetTime) {
+    if (emailRateLimitStore.size >= MAX_ENTRIES) {
+      for (const [entryKey, val] of emailRateLimitStore.entries()) {
+        if (nowMs > val.resetTime || emailRateLimitStore.size >= MAX_ENTRIES) {
+          emailRateLimitStore.delete(entryKey);
+        }
+        if (emailRateLimitStore.size < MAX_ENTRIES * 0.9) break;
+      }
+    }
+    emailRateLimitStore.set(key, {
+      count: 1,
+      resetTime: nowMs + windowMs,
+    });
+    return {
+      allowed: true,
+      retryAfterSeconds: Math.ceil(windowMs / 1000),
+      remaining: Math.max(0, limit - 1),
+    };
+  }
+
+  existing.count += 1;
+  const retryAfterSeconds = Math.max(
+    1,
+    Math.ceil((existing.resetTime - nowMs) / 1000),
+  );
+  if (existing.count > limit) {
+    return {
+      allowed: false,
+      retryAfterSeconds,
+      remaining: 0,
+    };
+  }
+
+  return {
+    allowed: true,
+    retryAfterSeconds,
+    remaining: Math.max(0, limit - existing.count),
+  };
+}
+
+export function resetIdentifierRateLimitStore(): void {
+  emailRateLimitStore.clear();
+}
+
 export const rateLimit = (options: RateLimitOptions) => {
   const hits = new Map<string, ClientRecord>();
 
@@ -146,12 +207,21 @@ export const authenticatedUserLimiter = rateLimit({
 });
 
 /**
- * Strict Auth Actions Rate Limiter (Login & Register):
- * 10 requests per 15 minutes per IP address.
+ * Strict Auth Actions Rate Limiter (Login, Register, Verify OTP, Reset Password):
+ * Campus-NAT-safe IP ceiling (150 per 15m per IP) paired with per-email enforcement (10 per 15m)
+ * inside authBeforeHook ( or composite IP+email key when req.body.email is parsed).
  */
 export const authActionLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 20,
+  limit: 150,
+  keyGenerator: (req) => {
+    const email =
+      typeof req.body?.email === "string"
+        ? req.body.email.trim().toLowerCase()
+        : "";
+    const ip = resolveClientIp(req);
+    return email ? `auth-action:ip:${ip}:email:${email}` : `auth-action:ip:${ip}`;
+  },
   message: {
     success: false,
     message:
@@ -161,11 +231,14 @@ export const authActionLimiter = rateLimit({
 
 /**
  * Onboard Rate Limiter:
- * 10 requests per 15 minutes per IP address.
+ * 10 requests per 15 minutes keyed by authenticated req.user.id (with IP fallback)
+ * so students sharing a campus NAT IP never block each other during onboarding (API-8).
  */
 export const onboardLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 10,
+  keyGenerator: (req) =>
+    req.user?.id ? `onboard:user:${req.user.id}` : `onboard:ip:${resolveClientIp(req)}`,
   message: {
     success: false,
     message: "Too many onboarding attempts. Please try again after 15 minutes.",
@@ -173,13 +246,21 @@ export const onboardLimiter = rateLimit({
 });
 
 /**
- * Strict OTP Email Dispatch Rate Limiter:
- * Max 3 email OTP send/resend attempts per 15 minutes per IP address.
- * Protects email verification and password reset code dispatch.
+ * OTP Email Dispatch Rate Limiter:
+ * Campus-NAT-safe IP ceiling (60 per 15m per IP) paired with strict per-email limit (3 per 15m)
+ * enforced in authBeforeHook so campus Wi-Fi cohorts do not collide (API-8).
  */
 export const otpEmailLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 3,
+  limit: 60,
+  keyGenerator: (req) => {
+    const email =
+      typeof req.body?.email === "string"
+        ? req.body.email.trim().toLowerCase()
+        : "";
+    const ip = resolveClientIp(req);
+    return email ? `otp:ip:${ip}:email:${email}` : `otp:ip:${ip}`;
+  },
   message: {
     success: false,
     message:
@@ -189,11 +270,11 @@ export const otpEmailLimiter = rateLimit({
 
 /**
  * Baseline Auth Rate Limiter:
- * 100 requests per 15 minutes per IP address on /api/auth endpoints for non-sensitive operations (sessions, sign-out).
+ * 600 requests per 15 minutes per IP address on /api/auth endpoints for session checks & sign-out on shared campus NAT.
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 100,
+  limit: 600,
   message: {
     success: false,
     message:
