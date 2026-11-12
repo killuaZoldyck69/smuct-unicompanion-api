@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.middleware";
-import { requireAdmin } from "../../middleware/admin.middleware";
+import { requireAdmin } from "../../middleware/role.middleware";
 import { validateRequest } from "../../middleware/validateRequest";
 import {
-  singleUpload,
+  profileImageUpload,
   normalizeSingleFile,
 } from "../../middleware/upload.middleware";
 import {
@@ -13,10 +13,13 @@ import {
   updateTeacherPositionSchema,
   adminUpdateStudentProfileSchema,
   updateGoogleDriveStatusSchema,
+  deleteMyAccountSchema,
+  profileImageBodySchema,
 } from "./user.schema";
 import { updateTeacherProfileSchema } from "../teacher/teacher.schema";
 import {
   getAllUsers,
+  deleteMyAccount,
   deleteUser,
   restrictUser,
   updateStudentRole,
@@ -38,12 +41,21 @@ router.post(
   runMaintenanceCleanup,
 );
 
+// DELETE /api/users/me - Self-service account deletion (Authenticated User)
+router.delete(
+  "/me",
+  requireAuth,
+  validateRequest(deleteMyAccountSchema),
+  deleteMyAccount,
+);
+
 // PATCH /api/users/profile/image - Upload and update profile image for current user
 router.patch(
   "/profile/image",
   requireAuth,
-  singleUpload,
+  profileImageUpload,
   normalizeSingleFile,
+  validateRequest(profileImageBodySchema),
   updateUserProfileImage,
 );
 

@@ -6,7 +6,7 @@ import {
   PROJECT_ROOT_FOLDER,
 } from "../../lib/cloudinary";
 
-const ALLOWED_MIME_TYPES = new Set([
+export const ALLOWED_IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
   "image/jpg",
   "image/png",
@@ -15,6 +15,8 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/heic",
   "image/heif",
 ]);
+
+const ALLOWED_MIME_TYPES = ALLOWED_IMAGE_MIME_TYPES;
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB standard max image size
 export const MAX_PROFILE_IMAGE_SIZE = 3 * 1024 * 1024; // 3MB

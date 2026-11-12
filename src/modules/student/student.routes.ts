@@ -4,9 +4,10 @@ import { requireStudent, requireRole } from "../../middleware/role.middleware";
 import { validateRequest } from "../../middleware/validateRequest";
 import { onboardLimiter } from "../../middleware/rateLimit.middleware";
 import {
-  singleUpload,
+  profileImageUpload,
   normalizeSingleFile,
 } from "../../middleware/upload.middleware";
+import { profileImageBodySchema } from "../user/user.schema";
 import {
   onboardStudentSchema,
   updateProfileSchema,
@@ -35,8 +36,9 @@ router.patch(
   "/profile/image",
   requireAuth,
   requireStudent,
-  singleUpload,
+  profileImageUpload,
   normalizeSingleFile,
+  validateRequest(profileImageBodySchema),
   updateProfileImage,
 );
 

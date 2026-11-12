@@ -56,6 +56,19 @@ export const restrictUser = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+export const deleteMyAccount = catchAsync(
+  async (req: Request, res: Response) => {
+    const userId = req.user.id;
+    const result = await userService.deleteMyAccountService(userId);
+
+    res.status(200).json({
+      success: true,
+      message: "Account permanently deleted.",
+      data: result,
+    });
+  },
+);
+
 export const deleteUser = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
   const callerId = req.user?.id;
@@ -156,7 +169,7 @@ export const updateUserProfileImage = catchAsync(
     res.status(200).json({
       success: true,
       message: "Profile image updated successfully.",
-      data: result,
+      data: result.user,
     });
   },
 );

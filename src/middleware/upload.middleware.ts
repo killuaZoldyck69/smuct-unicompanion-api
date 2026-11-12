@@ -1,5 +1,10 @@
 import { Request, Response, NextFunction } from "express";
 import multer from "multer";
+import { AppError } from "../utils/AppError";
+import {
+  ALLOWED_IMAGE_MIME_TYPES,
+  MAX_PROFILE_IMAGE_SIZE,
+} from "../modules/upload/upload.service";
 
 const storage = multer.memoryStorage();
 
@@ -12,6 +17,31 @@ export const upload = multer({
 });
 
 export const singleUpload = upload.fields([
+  { name: "image", maxCount: 1 },
+  { name: "file", maxCount: 1 },
+]);
+
+const profileMulter = multer({
+  storage,
+  limits: {
+    fileSize: MAX_PROFILE_IMAGE_SIZE, // 3MB strict avatar cap
+    files: 1,
+  },
+  fileFilter: (_req, file, cb) => {
+    if (!ALLOWED_IMAGE_MIME_TYPES.has(file.mimetype.toLowerCase())) {
+      cb(
+        new AppError(
+          `Unsupported file type: ${file.mimetype}. Allowed types are JPEG, PNG, WEBP, GIF, and HEIC.`,
+          400,
+        ),
+      );
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+export const profileImageUpload = profileMulter.fields([
   { name: "image", maxCount: 1 },
   { name: "file", maxCount: 1 },
 ]);

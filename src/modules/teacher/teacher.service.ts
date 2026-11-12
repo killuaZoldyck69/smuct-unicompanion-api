@@ -158,7 +158,7 @@ export const updateTeacherProfileData = async (
   const userUpdateData: Record<string, any> = {};
   if (data.name) userUpdateData.name = data.name.trim();
   if (data.phoneNumber !== undefined)
-    userUpdateData.phoneNumber = data.phoneNumber?.trim() || null;
+    userUpdateData.phoneNumber = data.phoneNumber?.trim() || "";
   if (data.bloodGroup !== undefined)
     userUpdateData.bloodGroup = data.bloodGroup || null;
 

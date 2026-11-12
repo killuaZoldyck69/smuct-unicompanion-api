@@ -1,5 +1,16 @@
 import { z } from "zod";
 import { BLOOD_GROUP_VALUES } from "../../constants/enums";
+import { urlSanitizer } from "../../utils/url-validators";
+
+const VALID_DAYS_OF_WEEK = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
 
 export const academicQualificationItemSchema = z.object({
   id: z.string().optional(),
@@ -10,25 +21,6 @@ export const academicQualificationItemSchema = z.object({
   year: z.union([z.string().trim().max(10), z.number()]).optional().nullable(),
   honors: z.string().optional().nullable(),
 });
-
-const urlSanitizer = z
-  .string()
-  .trim()
-  .max(300, "URL must not exceed 300 characters")
-  .transform((val) => {
-    if (!val) return "";
-    return /^https?:\/\//i.test(val) ? val : `https://${val}`;
-  })
-  .pipe(
-    z
-      .string()
-      .url("Must be a valid URL")
-      .refine(
-        (url) => !url || /^https?:\/\//i.test(url),
-        "URL must use http or https protocol",
-      )
-      .or(z.literal("")),
-  );
 
 export const registerTeacherSchema = z.object({
   body: z.object({
@@ -85,7 +77,11 @@ export const registerTeacherSchema = z.object({
       .regex(/^\d*$/, "Office room must contain numbers only")
       .optional()
       .nullable(),
-    dayOff: z.string().trim().max(50).nullable().optional(),
+    dayOff: z
+      .enum(VALID_DAYS_OF_WEEK)
+      .or(z.literal(""))
+      .nullable()
+      .optional(),
     advisoryBatch: z
       .union([
         z.number().int().positive().max(99999),
@@ -155,7 +151,11 @@ export const updateTeacherProfileSchema = z.object({
       ])
       .nullable()
       .optional(),
-    dayOff: z.string().trim().max(50).nullable().optional(),
+    dayOff: z
+      .enum(VALID_DAYS_OF_WEEK)
+      .or(z.literal(""))
+      .nullable()
+      .optional(),
     consultationSlots: z
       .array(
         z.object({

@@ -13,6 +13,13 @@ import {
 } from "../upload/upload.service";
 import { deleteImageFromCloudinary } from "../../lib/cloudinary";
 import { appCache } from "../../lib/cache";
+import { envConfig } from "../../config/env";
+import {
+  ACCOUNT_RE_REGISTRATION_COOLDOWN_DAYS,
+  computeNextDeletionGuardState,
+  hashAccountIdentifier,
+} from "../../utils/account-deletion-guard";
+import { isSafePublicHttpsUrl } from "../../utils/url-validators";
 import * as teacherService from "../teacher/teacher.service";
 import * as studentService from "../student/student.service";
 import { UpdateTeacherPayload } from "../teacher/teacher.schema";
@@ -233,6 +240,97 @@ export const deleteUserService = async (id: string, callerId?: string) => {
   return await restrictUserService(id, callerId, true);
 };
 
+export function assertSelfDeletionAllowed(context: {
+  user: {
+    id: string;
+    email: string;
+    role: string;
+    isRestricted: boolean;
+    image: string;
+    studentProfile: { studentId: string } | null;
+  } | null;
+  otherActiveAdminCount: number;
+}): void {
+  const { user, otherActiveAdminCount } = context;
+  if (!user) {
+    throw new AppError("User not found.", 404);
+  }
+  if (user.isRestricted) {
+    throw new AppError(
+      "Restricted accounts cannot perform self-service deletion.",
+      403,
+    );
+  }
+  if (user.role === "ADMIN" && otherActiveAdminCount <= 0) {
+    throw new AppError(
+      "The last active administrator account cannot be deleted.",
+      403,
+    );
+  }
+}
+
+/**
+ * Self-service PII deletion with keyed HMAC anti-churn guard and last-admin protection.
+ */
+export const deleteMyAccountService = async (userId: string) => {
+  const result = await userRepository.executeSelfAccountDeletionTx(
+    userId,
+    (user) => {
+      const now = new Date();
+      const specs: Array<{
+        identifierHash: string;
+        identifierType: "EMAIL" | "STUDENT_ID";
+        computeState: (existingCount: number) => ReturnType<typeof computeNextDeletionGuardState>;
+      }> = [
+        {
+          identifierHash: hashAccountIdentifier(
+            "EMAIL",
+            user.email,
+            envConfig.BETTER_AUTH_SECRET,
+          ),
+          identifierType: "EMAIL",
+          computeState: (existingCount) =>
+            computeNextDeletionGuardState(existingCount, now),
+        },
+      ];
+
+      if (user.studentId) {
+        specs.push({
+          identifierHash: hashAccountIdentifier(
+            "STUDENT_ID",
+            user.studentId,
+            envConfig.BETTER_AUTH_SECRET,
+          ),
+          identifierType: "STUDENT_ID",
+          computeState: (existingCount) =>
+            computeNextDeletionGuardState(existingCount, now),
+        });
+      }
+
+      return specs;
+    },
+    assertSelfDeletionAllowed,
+  );
+
+  appCache.delPattern(/^users:list/);
+  appCache.delPattern(/^directory:students/);
+  appCache.delPattern(/^directory:teachers/);
+  appCache.delPattern(/^hub:/);
+  appCache.delPattern(/^admin:dashboard-stats/);
+
+  if (result.previousImage) {
+    deleteImageFromCloudinary(result.previousImage).catch((err) =>
+      console.warn("[Cloudinary] Failed to clean up deleted account avatar:", err),
+    );
+  }
+
+  return {
+    deletedUserId: result.deletedUserId,
+    cooldownDays: ACCOUNT_RE_REGISTRATION_COOLDOWN_DAYS,
+    isPermanentlyBlocked: result.isPermanentlyBlocked,
+  };
+};
+
 export const updateStudentRoleService = async (
   id: string,
   action: UpdateRolePayload["action"],
@@ -369,6 +467,9 @@ export const updateUserProfileImageService = async (
   }
 
   let finalImageUrl = imageUrl?.trim();
+  if (finalImageUrl && !isSafePublicHttpsUrl(finalImageUrl)) {
+    throw new AppError("Image URL must be a valid public HTTPS URL.", 400);
+  }
 
   if (file || (base64 && base64.trim())) {
     const uploadResult = await uploadSingleImageService(
@@ -392,8 +493,11 @@ export const updateUserProfileImageService = async (
     throw new AppError("User not found.", 404);
   }
 
-  // Invalidate in-memory user list cache
+  // Invalidate in-memory user list & directory caches
   appCache.delPattern(/^users:list/);
+  appCache.delPattern(/^directory:students/);
+  appCache.delPattern(/^directory:teachers/);
+  appCache.delPattern(/^hub:/);
 
   // Storage cleanup optimization: delete previous image from Cloudinary
   if (previousImage && previousImage !== finalImageUrl) {

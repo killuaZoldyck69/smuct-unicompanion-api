@@ -160,3 +160,106 @@ export const revokeAllUserSessions = async (userId: string) => {
     where: { userId },
   });
 };
+
+export const executeSelfAccountDeletionTx = async (
+  userId: string,
+  buildGuards: (user: {
+    email: string;
+    role: string;
+    isRestricted: boolean;
+    image: string;
+    studentId?: string | null;
+  }) => Array<{
+    identifierHash: string;
+    identifierType: "EMAIL" | "STUDENT_ID";
+    computeState: (existingCount: number) => {
+      deletionCount: number;
+      lastDeletedAt: Date;
+      blockedUntil: Date | null;
+      isPermanentlyBlocked: boolean;
+    };
+  }>,
+  assertAllowed: (context: {
+    user: {
+      id: string;
+      email: string;
+      role: string;
+      isRestricted: boolean;
+      image: string;
+      studentProfile: { studentId: string } | null;
+    } | null;
+    otherActiveAdminCount: number;
+  }) => void,
+) => {
+  return await prisma.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        isRestricted: true,
+        image: true,
+        studentProfile: {
+          select: { studentId: true },
+        },
+      },
+    });
+
+    const otherActiveAdminCount =
+      user?.role === "ADMIN"
+        ? await tx.user.count({
+            where: {
+              role: "ADMIN",
+              isRestricted: false,
+              id: { not: userId },
+            },
+          })
+        : 0;
+
+    assertAllowed({ user, otherActiveAdminCount });
+
+    const guards = buildGuards({
+      email: user!.email,
+      role: user!.role,
+      isRestricted: user!.isRestricted,
+      image: user!.image,
+      studentId: user!.studentProfile?.studentId ?? null,
+    });
+
+    let maxPermanent = false;
+    for (const guardSpec of guards) {
+      const existingGuard = await tx.accountDeletionGuard.findUnique({
+        where: { identifierHash: guardSpec.identifierHash },
+        select: { deletionCount: true },
+      });
+      const nextState = guardSpec.computeState(existingGuard?.deletionCount ?? 0);
+      if (nextState.isPermanentlyBlocked) maxPermanent = true;
+
+      await tx.accountDeletionGuard.upsert({
+        where: { identifierHash: guardSpec.identifierHash },
+        create: {
+          identifierHash: guardSpec.identifierHash,
+          identifierType: guardSpec.identifierType,
+          ...nextState,
+        },
+        update: nextState,
+      });
+    }
+
+    await tx.submission.updateMany({
+      where: { gradedById: userId },
+      data: { gradedById: null },
+    });
+
+    await tx.user.delete({
+      where: { id: userId },
+    });
+
+    return {
+      deletedUserId: userId,
+      previousImage: user!.image,
+      isPermanentlyBlocked: maxPermanent,
+    };
+  });
+};

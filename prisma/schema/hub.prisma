@@ -190,7 +190,7 @@ model Submission {
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   student    User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  gradedBy   User?      @relation("GradedSubmissions", fields: [gradedById], references: [id])
+  gradedBy   User?      @relation("GradedSubmissions", fields: [gradedById], references: [id], onDelete: SetNull)
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @default(now()) @updatedAt
 

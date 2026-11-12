@@ -1,6 +1,11 @@
 import { createAuthMiddleware, APIError } from "better-auth/api";
 import { prisma } from "./prisma";
 import { validatePassword } from "../utils/password-validator";
+import { envConfig } from "../config/env";
+import {
+  evaluateDeletionGuardBlock,
+  hashAccountIdentifier,
+} from "../utils/account-deletion-guard";
 
 /**
  * Enforces role lockdown and abandoned-account cleanup during public registration.
@@ -17,6 +22,23 @@ async function handleSignUpSecurity(body?: Record<string, any>): Promise<void> {
   if (!email || typeof email !== "string") return;
 
   const normalizedEmail = email.toLowerCase().trim();
+  const deletionGuard = await prisma.accountDeletionGuard.findUnique({
+    where: {
+      identifierHash: hashAccountIdentifier(
+        "EMAIL",
+        normalizedEmail,
+        envConfig.BETTER_AUTH_SECRET,
+      ),
+    },
+    select: { isPermanentlyBlocked: true, blockedUntil: true },
+  });
+  const guardCheck = evaluateDeletionGuardBlock(deletionGuard);
+  if (guardCheck.blocked && guardCheck.message) {
+    throw new APIError("FORBIDDEN", {
+      message: guardCheck.message,
+    });
+  }
+
   const existingUser = await prisma.user.findFirst({
     where: {
       email: {
@@ -89,6 +111,7 @@ async function handlePasswordResetRequest(body?: Record<string, any>): Promise<v
   }
 
   const normalizedEmail = email.toLowerCase().trim();
+
   const existingUser = await prisma.user.findFirst({
     where: {
       email: {
@@ -135,6 +158,7 @@ async function handleVerificationOtpRequest(body?: Record<string, any>): Promise
   }
 
   const normalizedEmail = email.toLowerCase().trim();
+
   const existingUser = await prisma.user.findFirst({
     where: {
       email: {

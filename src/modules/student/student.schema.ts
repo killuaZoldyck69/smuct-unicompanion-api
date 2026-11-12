@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { BLOOD_GROUP_VALUES } from "../../constants/enums";
+import { urlSanitizer } from "../../utils/url-validators";
 
 export const onboardStudentSchema = z.object({
   body: z.object({
@@ -25,26 +26,18 @@ export const updateProfileImageSchema = z.object({
 
 export const updateProfileSchema = z.object({
   body: z.object({
-    name: z.string().optional(),
-    phoneNumber: z.string().optional(),
-    batch: z.string().optional(),
-    currentSemester: z.number().min(1).max(12).optional(),
-    section: z.string().optional(),
-    currentTerm: z.string().optional(),
-    bloodGroup: z.enum(BLOOD_GROUP_VALUES).optional(),
-    faculty: z.string().optional(),
-    program: z.string().optional(),
-    skills: z.array(z.string()).optional(),
-    linkedInUrl: z
-      .string()
-      .url({ message: "Must be a valid URL" })
-      .or(z.literal(""))
-      .optional(),
-    personalWebsiteUrl: z
-      .string()
-      .url({ message: "Must be a valid URL" })
-      .or(z.literal(""))
-      .optional(),
+    name: z.string().trim().min(2).max(100).optional(),
+    phoneNumber: z.string().trim().max(25).nullable().optional(),
+    batch: z.string().trim().max(20).optional(),
+    currentSemester: z.number().int().min(1).max(12).optional(),
+    section: z.string().trim().min(1).max(10).optional(),
+    currentTerm: z.string().trim().max(40).nullable().optional(),
+    bloodGroup: z.enum(BLOOD_GROUP_VALUES).nullable().optional(),
+    faculty: z.string().trim().max(120).optional(),
+    program: z.string().trim().max(150).optional(),
+    skills: z.array(z.string().trim().min(1).max(40)).max(30).optional(),
+    linkedInUrl: urlSanitizer.optional().nullable(),
+    personalWebsiteUrl: urlSanitizer.optional().nullable(),
   }),
 });
 

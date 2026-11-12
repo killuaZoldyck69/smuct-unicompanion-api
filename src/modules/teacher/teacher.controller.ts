@@ -36,6 +36,20 @@ export const registerTeacher = catchAsync(
   },
 );
 
+export function formatTeacherProfile(userProfile: any) {
+  const { id: _profileId, ...restProfile } = (userProfile.teacherProfile || {}) as any;
+  return {
+    ...restProfile,
+    id: userProfile.id,
+    name: userProfile.name,
+    email: userProfile.email,
+    image: userProfile.image,
+    phoneNumber: userProfile.phoneNumber,
+    bloodGroup: userProfile.bloodGroup,
+    role: userProfile.role,
+  };
+}
+
 export const getTeacherProfile = catchAsync(
   async (req: Request, res: Response) => {
     const userId = req.user.id;
@@ -45,24 +59,10 @@ export const getTeacherProfile = catchAsync(
       throw new AppError("Teacher profile not found.", 404);
     }
 
-    // Flatten the response
-    // The spread operator automatically includes expertiseFields, academicQualifications, etc.
-    const { id: _profileId, ...restProfile } = (userProfile.teacherProfile || {}) as any;
-    const formattedProfile = {
-      ...restProfile,
-      id: userProfile.id,
-      name: userProfile.name,
-      email: userProfile.email,
-      image: userProfile.image,
-      phoneNumber: userProfile.phoneNumber,
-      bloodGroup: userProfile.bloodGroup,
-      role: userProfile.role,
-    };
-
     res.status(200).json({
       success: true,
       message: "Teacher profile retrieved successfully.",
-      data: formattedProfile,
+      data: formatTeacherProfile(userProfile),
     });
   },
 );
@@ -100,21 +100,9 @@ export const updateProfile = catchAsync(async (req: Request, res: Response) => {
     throw new AppError("Failed to retrieve updated profile.", 500);
   }
 
-  // Flatten the response
-  const formattedProfile = {
-    id: updatedProfile.id,
-    name: updatedProfile.name,
-    email: updatedProfile.email,
-    image: updatedProfile.image,
-    phoneNumber: updatedProfile.phoneNumber,
-    bloodGroup: updatedProfile.bloodGroup,
-    role: updatedProfile.role,
-    ...updatedProfile.teacherProfile,
-  };
-
   res.status(200).json({
     success: true,
     message: "Teacher profile updated successfully.",
-    data: formattedProfile,
+    data: formatTeacherProfile(updatedProfile),
   });
 });

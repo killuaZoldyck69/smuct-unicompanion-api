@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.middleware";
-import { requireAdmin } from "../../middleware/admin.middleware";
+import { requireAdmin, requireTeacher } from "../../middleware/role.middleware";
 import { validateRequest } from "../../middleware/validateRequest";
 import {
-  singleUpload,
+  profileImageUpload,
   normalizeSingleFile,
 } from "../../middleware/upload.middleware";
+import { profileImageBodySchema } from "../user/user.schema";
 import {
   registerTeacherSchema,
   updateTeacherProfileSchema,
@@ -16,7 +17,6 @@ import {
   updateProfile,
   updateTeacherProfileImage,
 } from "./teacher.controller";
-import { requireTeacher } from "../../middleware/teacher.middleware";
 
 const router = Router();
 
@@ -37,8 +37,9 @@ router.patch(
   "/profile/image",
   requireAuth,
   requireTeacher,
-  singleUpload,
+  profileImageUpload,
   normalizeSingleFile,
+  validateRequest(profileImageBodySchema),
   updateTeacherProfileImage,
 );
 

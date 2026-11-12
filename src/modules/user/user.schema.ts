@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { BLOOD_GROUP_VALUES } from "../../constants/enums";
+import { isSafePublicHttpsUrl, urlSanitizer } from "../../utils/url-validators";
 
 export const updateRoleSchema = z.object({
   body: z.object({
@@ -41,24 +42,34 @@ export type UpdateTeacherPositionPayload = z.infer<
   typeof updateTeacherPositionSchema
 >["body"];
 
-const urlSanitizer = z
-  .string()
-  .trim()
-  .max(300, "URL must not exceed 300 characters")
-  .transform((val) => {
-    if (!val) return "";
-    return /^https?:\/\//i.test(val) ? val : `https://${val}`;
-  })
-  .pipe(
-    z
-      .string()
-      .url("Must be a valid URL")
-      .refine(
-        (url) => !url || /^https?:\/\//i.test(url),
-        "URL must use http or https protocol",
-      )
-      .or(z.literal("")),
-  );
+export const deleteMyAccountSchema = z.object({
+  body: z.object({
+    confirmation: z.literal("DELETE", {
+      message: 'Confirmation must be exactly "DELETE".',
+    }),
+  }),
+});
+
+export type DeleteMyAccountPayload = z.infer<
+  typeof deleteMyAccountSchema
+>["body"];
+
+export const profileImageBodySchema = z.object({
+  body: z
+    .object({
+      image: z.string().max(4_500_000, "Base64 image payload too large").optional(),
+      imageUrl: z
+        .string()
+        .trim()
+        .max(500, "Image URL must not exceed 500 characters")
+        .refine(
+          (val) => !val || isSafePublicHttpsUrl(val),
+          "Image URL must be a valid public HTTPS URL.",
+        )
+        .optional(),
+    })
+    .optional(),
+});
 
 export const adminUpdateStudentProfileSchema = z.object({
   body: z.object({

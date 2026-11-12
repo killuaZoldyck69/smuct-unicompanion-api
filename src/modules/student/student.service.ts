@@ -3,6 +3,11 @@ import { prisma } from "../../lib/prisma";
 import * as studentRepository from "./student.repository";
 import { OnboardStudentPayload, UpdateProfilePayload } from "./student.schema";
 import { appCache } from "../../lib/cache";
+import { envConfig } from "../../config/env";
+import {
+  evaluateDeletionGuardBlock,
+  hashAccountIdentifier,
+} from "../../utils/account-deletion-guard";
 
 export const onboardStudentService = async (
   userId: string,
@@ -32,6 +37,20 @@ export const onboardStudentService = async (
     throw new AppError("Email must be verified before student onboarding.", 403);
   }
 
+  const studentIdHash = hashAccountIdentifier(
+    "STUDENT_ID",
+    data.studentId,
+    envConfig.BETTER_AUTH_SECRET,
+  );
+  const studentGuard = await prisma.accountDeletionGuard.findUnique({
+    where: { identifierHash: studentIdHash },
+    select: { isPermanentlyBlocked: true, blockedUntil: true },
+  });
+  const guardCheck = evaluateDeletionGuardBlock(studentGuard);
+  if (guardCheck.blocked && guardCheck.message) {
+    throw new AppError(guardCheck.message, 403);
+  }
+
   return await studentRepository.createStudentProfileWithRole(userId, data);
 };
 
@@ -54,7 +73,7 @@ export const updateStudentProfileData = async (
   const userUpdateData: Record<string, any> = {};
   if (data.name) userUpdateData.name = data.name.trim();
   if (data.phoneNumber !== undefined)
-    userUpdateData.phoneNumber = data.phoneNumber?.trim() || null;
+    userUpdateData.phoneNumber = data.phoneNumber?.trim() || "";
   if (data.bloodGroup !== undefined)
     userUpdateData.bloodGroup = data.bloodGroup || null;
 

@@ -73,6 +73,18 @@ export const formatErrorResponse = (
     statusCode = err.statusCode;
     message = err.message;
   }
+  // Handle Multer upload limit/format errors safely as 400 Bad Request
+  else if (err?.name === "MulterError") {
+    isExpectedOperational = true;
+    statusCode = 400;
+    if (err.code === "LIMIT_FILE_SIZE") {
+      message = "Uploaded file exceeds the maximum allowed size limit.";
+    } else if (err.code === "LIMIT_FILE_COUNT" || err.code === "LIMIT_UNEXPECTED_FILE") {
+      message = "Too many or unexpected upload fields provided.";
+    } else {
+      message = err.message || "Invalid file upload payload.";
+    }
+  }
 
   if (!isExpectedOperational && statusCode >= 500) {
     console.error(
