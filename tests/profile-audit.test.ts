@@ -218,6 +218,30 @@ test("Student & Teacher schemas sanitize URLs and enforce canonical profile shap
     }).success,
     false,
   );
+
+  // Server-side phone validation & BD normalization
+  const phoneNormalized = updateStudentProfileSchema.parse({
+    body: { phoneNumber: "01712-345678" },
+  });
+  assert.equal(phoneNormalized.body.phoneNumber, "+8801712345678");
+  assert.equal(
+    updateStudentProfileSchema.parse({ body: { phoneNumber: "" } }).body.phoneNumber,
+    "",
+  );
+  assert.equal(
+    updateStudentProfileSchema.safeParse({ body: { phoneNumber: "abc" } }).success,
+    false,
+  );
+
+  // Teacher consultation slots require non-empty day, startTime, and endTime
+  assert.equal(
+    updateTeacherProfileSchema.safeParse({
+      body: {
+        consultationSlots: [{ day: "Sunday", startTime: "", endTime: "12:00 PM" }],
+      },
+    }).success,
+    false,
+  );
 });
 
 test("formatTeacherProfile keeps User.id even when teacherProfile has its own id", () => {

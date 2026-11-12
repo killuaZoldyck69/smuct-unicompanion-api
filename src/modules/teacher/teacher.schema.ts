@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BLOOD_GROUP_VALUES } from "../../constants/enums";
-import { urlSanitizer } from "../../utils/url-validators";
+import { phoneNumberSanitizer, urlSanitizer } from "../../utils/url-validators";
 
 const VALID_DAYS_OF_WEEK = [
   "Sunday",
@@ -126,7 +126,7 @@ export type RegisterTeacherPayload = z.infer<
 export const updateTeacherProfileSchema = z.object({
   body: z.object({
     name: z.string().trim().min(2).max(100).optional(),
-    phoneNumber: z.string().trim().max(25).nullable().optional(),
+    phoneNumber: phoneNumberSanitizer.optional().nullable(),
     bloodGroup: z.enum(BLOOD_GROUP_VALUES).nullable().optional(),
     designation: z.string().trim().max(100).optional(),
     administrativeRole: z.string().trim().max(100).nullable().optional(),
@@ -159,9 +159,9 @@ export const updateTeacherProfileSchema = z.object({
     consultationSlots: z
       .array(
         z.object({
-          day: z.string().trim().max(30),
-          startTime: z.string().trim().max(20),
-          endTime: z.string().trim().max(20),
+          day: z.string().trim().min(1, "Consultation day is required").max(30),
+          startTime: z.string().trim().min(1, "Start time is required").max(20),
+          endTime: z.string().trim().min(1, "End time is required").max(20),
         }),
       )
       .max(50)

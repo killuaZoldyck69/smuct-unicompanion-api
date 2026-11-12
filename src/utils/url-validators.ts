@@ -73,3 +73,32 @@ export const urlSanitizer = z
       )
       .or(z.literal("")),
   );
+
+/**
+ * Normalizes and validates profile phone numbers while permitting `""` or `null` to clear.
+ * Converts local BD `01XXXXXXXXX` and `8801XXXXXXXXX` into `+8801XXXXXXXXX` and rejects
+ * non-phone strings or impossible digit lengths.
+ */
+export const phoneNumberSanitizer = z
+  .string()
+  .trim()
+  .max(25, "Phone number must not exceed 25 characters")
+  .transform((val) => {
+    if (!val) return "";
+    const compact = val.replace(/[\s()-]/g, "");
+    if (/^01\d{9}$/.test(compact)) {
+      return `+880${compact.slice(1)}`;
+    }
+    if (/^8801\d{9}$/.test(compact)) {
+      return `+${compact}`;
+    }
+    return compact;
+  })
+  .pipe(
+    z
+      .string()
+      .refine(
+        (val) => !val || /^\+[1-9]\d{6,14}$/.test(val),
+        "Enter a valid phone number (e.g. +8801XXXXXXXXX) or leave empty to clear.",
+      ),
+  );

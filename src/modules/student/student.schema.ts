@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BLOOD_GROUP_VALUES } from "../../constants/enums";
-import { urlSanitizer } from "../../utils/url-validators";
+import { phoneNumberSanitizer, urlSanitizer } from "../../utils/url-validators";
 
 export const onboardStudentSchema = z.object({
   body: z.object({
@@ -27,7 +27,7 @@ export const updateProfileImageSchema = z.object({
 export const updateProfileSchema = z.object({
   body: z.object({
     name: z.string().trim().min(2).max(100).optional(),
-    phoneNumber: z.string().trim().max(25).nullable().optional(),
+    phoneNumber: phoneNumberSanitizer.optional().nullable(),
     batch: z.string().trim().max(20).optional(),
     currentSemester: z.number().int().min(1).max(12).optional(),
     section: z.string().trim().min(1).max(10).optional(),
