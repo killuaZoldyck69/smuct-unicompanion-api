@@ -9,6 +9,7 @@ export interface ErrorPayload {
   body: {
     success: false;
     message: string;
+    code?: string;
     errorSources: any[];
     stack?: string;
   };
@@ -31,6 +32,7 @@ export const formatErrorResponse = (
       ? err.message
       : "Internal Server Error";
   let errorSources: any[] = [];
+  let code: string | undefined;
   let isExpectedOperational = false;
 
   // Handle Zod Validation Errors
@@ -49,7 +51,7 @@ export const formatErrorResponse = (
       message: issue.message,
     }));
   }
-  // Handle Prisma Unique Constraint Errors (e.g., Duplicate Student ID)
+  // Handle Prisma Constraint & Not-Found Errors cleanly without exposing schema details
   else if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === "P2002") {
       isExpectedOperational = true;
@@ -63,6 +65,10 @@ export const formatErrorResponse = (
       errorSources = [
         { path: err.meta?.target, message: `${target} is already in use.` },
       ];
+    } else if (err.code === "P2025" || err.code === "P2003") {
+      isExpectedOperational = true;
+      statusCode = 404;
+      message = "Requested resource was not found.";
     } else {
       statusCode = 500;
     }
@@ -72,6 +78,7 @@ export const formatErrorResponse = (
     isExpectedOperational = true;
     statusCode = err.statusCode;
     message = err.message;
+    code = err.code;
   }
   // Handle Multer upload limit/format errors safely as 400 Bad Request
   else if (err?.name === "MulterError") {
@@ -101,6 +108,7 @@ export const formatErrorResponse = (
     body: {
       success: false,
       message,
+      ...(code ? { code } : {}),
       errorSources,
       stack: nodeEnv === "development" ? err?.stack : undefined,
     },

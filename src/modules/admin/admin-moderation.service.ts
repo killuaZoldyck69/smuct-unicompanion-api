@@ -1,0 +1,400 @@
+import { prisma } from "../../lib/prisma";
+import { appCache } from "../../lib/cache";
+import { AppError } from "../../utils/AppError";
+import { publicUserSelect } from "../forum/forum.repository";
+import { extractPlainText } from "../forum/forum.sanitizer";
+import {
+  AdminForumReportsQuery,
+  AdminResolveReportPayload,
+} from "./admin.schema";
+
+const FORUM_TARGET_TYPES = ["FORUM_POST", "FORUM_RESPONSE"] as const;
+
+const safeModerationActorSelect = {
+  id: true,
+  name: true,
+  image: true,
+  role: true,
+} as const;
+
+const safeTargetAuthorSelect = {
+  ...publicUserSelect,
+  isRestricted: true,
+} as const;
+
+export const getForumReportsQueueService = async (
+  query: AdminForumReportsQuery,
+) => {
+  const page = Math.max(1, Number(query.page) || 1);
+  const limit = Math.max(1, Math.min(50, Number(query.limit) || 20));
+  const skip = (page - 1) * limit;
+
+  const where: Record<string, any> = {
+    targetType:
+      query.targetType === "ALL"
+        ? { in: [...FORUM_TARGET_TYPES] }
+        : query.targetType,
+  };
+
+  if (query.status !== "ALL") {
+    where.status = query.status;
+  }
+
+  const [reports, total, pendingCount] = await Promise.all([
+    prisma.contentReport.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: [{ createdAt: "desc" }],
+      include: {
+        reporter: { select: safeModerationActorSelect },
+        targetAuthor: { select: safeTargetAuthorSelect },
+        reviewedBy: { select: safeModerationActorSelect },
+      },
+    }),
+    prisma.contentReport.count({ where }),
+    prisma.contentReport.count({
+      where: {
+        status: "PENDING",
+        targetType: { in: [...FORUM_TARGET_TYPES] },
+      },
+    }),
+  ]);
+
+  const targetPairs = reports.map((r) => ({
+    targetType: r.targetType,
+    targetId: r.targetId,
+  }));
+
+  const uniquePostIds = [
+    ...new Set(
+      reports
+        .filter((r) => r.targetType === "FORUM_POST")
+        .map((r) => r.targetId),
+    ),
+  ];
+  const uniqueResponseIds = [
+    ...new Set(
+      reports
+        .filter((r) => r.targetType === "FORUM_RESPONSE")
+        .map((r) => r.targetId),
+    ),
+  ];
+  const uniqueTargetIds = [...new Set(targetPairs.map((p) => p.targetId))];
+
+  const groupedTargetTypeFilter =
+    query.targetType === "ALL"
+      ? { in: [...FORUM_TARGET_TYPES] }
+      : query.targetType;
+
+  const [groupedTargetCounts, livePosts, liveResponses] = await Promise.all([
+    uniqueTargetIds.length
+      ? prisma.contentReport.groupBy({
+          by: ["targetType", "targetId"],
+          where: {
+            targetType: groupedTargetTypeFilter,
+            targetId: { in: uniqueTargetIds },
+            status: "PENDING",
+          },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
+    uniquePostIds.length
+      ? prisma.helpPost.findMany({
+          where: { id: { in: uniquePostIds } },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            isResolved: true,
+            isHiddenByModeration: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve([]),
+    uniqueResponseIds.length
+      ? prisma.helpResponse.findMany({
+          where: { id: { in: uniqueResponseIds } },
+          select: {
+            id: true,
+            postId: true,
+            content: true,
+            isHiddenByModeration: true,
+            createdAt: true,
+            post: {
+              select: {
+                id: true,
+                title: true,
+                isHiddenByModeration: true,
+              },
+            },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const pendingByTarget = new Map<string, number>();
+  for (const row of groupedTargetCounts) {
+    pendingByTarget.set(`${row.targetType}:${row.targetId}`, row._count._all);
+  }
+
+  const postById = new Map(livePosts.map((p) => [p.id, p]));
+  const responseById = new Map(liveResponses.map((resp) => [resp.id, resp]));
+
+  const enriched = reports.map((report) => {
+    const snapshot =
+      report.targetSnapshot && typeof report.targetSnapshot === "object"
+        ? (report.targetSnapshot as Record<string, any>)
+        : null;
+
+    if (report.targetType === "FORUM_POST") {
+      const livePost = postById.get(report.targetId);
+      const resolvedPostId = livePost?.id ?? snapshot?.postId ?? report.targetId;
+      return {
+        ...report,
+        postId: resolvedPostId,
+        responseId: null,
+        targetExists: Boolean(livePost),
+        targetLive: livePost
+          ? {
+              id: livePost.id,
+              postId: livePost.id,
+              title: livePost.title,
+              postTitle: livePost.title,
+              contentPreview: extractPlainText(livePost.description).slice(
+                0,
+                800,
+              ),
+              isResolved: livePost.isResolved,
+              isHiddenByModeration: livePost.isHiddenByModeration,
+              createdAt: livePost.createdAt,
+            }
+          : null,
+        uniquePendingReportCount:
+          pendingByTarget.get(`${report.targetType}:${report.targetId}`) ?? 0,
+      };
+    }
+
+    const liveResponse = responseById.get(report.targetId);
+    const resolvedPostId =
+      liveResponse?.postId ??
+      (typeof snapshot?.postId === "string" ? snapshot.postId : null);
+
+    return {
+      ...report,
+      postId: resolvedPostId,
+      responseId: report.targetId,
+      targetExists: Boolean(liveResponse),
+      targetLive: liveResponse
+        ? {
+            id: liveResponse.id,
+            postId: liveResponse.postId,
+            title: null,
+            postTitle: liveResponse.post?.title ?? null,
+            contentPreview: extractPlainText(liveResponse.content).slice(
+              0,
+              800,
+            ),
+            isResolved: null,
+            isHiddenByModeration: liveResponse.isHiddenByModeration,
+            createdAt: liveResponse.createdAt,
+          }
+        : null,
+      uniquePendingReportCount:
+        pendingByTarget.get(`${report.targetType}:${report.targetId}`) ?? 0,
+    };
+  });
+
+  const totalPages = Math.ceil(total / limit);
+
+  return {
+    data: enriched,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasMore: page < totalPages,
+      pendingCount,
+    },
+  };
+};
+
+export const resolveForumReportService = async (
+  reportId: string,
+  adminId: string,
+  payload: AdminResolveReportPayload,
+) => {
+  const now = new Date();
+  const nextStatus = payload.action === "DISMISS" ? "DISMISSED" : "ACTIONED";
+  const adminNote = payload.adminNote ?? null;
+  let shouldInvalidateUserCaches = false;
+
+  await prisma.$transaction(async (tx) => {
+    // Lock report row so concurrent moderation actions serialize and cannot double-resolve or flip state
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "content_report" WHERE id = ${reportId} FOR UPDATE
+    `;
+
+    if (locked.length === 0) {
+      throw new AppError("Content report not found.", 404);
+    }
+
+    const report = await tx.contentReport.findUnique({
+      where: { id: reportId },
+    });
+
+    if (!report) {
+      throw new AppError("Content report not found.", 404);
+    }
+
+    if (report.status !== "PENDING") {
+      throw new AppError(
+        "This content report has already been reviewed.",
+        409,
+      );
+    }
+
+    if (payload.action === "RESTRICT_USER") {
+      if (!report.targetAuthorId) {
+        throw new AppError(
+          "The author of this content no longer exists; use HIDE_CONTENT or DELETE_CONTENT instead.",
+          400,
+        );
+      }
+      if (report.targetAuthorId === adminId) {
+        throw new AppError("Administrators cannot restrict their own account.", 400);
+      }
+
+      const targetUser = await tx.user.findUnique({
+        where: { id: report.targetAuthorId },
+        select: { id: true, role: true },
+      });
+
+      if (!targetUser) {
+        throw new AppError("User not found.", 404);
+      }
+
+      if (targetUser.role === "ADMIN") {
+        throw new AppError("Administrator accounts cannot be restricted.", 403);
+      }
+
+      await tx.user.update({
+        where: { id: targetUser.id },
+        data: { isRestricted: true },
+      });
+      await tx.session.deleteMany({
+        where: { userId: targetUser.id },
+      });
+      shouldInvalidateUserCaches = true;
+    }
+
+    let childResponseIds: string[] = [];
+    if (
+      payload.action === "DELETE_CONTENT" &&
+      report.targetType === "FORUM_POST"
+    ) {
+      const childResponses = await tx.helpResponse.findMany({
+        where: { postId: report.targetId },
+        select: { id: true },
+      });
+      childResponseIds = childResponses.map((r) => r.id);
+    }
+
+    // Resolve target report, sibling reports on same target, and any pending child-response reports if deleting parent post
+    await tx.contentReport.updateMany({
+      where: {
+        OR: [
+          { id: report.id },
+          {
+            targetType: report.targetType,
+            targetId: report.targetId,
+            status: "PENDING",
+          },
+          ...(childResponseIds.length
+            ? [
+                {
+                  targetType: "FORUM_RESPONSE" as const,
+                  targetId: { in: childResponseIds },
+                  status: "PENDING" as const,
+                },
+              ]
+            : []),
+        ],
+      },
+      data: {
+        status: nextStatus,
+        reviewedById: adminId,
+        reviewedAt: now,
+        adminNote,
+      },
+    });
+
+    if (payload.action === "DISMISS") {
+      const remainingActioned = await tx.contentReport.count({
+        where: {
+          targetType: report.targetType,
+          targetId: report.targetId,
+          status: "ACTIONED",
+        },
+      });
+
+      if (remainingActioned === 0) {
+        if (report.targetType === "FORUM_POST") {
+          await tx.helpPost.updateMany({
+            where: { id: report.targetId },
+            data: { isHiddenByModeration: false, hiddenAt: null },
+          });
+        } else {
+          await tx.helpResponse.updateMany({
+            where: { id: report.targetId },
+            data: { isHiddenByModeration: false, hiddenAt: null },
+          });
+        }
+      }
+    } else if (
+      payload.action === "HIDE_CONTENT" ||
+      payload.action === "RESTRICT_USER"
+    ) {
+      if (report.targetType === "FORUM_POST") {
+        await tx.helpPost.updateMany({
+          where: { id: report.targetId },
+          data: { isHiddenByModeration: true, hiddenAt: now },
+        });
+      } else {
+        await tx.helpResponse.updateMany({
+          where: { id: report.targetId },
+          data: { isHiddenByModeration: true, hiddenAt: now },
+        });
+      }
+    } else if (payload.action === "DELETE_CONTENT") {
+      if (report.targetType === "FORUM_POST") {
+        await tx.helpPost.deleteMany({ where: { id: report.targetId } });
+      } else {
+        await tx.helpResponse.deleteMany({ where: { id: report.targetId } });
+      }
+    }
+  });
+
+  if (shouldInvalidateUserCaches) {
+    appCache.delPattern(/^users:list/);
+    appCache.delPattern(/^directory:students/);
+    appCache.delPattern(/^directory:teachers/);
+  }
+
+  const updated = await prisma.contentReport.findUnique({
+    where: { id: reportId },
+    include: {
+      reporter: { select: safeModerationActorSelect },
+      targetAuthor: {
+        select: {
+          ...safeModerationActorSelect,
+          isRestricted: true,
+        },
+      },
+      reviewedBy: { select: safeModerationActorSelect },
+    },
+  });
+
+  return updated;
+};

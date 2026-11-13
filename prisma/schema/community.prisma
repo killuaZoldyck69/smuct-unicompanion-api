@@ -2,38 +2,116 @@
 // COMMUNITY & PEER SUPPORT
 // ==============================
 
+enum ForumReactionType {
+  LIKE
+  DISLIKE
+}
+
+enum UgcReportTargetType {
+  FORUM_POST
+  FORUM_RESPONSE
+}
+
+enum UgcReportReason {
+  SPAM
+  HARASSMENT
+  HATE_SPEECH
+  INAPPROPRIATE
+  ACADEMIC_MISCONDUCT
+  OTHER
+}
+
+enum UgcReportStatus {
+  PENDING
+  DISMISSED
+  ACTIONED
+}
+
 model HelpPost {
-  id          String         @id @default(uuid())
-  authorId    String
-  title       String
-  description String
-  isResolved  Boolean        @default(false)
-  author      User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  responses   HelpResponse[]
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id                   String         @id @default(uuid())
+  authorId             String
+  title                String
+  description          String
+  isResolved           Boolean        @default(false)
+  isHiddenByModeration Boolean        @default(false)
+  hiddenAt             DateTime?
+  author               User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  responses            HelpResponse[]
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   @@index([authorId])
   @@index([createdAt(sort: Desc)])
   @@index([isResolved, createdAt(sort: Desc)])
+  @@index([isHiddenByModeration, createdAt(sort: Desc)])
+  @@index([isHiddenByModeration, isResolved, createdAt(sort: Desc)])
 }
 
 model HelpResponse {
-  id          String         @id @default(uuid())
-  postId      String
-  responderId String
-  parentId    String?
-  content     String
-  post        HelpPost       @relation(fields: [postId], references: [id], onDelete: Cascade)
-  responder   User           @relation(fields: [responderId], references: [id], onDelete: Cascade)
-  parent      HelpResponse?  @relation("HelpResponseReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies     HelpResponse[] @relation("HelpResponseReplies")
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id                   String                 @id @default(uuid())
+  postId               String
+  responderId          String
+  parentId             String?
+  content              String
+  isHiddenByModeration Boolean                @default(false)
+  hiddenAt             DateTime?
+  post                 HelpPost               @relation(fields: [postId], references: [id], onDelete: Cascade)
+  responder            User                   @relation(fields: [responderId], references: [id], onDelete: Cascade)
+  parent               HelpResponse?          @relation("HelpResponseReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies              HelpResponse[]         @relation("HelpResponseReplies")
+  reactions            HelpResponseReaction[]
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
 
   @@index([postId])
   @@index([responderId])
   @@index([parentId])
+  @@index([postId, isHiddenByModeration, parentId])
+}
+
+model HelpResponseReaction {
+  id         String            @id @default(uuid())
+  responseId String
+  userId     String
+  type       ForumReactionType
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  response HelpResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([responseId, userId])
+  @@index([responseId, type])
+  @@index([userId])
+  @@map("help_response_reaction")
+}
+
+model ContentReport {
+  id             String              @id @default(uuid())
+  reporterId     String
+  targetType     UgcReportTargetType
+  targetId       String
+  targetAuthorId String?
+  reason         UgcReportReason
+  details        String?
+  targetSnapshot Json?
+  status         UgcReportStatus     @default(PENDING)
+  reviewedById   String?
+  reviewedAt     DateTime?
+  adminNote      String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  reporter     User  @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetAuthor User? @relation("ReportTargetAuthor", fields: [targetAuthorId], references: [id], onDelete: SetNull)
+  reviewedBy   User? @relation("ReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([reporterId, targetType, targetId])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([targetType, targetId, status])
+  @@index([reporterId, targetType, status])
+  @@index([targetAuthorId])
+  @@map("content_report")
 }
 
 // ==============================

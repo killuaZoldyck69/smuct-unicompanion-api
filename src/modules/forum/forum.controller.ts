@@ -15,7 +15,12 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
 
 export const getFeed = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id;
-  const result = await forumService.getAllPostsService(req.query, userId);
+  const role = req.user?.role;
+  const result = await forumService.getAllPostsService(
+    req.query,
+    userId,
+    role,
+  );
 
   res.status(200).json({
     success: true,
@@ -27,7 +32,9 @@ export const getFeed = catchAsync(async (req: Request, res: Response) => {
 
 export const getThread = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
-  const post = await forumService.getSinglePostService(id);
+  const userId = req.user?.id;
+  const role = req.user?.role;
+  const post = await forumService.getSinglePostService(id, userId, role);
 
   res.status(200).json({
     success: true,
@@ -108,37 +115,81 @@ export const deletePost = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-export const updateResponse = catchAsync(async (req: Request, res: Response) => {
-  const postId = req.params.id as string;
-  const responseId = req.params.responseId as string;
-  const userId = req.user.id;
-  const role = req.user.role;
+export const updateResponse = catchAsync(
+  async (req: Request, res: Response) => {
+    const postId = req.params.id as string;
+    const responseId = req.params.responseId as string;
+    const userId = req.user.id;
+    const role = req.user.role;
 
-  const updated = await forumService.updateResponseService(
-    postId,
-    responseId,
-    userId,
-    role,
+    const updated = await forumService.updateResponseService(
+      postId,
+      responseId,
+      userId,
+      role,
+      req.body,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Response updated successfully.",
+      data: updated,
+    });
+  },
+);
+
+export const deleteResponse = catchAsync(
+  async (req: Request, res: Response) => {
+    const postId = req.params.id as string;
+    const responseId = req.params.responseId as string;
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    await forumService.deleteResponseService(postId, responseId, userId, role);
+
+    res.status(200).json({
+      success: true,
+      message: "Response deleted successfully.",
+    });
+  },
+);
+
+export const reactToResponse = catchAsync(
+  async (req: Request, res: Response) => {
+    const postId = req.params.id as string;
+    const responseId = req.params.responseId as string;
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    const summary = await forumService.toggleResponseReactionService(
+      postId,
+      responseId,
+      userId,
+      role,
+      req.body,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: summary.userReaction
+        ? "Reaction updated."
+        : "Reaction removed.",
+      data: summary,
+    });
+  },
+);
+
+export const reportContent = catchAsync(async (req: Request, res: Response) => {
+  const reporterId = req.user.id;
+  const result = await forumService.reportForumContentService(
+    reporterId,
     req.body,
   );
 
-  res.status(200).json({
+  res.status(201).json({
     success: true,
-    message: "Response updated successfully.",
-    data: updated,
-  });
-});
-
-export const deleteResponse = catchAsync(async (req: Request, res: Response) => {
-  const postId = req.params.id as string;
-  const responseId = req.params.responseId as string;
-  const userId = req.user.id;
-  const role = req.user.role;
-
-  await forumService.deleteResponseService(postId, responseId, userId, role);
-
-  res.status(200).json({
-    success: true,
-    message: "Response deleted successfully.",
+    message:
+      "Thank you. Your report has been submitted and this content is now hidden from your feed.",
+    data: result,
   });
 });

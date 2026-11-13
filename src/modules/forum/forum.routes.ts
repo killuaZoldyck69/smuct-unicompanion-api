@@ -1,42 +1,87 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.middleware";
 import { validateRequest } from "../../middleware/validateRequest";
-import { rateLimit } from "../../middleware/rateLimit.middleware";
 import {
+  createUserKeyGenerator,
+  rateLimit,
+} from "../../middleware/rateLimit.middleware";
+import {
+  createForumReportSchema,
   createPostSchema,
   createResponseSchema,
-  updateResponseSchema,
-  responseIdParamSchema,
-  updatePostSchema,
-  resolvePostSchema,
   forumIdParamSchema,
   getFeedQuerySchema,
+  reactResponseSchema,
+  resolvePostSchema,
+  responseIdParamSchema,
+  updatePostSchema,
+  updateResponseSchema,
 } from "./forum.schema";
 import {
   createPost,
+  deletePost,
+  deleteResponse,
   getFeed,
   getThread,
-  replyToPost,
   markResolved,
+  reactToResponse,
+  replyToPost,
+  reportContent,
   updatePost,
-  deletePost,
   updateResponse,
-  deleteResponse,
 } from "./forum.controller";
 
 const router = Router();
 
-const postRateLimiter = rateLimit({
+// All Forum mutation limiters key by verified req.user.id (API-8 campus-NAT safe)
+export const postRateLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   limit: 10,
-  message: "Too many posts created. Please try again in 10 minutes.",
+  keyGenerator: createUserKeyGenerator("forum-post"),
+  message: {
+    success: false,
+    message: "Too many posts created. Please try again in 10 minutes.",
+  },
 });
 
-const replyRateLimiter = rateLimit({
+export const replyRateLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   limit: 25,
-  message: "Too many replies posted. Please try again in 5 minutes.",
+  keyGenerator: createUserKeyGenerator("forum-reply"),
+  message: {
+    success: false,
+    message: "Too many replies posted. Please try again in 5 minutes.",
+  },
 });
+
+export const reactionRateLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  limit: 60,
+  keyGenerator: createUserKeyGenerator("forum-reaction"),
+  message: {
+    success: false,
+    message: "Too many reaction updates. Please slow down slightly.",
+  },
+});
+
+export const reportRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  keyGenerator: createUserKeyGenerator("forum-report"),
+  message: {
+    success: false,
+    message: "Too many content reports submitted. Please try again later.",
+  },
+});
+
+// POST /api/forum/reports - Submit UGC Abuse Report (mounted before :id routes)
+router.post(
+  "/reports",
+  requireAuth,
+  reportRateLimiter,
+  validateRequest(createForumReportSchema),
+  reportContent,
+);
 
 // POST /api/forum - Create a Forum Post
 router.post(
@@ -69,6 +114,15 @@ router.post(
   replyRateLimiter,
   validateRequest(createResponseSchema),
   replyToPost,
+);
+
+// POST /api/forum/:id/responses/:responseId/react - Like / Dislike a Response or Reply
+router.post(
+  "/:id/responses/:responseId/react",
+  requireAuth,
+  reactionRateLimiter,
+  validateRequest(reactResponseSchema),
+  reactToResponse,
 );
 
 // PATCH /api/forum/:id/resolve - Mark Post as Resolved or Toggle

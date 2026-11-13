@@ -263,3 +263,27 @@ export const executeSelfAccountDeletionTx = async (
     };
   });
 };
+
+export const findUserUgcTermsById = async (userId: string) => {
+  return await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      ugcTermsAcceptedAt: true,
+    },
+  });
+};
+
+export const acceptUserUgcTermsById = async (userId: string) => {
+  await prisma.user.updateMany({
+    where: {
+      id: userId,
+      ugcTermsAcceptedAt: null,
+    },
+    data: {
+      ugcTermsAcceptedAt: new Date(),
+    },
+  });
+
+  return await findUserUgcTermsById(userId);
+};

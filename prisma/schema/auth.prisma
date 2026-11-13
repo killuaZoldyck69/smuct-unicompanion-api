@@ -32,8 +32,9 @@ model User {
   role          SystemRole  @default(STUDENT)
   phoneNumber   String      @default("")
   bloodGroup    BloodGroup?
-  isRestricted  Boolean     @default(false)
-  googleDriveConnected Boolean @default(false)
+  isRestricted         Boolean     @default(false)
+  ugcTermsAcceptedAt   DateTime?
+  googleDriveConnected Boolean     @default(false)
   googleDriveEmail     String?
 
   // Better Auth Relations
@@ -72,8 +73,12 @@ model User {
   memes                Meme[]
   memeReactions        MemeReaction[]
   eventInterested      EventInterested[]
-  notifications        Notification[]
-  pushTokens           PushToken[]
+  notifications           Notification[]
+  pushTokens              PushToken[]
+  contentReportsSubmitted ContentReport[]        @relation("ReportReporter")
+  contentReportsReceived  ContentReport[]        @relation("ReportTargetAuthor")
+  contentReportsReviewed  ContentReport[]        @relation("ReportReviewer")
+  helpResponseReactions   HelpResponseReaction[]
 
   @@index([role, isRestricted])
   @@index([isRestricted, updatedAt(sort: Desc)])

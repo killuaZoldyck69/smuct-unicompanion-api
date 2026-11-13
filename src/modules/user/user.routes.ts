@@ -3,6 +3,10 @@ import { requireAuth } from "../../middleware/auth.middleware";
 import { requireAdmin } from "../../middleware/role.middleware";
 import { validateRequest } from "../../middleware/validateRequest";
 import {
+  createUserKeyGenerator,
+  rateLimit,
+} from "../../middleware/rateLimit.middleware";
+import {
   profileImageUpload,
   normalizeSingleFile,
 } from "../../middleware/upload.middleware";
@@ -29,9 +33,21 @@ import {
   updateUserProfileImage,
   updateGoogleDriveConnectionStatus,
   runMaintenanceCleanup,
+  getUgcTermsStatus,
+  acceptUgcTerms,
 } from "./user.controller";
 
 const router = Router();
+
+const ugcTermsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  keyGenerator: createUserKeyGenerator("user-ugc-terms"),
+  message: {
+    success: false,
+    message: "Too many Community Guidelines requests. Please try again later.",
+  },
+});
 
 // POST /api/users/maintenance/cleanup - Trigger unverified accounts & expired tokens cleanup (Admin Only)
 router.post(
@@ -65,6 +81,10 @@ router.patch(
   validateRequest(updateGoogleDriveStatusSchema),
   updateGoogleDriveConnectionStatus,
 );
+
+// GET /api/users/me/ugc-terms & POST /api/users/me/ugc-terms - Community Guidelines Acceptance
+router.get("/me/ugc-terms", requireAuth, getUgcTermsStatus);
+router.post("/me/ugc-terms", requireAuth, ugcTermsLimiter, acceptUgcTerms);
 
 // GET /api/users - Get All Users with filtering, pagination, search, and caching (Admin Only)
 router.get(

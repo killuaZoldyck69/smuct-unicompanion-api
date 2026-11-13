@@ -26,6 +26,7 @@ export const auth = betterAuth({
       phoneNumber: { type: "string", required: false },
       bloodGroup: { type: "string", required: false },
       isRestricted: { type: "boolean", required: false, defaultValue: false, input: false },
+      ugcTermsAcceptedAt: { type: "date", required: false, input: false },
     },
   },
 

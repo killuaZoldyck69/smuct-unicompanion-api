@@ -511,3 +511,27 @@ export const updateUserProfileImageService = async (
     user: updatedUser,
   };
 };
+
+export const getUgcTermsStatusService = async (userId: string) => {
+  const user = await userRepository.findUserUgcTermsById(userId);
+  if (!user) {
+    throw new AppError("User not found.", 404);
+  }
+  return {
+    accepted: Boolean(user.ugcTermsAcceptedAt),
+    ugcTermsAcceptedAt: user.ugcTermsAcceptedAt
+      ? user.ugcTermsAcceptedAt.toISOString()
+      : null,
+  };
+};
+
+export const acceptUgcTermsService = async (userId: string) => {
+  const updated = await userRepository.acceptUserUgcTermsById(userId);
+  if (!updated || !updated.ugcTermsAcceptedAt) {
+    throw new AppError("User not found.", 404);
+  }
+  return {
+    accepted: true,
+    ugcTermsAcceptedAt: updated.ugcTermsAcceptedAt.toISOString(),
+  };
+};

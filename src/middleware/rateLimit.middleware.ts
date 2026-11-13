@@ -23,6 +23,16 @@ export const resolveClientIp = (req: Request): string =>
   req.ip || req.socket?.remoteAddress || "unknown";
 
 /**
+ * Derive a NAT-safe per-user rate limit key behind `requireAuth` (falling back to IP if unauthenticated).
+ */
+export const createUserKeyGenerator =
+  (bucket: string) =>
+  (req: Request): string =>
+    req.user?.id
+      ? `${bucket}:user:${req.user.id}`
+      : `${bucket}:ip:${resolveClientIp(req)}`;
+
+/**
  * Enforces an in-memory per-identifier rate limit (used by Better Auth hooks where
  * JSON body is parsed inside Better Auth rather than Express middleware).
  */

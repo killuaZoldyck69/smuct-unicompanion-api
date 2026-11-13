@@ -1,12 +1,21 @@
+import sanitizeHtml from "sanitize-html";
+
 /**
  * Forum Input Sanitizer & Content Validator
  *
- * Enforces XSS protection, strips dangerous tags and attributes,
- * extracts meaningful plain text, and validates readable content limits.
+ * Enforces XSS protection via sanitize-html AST parsing, extracts meaningful
+ * plain text, and validates readable content limits aligned with Mobile UI.
  */
 
-// Tags allowed in rich text descriptions
-const ALLOWED_TAGS = new Set([
+export const MIN_FORUM_TITLE_LENGTH = 5;
+export const MAX_FORUM_TITLE_LENGTH = 150;
+export const MIN_FORUM_DESCRIPTION_PLAIN_LENGTH = 10;
+export const MAX_FORUM_DESCRIPTION_PLAIN_LENGTH = 3000;
+export const MAX_FORUM_DESCRIPTION_HTML_LENGTH = 12000;
+export const MIN_FORUM_RESPONSE_LENGTH = 1;
+export const MAX_FORUM_RESPONSE_LENGTH = 2000;
+
+const ALLOWED_TAGS = [
   "p",
   "b",
   "i",
@@ -19,76 +28,87 @@ const ALLOWED_TAGS = new Set([
   "br",
   "div",
   "span",
-]);
+];
 
-// Strip all dangerous tags including their entire content
-const DANGEROUS_BLOCK_TAGS_REGEX =
-  /<(script|style|iframe|object|embed|svg|canvas|form|button|input|textarea|select|option)[^>]*>[\s\S]*?<\/\1>/gi;
+// Discard both tag and inner content for non-text/executable elements
+const NON_TEXT_TAGS = [
+  "script",
+  "style",
+  "textarea",
+  "option",
+  "noscript",
+  "iframe",
+  "object",
+  "embed",
+  "svg",
+  "canvas",
+  "form",
+  "button",
+  "input",
+  "select",
+];
 
-// Strip self-closing or unclosed dangerous tags
-const DANGEROUS_SELF_CLOSING_REGEX =
-  /<(script|style|iframe|object|embed|svg|canvas|form|button|input|textarea|select|option)[^>]*\/?>/gi;
-
-// Match inline event handlers (e.g., onload, onerror, onclick)
-const EVENT_HANDLER_REGEX = /\s+on[a-z]+\s*=\s*(["'][^"']*["']|[^\s>]+)/gi;
-
-// Match javascript: URIs in any attribute
-const JAVASCRIPT_PROTOCOL_REGEX = /(href|src)\s*=\s*(["']\s*javascript:[^"']*["']|javascript:[^\s>]+)/gi;
+const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
+  allowedTags: ALLOWED_TAGS,
+  allowedAttributes: {
+    p: ["style"],
+    div: ["style"],
+    li: ["style"],
+  },
+  allowedStyles: {
+    "*": {
+      "text-align": [/^(?:left|center|right|justify)$/i],
+    },
+  },
+  allowedSchemes: [],
+  disallowedTagsMode: "discard",
+  nonTextTags: NON_TEXT_TAGS,
+};
 
 /**
- * Extracts human-readable plain text from an HTML snippet,
- * decoding common HTML entities and collapsing whitespace.
+ * Extracts human-readable plain text from an HTML snippet, removing executable
+ * payloads safely, decoding common HTML entities, and collapsing whitespace.
  */
 export function extractPlainText(html?: string | null): string {
   if (!html) return "";
-  return html
+
+  // Insert spacing around block boundaries before stripping all HTML tags
+  const spaced = html
     .replace(/<\/(p|div|li|h[1-6])>/gi, " ")
-    .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<[^>]+>/g, "")
+    .replace(/<br\s*\/?>/gi, " ");
+
+  const stripped = sanitizeHtml(spaced, {
+    allowedTags: [],
+    allowedAttributes: {},
+    disallowedTagsMode: "discard",
+    nonTextTags: NON_TEXT_TAGS,
+  });
+
+  return stripped
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
+    .replace(/&#39;|&#x27;/gi, "'")
     .replace(/\s+([,.:;?!])/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 /**
- * Sanitizes rich text HTML by removing dangerous tags, malicious event handlers,
- * and unsafe protocols while preserving safe formatting tags.
+ * Sanitizes rich text HTML by discarding dangerous tags, attributes, event
+ * handlers, and unsafe URIs via sanitize-html's HTML parser while preserving
+ * safe formatting tags and explicit text-align styles.
  */
 export function sanitizeForumHtml(html?: string | null): string {
   if (!html) return "";
-
-  let cleaned = html
-    .replace(DANGEROUS_BLOCK_TAGS_REGEX, "")
-    .replace(DANGEROUS_SELF_CLOSING_REGEX, "")
-    .replace(EVENT_HANDLER_REGEX, "")
-    .replace(JAVASCRIPT_PROTOCOL_REGEX, "");
-
-  // Remove any tags not in the allowed list
-  cleaned = cleaned.replace(/<\/?([a-zA-Z0-9]+)(\s+[^>]*)?\/?>/g, (match, tagName) => {
-    const lower = tagName.toLowerCase();
-    if (!ALLOWED_TAGS.has(lower)) {
-      return "";
-    }
-    // For allowed tags, keep style only if it contains safe text-align / color
-    if (match.startsWith("</")) {
-      return `</${lower}>`;
-    }
-    // Filter attributes to allow only safe style (text-align)
-    const styleMatch = match.match(/style\s*=\s*["']([^"']*)["']/i);
-    if (styleMatch && /text-align\s*:\s*(left|center|right|justify)/i.test(styleMatch[1])) {
-      const align = styleMatch[1].match(/text-align\s*:\s*(left|center|right|justify)/i)?.[0];
-      return `<${lower} style="${align}">`;
-    }
-    return `<${lower}>`;
-  });
-
-  return cleaned.trim();
+  return sanitizeHtml(html, SANITIZE_OPTIONS)
+    .replace(
+      /style="text-align:\s*(left|center|right|justify)"/gi,
+      (_m, dir: string) => `style="text-align: ${dir.toLowerCase()}"`,
+    )
+    .trim();
 }
 
 /**
@@ -105,12 +125,16 @@ export function validateAndSanitizePost(input: {
 } {
   let cleanTitle: string | undefined;
   if (input.title !== undefined) {
-    cleanTitle = input.title.trim().replace(/\s+/g, " ");
-    if (cleanTitle.length < 5) {
-      return { error: "Question title must be at least 5 characters." };
+    cleanTitle = extractPlainText(input.title).replace(/\s+/g, " ").trim();
+    if (cleanTitle.length < MIN_FORUM_TITLE_LENGTH) {
+      return {
+        error: `Question title must be at least ${MIN_FORUM_TITLE_LENGTH} characters.`,
+      };
     }
-    if (cleanTitle.length > 150) {
-      return { error: "Question title cannot exceed 150 characters." };
+    if (cleanTitle.length > MAX_FORUM_TITLE_LENGTH) {
+      return {
+        error: `Question title cannot exceed ${MAX_FORUM_TITLE_LENGTH} characters.`,
+      };
     }
   }
 
@@ -120,13 +144,19 @@ export function validateAndSanitizePost(input: {
     cleanDescription = sanitizeForumHtml(input.description);
     plainText = extractPlainText(cleanDescription);
 
-    if (plainText.length < 10) {
+    if (plainText.length < MIN_FORUM_DESCRIPTION_PLAIN_LENGTH) {
       return {
-        error: "Question details must contain at least 10 characters of readable context.",
+        error: `Question details must contain at least ${MIN_FORUM_DESCRIPTION_PLAIN_LENGTH} characters of readable context.`,
       };
     }
-    if (cleanDescription.length > 3000) {
+    if (plainText.length > MAX_FORUM_DESCRIPTION_PLAIN_LENGTH) {
       return { error: "Question details cannot exceed 3,000 characters." };
+    }
+    if (cleanDescription.length > MAX_FORUM_DESCRIPTION_HTML_LENGTH) {
+      return {
+        error:
+          "Question formatting markup exceeds maximum allowed payload size.",
+      };
     }
   }
 
@@ -144,13 +174,13 @@ export function validateAndSanitizeResponse(content?: string): {
     return { error: "Response content cannot be empty." };
   }
 
-  // Comments are plain text with minimal formatting; strip all HTML tags
-  const cleanContent = extractPlainText(content);
+  const sanitized = sanitizeForumHtml(content);
+  const cleanContent = extractPlainText(sanitized);
 
-  if (cleanContent.length < 1) {
+  if (cleanContent.length < MIN_FORUM_RESPONSE_LENGTH) {
     return { error: "Response content cannot be empty." };
   }
-  if (cleanContent.length > 2000) {
+  if (cleanContent.length > MAX_FORUM_RESPONSE_LENGTH) {
     return { error: "Response content cannot exceed 2,000 characters." };
   }
 

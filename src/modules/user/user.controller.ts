@@ -187,3 +187,27 @@ export const runMaintenanceCleanup = catchAsync(
     });
   },
 );
+
+export const getUgcTermsStatus = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await userService.getUgcTermsStatusService(req.user.id);
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({
+      success: true,
+      message: "Community Guidelines status retrieved.",
+      data: result,
+    });
+  },
+);
+
+export const acceptUgcTerms = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await userService.acceptUgcTermsService(req.user.id);
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({
+      success: true,
+      message: "Community Guidelines accepted.",
+      data: result,
+    });
+  },
+);
