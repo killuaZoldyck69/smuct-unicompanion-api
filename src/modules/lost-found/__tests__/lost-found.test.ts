@@ -10,11 +10,10 @@ import {
 } from "../lost-found.schema";
 import {
   buildLostFoundUpdateData,
-  extractMatchTokens,
   isLostFoundPostVisibleToViewer,
   sanitizeLostFoundPostDetail,
 } from "../lost-found.domain";
-import { publicAuthorSelection } from "../lost-found.repository";
+import { publicAuthorSelection } from "../lost-found.projections";
 import { isAllowedAppCloudinaryImageUrl } from "../../../lib/cloudinary";
 import { envConfig } from "../../../config/env";
 import { validateImageFile, MulterFile } from "../../upload/upload.service";
@@ -409,19 +408,13 @@ async function runTests() {
     "RESOLVED post with matching resolvedClaimId exposes handover counterpart",
   );
 
-  // Test 13: UGC visibility & location tokens & HTML escaping
+  // Test 13: UGC visibility & HTML escaping
   assert(
     !isLostFoundPostVisibleToViewer(
       { id: VALID_POST_ID, authorId: "author-1", isHiddenByModeration: false },
       { userId: "viewer-1", reportedPostIds: new Set([VALID_POST_ID]) },
     ),
     "Listing reported by viewer is hidden from viewer",
-  );
-  assert(
-    extractMatchTokens("UB-111 Central Library, 2nd Floor").includes(
-      "library",
-    ),
-    "Location token extractor extracts meaningful match keywords",
   );
   assert(
     escapeHtml('<script>alert("x")</script>') ===

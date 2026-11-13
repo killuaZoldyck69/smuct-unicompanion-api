@@ -155,9 +155,6 @@ export type CreateLostFoundPayload = z.infer<
 export type UpdateLostFoundPayload = z.infer<
   typeof updateLostFoundSchema
 >["body"];
-export type UpdateLostFoundStatusPayload = z.infer<
-  typeof updateLostFoundStatusSchema
->["body"];
 export type CreateClaimPayload = z.infer<typeof createClaimSchema>["body"];
 export type CreateLostFoundReportPayload = z.infer<
   typeof createLostFoundReportSchema

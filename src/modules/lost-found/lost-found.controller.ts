@@ -9,7 +9,6 @@ import {
   deletePostService,
   getClaimsForPostService,
   getFeedService,
-  getPossibleMatchesService,
   getPostByIdService,
   rejectClaimService,
   reportLostFoundPostService,
@@ -63,22 +62,6 @@ export const getFeed = catchAsync(async (req: Request, res: Response) => {
     meta: result.meta,
   });
 });
-
-export const getPossibleMatches = catchAsync(
-  async (req: Request, res: Response) => {
-    const actor = getAuthActor(req);
-    const result = await getPossibleMatchesService(
-      getParamId(req, "id"),
-      actor.id,
-      actor.role,
-    );
-
-    res.status(200).json({
-      success: true,
-      data: result,
-    });
-  },
-);
 
 export const getPostById = catchAsync(async (req: Request, res: Response) => {
   const actor = getAuthActor(req);

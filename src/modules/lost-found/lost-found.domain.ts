@@ -221,13 +221,3 @@ function pickHandoverCounterpart(
     teacherProfile: person.teacherProfile,
   };
 }
-
-export function extractMatchTokens(input?: string | null): string[] {
-  if (!input) return [];
-  const rawTokens = input
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((token) => token.length >= 3);
-
-  return [...new Set(rawTokens)].slice(0, 4);
-}

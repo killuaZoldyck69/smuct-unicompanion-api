@@ -7,21 +7,6 @@ import {
 } from "../forum/forum.domain";
 import { CreateLostFoundReportPayload } from "./lost-found.schema";
 
-export const findExistingLostFoundReportInDb = async (
-  reporterId: string,
-  postId: string,
-) => {
-  return prisma.contentReport.findUnique({
-    where: {
-      reporterId_targetType_targetId: {
-        reporterId,
-        targetType: "LOST_FOUND_POST",
-        targetId: postId,
-      },
-    },
-  });
-};
-
 export const createLostFoundReportAndEvaluateAutoHideInDb = async (params: {
   reporterId: string;
   postId: string;

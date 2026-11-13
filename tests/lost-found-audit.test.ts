@@ -14,7 +14,6 @@ process.env.NODE_ENV ??= "test";
 
 const {
   buildLostFoundUpdateData,
-  extractMatchTokens,
   isLostFoundPostVisibleToViewer,
   sanitizeLostFoundPostDetail,
 } = await import("../src/modules/lost-found/lost-found.domain");
@@ -225,7 +224,6 @@ test("Domain correctness: Admin edits preserve verificationAnswer, reopening rev
     ),
     false,
   );
-  assert.ok(extractMatchTokens("Room 402, Library").includes("library"));
   assert.equal(escapeHtml(`<b>"hi"</b>`), "&lt;b&gt;&quot;hi&quot;&lt;/b&gt;");
 });
 

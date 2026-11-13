@@ -6,10 +6,7 @@ import {
   LostFoundStatus,
   LostFoundType,
 } from "../../constants/enums";
-import {
-  extractMatchTokens,
-  LostFoundViewerContext,
-} from "./lost-found.domain";
+import { LostFoundViewerContext } from "./lost-found.domain";
 import {
   lostFoundFeedSelect,
   privateContactSelection,
@@ -187,71 +184,6 @@ export const findLostFoundFeedInDb = async (
   };
 };
 
-export const findPossibleMatchesInDb = async (
-  postId: string,
-  category: LostFoundCategory,
-  title: string,
-  location: string | null | undefined,
-  type: LostFoundType,
-  viewer: LostFoundViewerContext,
-) => {
-  const counterpartType =
-    type === LostFoundType.LOST ? LostFoundType.FOUND : LostFoundType.LOST;
-
-  const excludedIds = [postId, ...viewer.reportedPostIds];
-
-  const candidates = await prisma.lostFoundPost.findMany({
-    where: {
-      id: { notIn: excludedIds },
-      type: counterpartType,
-      status: LostFoundStatus.ACTIVE,
-      isHiddenByModeration: false,
-      category,
-    },
-    select: {
-      id: true,
-      authorId: true,
-      type: true,
-      title: true,
-      description: true,
-      category: true,
-      location: true,
-      status: true,
-      images: true,
-      createdAt: true,
-      author: { select: publicAuthorSelection },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 16,
-  });
-
-  const locationTokens = extractMatchTokens(location);
-  const titleTokens = extractMatchTokens(title);
-
-  if (locationTokens.length === 0 && titleTokens.length === 0) {
-    return candidates.slice(0, 4);
-  }
-
-  return candidates
-    .map((candidate) => {
-      const locText = (candidate.location ?? "").toLowerCase();
-      const titleText =
-        `${candidate.title} ${candidate.description ?? ""}`.toLowerCase();
-      let score = 0;
-      for (const token of locationTokens) {
-        if (locText.includes(token)) score += 3;
-        else if (titleText.includes(token)) score += 1;
-      }
-      for (const token of titleTokens) {
-        if (titleText.includes(token)) score += 2;
-      }
-      return { candidate, score };
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 4)
-    .map((entry) => entry.candidate);
-};
-
 export const findLostFoundPostSummaryInDb = async (id: string) => {
   return prisma.lostFoundPost.findUnique({
     where: { id },
@@ -306,21 +238,6 @@ export const findClaimByPostAndClaimantInDb = async (
       claimant: { select: privateContactSelection },
     },
   });
-};
-
-export const findClaimProofImagesByPostIdInDb = async (postId: string) => {
-  const claims = await prisma.lostFoundClaim.findMany({
-    where: {
-      postId,
-      proofImage: { not: null },
-    },
-    select: { proofImage: true },
-    take: 500,
-  });
-
-  return claims
-    .map((claim) => claim.proofImage)
-    .filter((image): image is string => Boolean(image));
 };
 
 export const findClaimsByPostIdInDb = async (postId: string) => {

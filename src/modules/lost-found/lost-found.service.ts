@@ -21,7 +21,6 @@ import {
   findLostFoundFeedInDb,
   findLostFoundPostByIdInDb,
   findLostFoundPostSummaryInDb,
-  findPossibleMatchesInDb,
   getLostFoundViewerContextInDb,
   LostFoundFeedFilters,
 } from "./lost-found.queries";
@@ -117,31 +116,6 @@ export const getFeedService = async (filters: LostFoundFeedFilters) => {
     filters.viewerRole,
   );
   return findLostFoundFeedInDb(filters, viewer);
-};
-
-export const getPossibleMatchesService = async (
-  postId: string,
-  viewerId?: string,
-  viewerRole?: string,
-) => {
-  const [post, viewer] = await Promise.all([
-    findLostFoundPostSummaryInDb(postId),
-    getLostFoundViewerContextInDb(viewerId, viewerRole),
-  ]);
-  if (
-    !post ||
-    !isLostFoundPostVisibleToViewer(post, viewer, { includeOwnHidden: true })
-  ) {
-    throw new AppError("Lost & Found post not found", 404);
-  }
-  return findPossibleMatchesInDb(
-    post.id,
-    post.category,
-    post.title,
-    post.location,
-    post.type,
-    viewer,
-  );
 };
 
 export const getPostByIdService = async (

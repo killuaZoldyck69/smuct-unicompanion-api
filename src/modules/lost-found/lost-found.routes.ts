@@ -21,7 +21,6 @@ import {
   deletePost,
   getClaims,
   getFeed,
-  getPossibleMatches,
   getPostById,
   rejectClaim,
   reportPost,
@@ -79,13 +78,6 @@ router.get(
   requireAuth,
   validateRequest(lostFoundIdParamSchema),
   getPostById,
-);
-
-router.get(
-  "/:id/matches",
-  requireAuth,
-  validateRequest(lostFoundIdParamSchema),
-  getPossibleMatches,
 );
 
 router.patch(

@@ -23,9 +23,6 @@ import {
   UpdateLostFoundPayload,
 } from "./lost-found.schema";
 
-export { publicAuthorSelection, privateContactSelection };
-export type { LostFoundFeedFilters } from "./lost-found.queries";
-
 interface LockedPostRow {
   id: string;
   authorId: string;
