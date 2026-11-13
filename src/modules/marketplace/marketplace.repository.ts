@@ -50,6 +50,25 @@ export interface PaginatedResult<T> {
   counts: MarketplaceFeedCounts;
 }
 
+const postDetailInclude = {
+  author: { select: publicUserSelect },
+  _count: { select: { comments: true } },
+} satisfies Prisma.MarketplacePostInclude;
+
+function mapPrismaNotFound(
+  err: unknown,
+  message: string,
+  codes: readonly string[] = ["P2025"],
+): never {
+  if (
+    err instanceof Prisma.PrismaClientKnownRequestError &&
+    codes.includes(err.code)
+  ) {
+    throw new AppError(message, 404);
+  }
+  throw err;
+}
+
 function buildFeedItemSelect(isAdmin: boolean) {
   return {
     id: true,
@@ -280,10 +299,7 @@ export const createMarketplacePostInDb = async (
           contactPhone: payload.contactPhone ?? null,
           idempotencyKey,
         },
-        include: {
-          author: { select: publicUserSelect },
-          _count: { select: { comments: true } },
-        },
+        include: postDetailInclude,
       });
     });
   } catch (err) {
@@ -296,10 +312,7 @@ export const createMarketplacePostInDb = async (
         where: {
           authorId_idempotencyKey: { authorId, idempotencyKey },
         },
-        include: {
-          author: { select: publicUserSelect },
-          _count: { select: { comments: true } },
-        },
+        include: postDetailInclude,
       });
       if (existing) {
         return existing;
@@ -361,7 +374,7 @@ export const updateMarketplacePostAtomicInDb = async (
       ...(normalized.price !== undefined && { price: normalized.price }),
       ...(data.category !== undefined && { category: data.category }),
       ...(normalized.condition !== undefined && {
-        condition: normalized.condition as any,
+        condition: normalized.condition,
       }),
       ...(data.images !== undefined && { images: data.images }),
       ...(data.contactPhone !== undefined && {
@@ -372,10 +385,7 @@ export const updateMarketplacePostAtomicInDb = async (
     const updated = await tx.marketplacePost.update({
       where: { id },
       data: updateData,
-      include: {
-        author: { select: publicUserSelect },
-        _count: { select: { comments: true } },
-      },
+      include: postDetailInclude,
     });
 
     return { updated, removedImages };
@@ -391,7 +401,7 @@ export const updateMarketplaceStatusAtomicInDb = async (
   return prisma.$transaction(async (tx) => {
     const existing = await tx.marketplacePost.findUnique({
       where: { id },
-      select: { id: true, authorId: true, status: true },
+      include: postDetailInclude,
     });
 
     if (!existing) {
@@ -405,22 +415,13 @@ export const updateMarketplaceStatusAtomicInDb = async (
     );
 
     if (existing.status === status) {
-      return tx.marketplacePost.findUnique({
-        where: { id },
-        include: {
-          author: { select: publicUserSelect },
-          _count: { select: { comments: true } },
-        },
-      });
+      return existing;
     }
 
     return tx.marketplacePost.update({
       where: { id },
       data: { status },
-      include: {
-        author: { select: publicUserSelect },
-        _count: { select: { comments: true } },
-      },
+      include: postDetailInclude,
     });
   });
 };
@@ -452,13 +453,7 @@ export const deleteMarketplacePostAtomicInDb = async (
       return { images: existing.images };
     });
   } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2025"
-    ) {
-      throw new AppError("Marketplace listing not found", 404);
-    }
-    throw err;
+    mapPrismaNotFound(err, "Marketplace listing not found");
   }
 };
 
@@ -547,13 +542,7 @@ export const createMarketplaceCommentAtomicInDb = async (params: {
       };
     });
   } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      (err.code === "P2003" || err.code === "P2025")
-    ) {
-      throw new AppError("Marketplace listing not found", 404);
-    }
-    throw err;
+    mapPrismaNotFound(err, "Marketplace listing not found", ["P2003", "P2025"]);
   }
 };
 
@@ -607,13 +596,7 @@ export const updateMarketplaceCommentAtomicInDb = async (
       });
     });
   } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2025"
-    ) {
-      throw new AppError("Comment not found", 404);
-    }
-    throw err;
+    mapPrismaNotFound(err, "Comment not found");
   }
 };
 
@@ -621,12 +604,6 @@ export const deleteMarketplaceCommentFromDb = async (commentId: string) => {
   try {
     return await prisma.marketplaceComment.delete({ where: { id: commentId } });
   } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2025"
-    ) {
-      throw new AppError("Comment not found", 404);
-    }
-    throw err;
+    mapPrismaNotFound(err, "Comment not found");
   }
 };

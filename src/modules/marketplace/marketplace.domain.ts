@@ -1,4 +1,4 @@
-import { ListingStatus, ListingType } from "../../constants/enums";
+import { ItemCondition, ListingStatus, ListingType } from "../../constants/enums";
 import { AppError } from "../../utils/AppError";
 import { extractPlainText, sanitizeForumHtml } from "../forum/forum.sanitizer";
 
@@ -108,22 +108,16 @@ export function validateAndSanitizeMarketplaceComment(content?: string): {
 
 export function normalizeMarketplaceConditionAndPrice(params: {
   effectiveType: ListingType;
-  condition?: string | null;
+  condition?: ItemCondition | null;
   price?: number | null;
-}) {
-  const normalizedCondition =
-    params.effectiveType === ListingType.BUYING
-      ? null
-      : params.condition !== undefined
-        ? params.condition
-        : undefined;
-
-  const normalizedPrice =
-    params.price === null ? 0 : params.price !== undefined ? params.price : undefined;
-
+}): {
+  condition?: ItemCondition | null;
+  price?: number;
+} {
   return {
-    condition: normalizedCondition,
-    price: normalizedPrice,
+    condition:
+      params.effectiveType === ListingType.BUYING ? null : params.condition,
+    price: params.price === null ? 0 : params.price,
   };
 }
 

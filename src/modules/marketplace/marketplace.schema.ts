@@ -96,9 +96,13 @@ export const getMarketplaceFeedQuerySchema = z.object({
     status: emptyToUndefined(z.enum(LISTING_STATUS_VALUES).optional()),
     category: emptyToUndefined(z.enum(MARKETPLACE_CATEGORY_VALUES).optional()),
     search: emptyToUndefined(z.string().trim().max(100).optional()),
-    myPosts: emptyToUndefined(z.enum(["true", "false"]).optional()),
+    myPosts: emptyToUndefined(z.enum(["true", "false"]).optional()).transform(
+      (val) => val === "true",
+    ),
     cursor: emptyToUndefined(z.string().uuid("Invalid cursor ID").optional()),
-    limit: emptyToUndefined(z.coerce.number().int().min(1).max(50).optional()),
+    limit: emptyToUndefined(
+      z.coerce.number().int().min(1).max(50).optional(),
+    ).transform((val) => val ?? 20),
   }),
 });
 

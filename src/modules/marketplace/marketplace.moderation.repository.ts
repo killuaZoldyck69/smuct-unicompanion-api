@@ -8,90 +8,107 @@ import {
 import { extractPlainText } from "../forum/forum.sanitizer";
 import { CreateMarketplaceReportPayload } from "./marketplace.schema";
 
+type ModerationTargetType = CreateMarketplaceReportPayload["targetType"];
+
+interface LoadedModerationTarget {
+  authorId: string;
+  updatedAt: Date;
+  snapshot: Prisma.InputJsonObject;
+}
+
+async function loadModerationTargetInDb(
+  tx: Prisma.TransactionClient,
+  targetType: ModerationTargetType,
+  targetId: string,
+  reporterId: string,
+): Promise<LoadedModerationTarget> {
+  if (targetType === "MARKETPLACE_POST") {
+    const post = await tx.marketplacePost.findUnique({
+      where: { id: targetId },
+      select: {
+        id: true,
+        authorId: true,
+        type: true,
+        category: true,
+        title: true,
+        description: true,
+        isHiddenByModeration: true,
+        updatedAt: true,
+      },
+    });
+    if (!post || post.isHiddenByModeration) {
+      throw new AppError("Marketplace listing not found", 404);
+    }
+    if (post.authorId === reporterId) {
+      throw new AppError("You cannot report your own listing.", 400);
+    }
+    return {
+      authorId: post.authorId,
+      updatedAt: post.updatedAt,
+      snapshot: {
+        postId: post.id,
+        type: post.type,
+        category: post.category,
+        title: post.title,
+        contentPreview: extractPlainText(post.description).slice(0, 400),
+      },
+    };
+  }
+
+  const comment = await tx.marketplaceComment.findUnique({
+    where: { id: targetId },
+    select: {
+      id: true,
+      postId: true,
+      authorId: true,
+      content: true,
+      isHiddenByModeration: true,
+      updatedAt: true,
+      post: {
+        select: { id: true, title: true, isHiddenByModeration: true },
+      },
+    },
+  });
+  if (
+    !comment ||
+    comment.isHiddenByModeration ||
+    comment.post.isHiddenByModeration
+  ) {
+    throw new AppError("Marketplace comment not found", 404);
+  }
+  if (comment.authorId === reporterId) {
+    throw new AppError("You cannot report your own comment.", 400);
+  }
+  return {
+    authorId: comment.authorId,
+    updatedAt: comment.updatedAt,
+    snapshot: {
+      postId: comment.postId,
+      commentId: comment.id,
+      title: comment.post.title,
+      contentPreview: extractPlainText(comment.content).slice(0, 400),
+    },
+  };
+}
+
 export const createMarketplaceReportAndEvaluateAutoHideInDb = async (params: {
   reporterId: string;
-  targetType: CreateMarketplaceReportPayload["targetType"];
+  targetType: ModerationTargetType;
   targetId: string;
   reason: CreateMarketplaceReportPayload["reason"];
   details?: string;
 }) => {
+  const targetLabel =
+    params.targetType === "MARKETPLACE_POST" ? "listing" : "comment";
+
   try {
     return await prisma.$transaction(async (tx) => {
-      let targetAuthorId: string;
-      let targetUpdatedAt: Date;
-      let targetSnapshot: Prisma.InputJsonObject;
-
-      if (params.targetType === "MARKETPLACE_POST") {
-        const post = await tx.marketplacePost.findUnique({
-          where: { id: params.targetId },
-          select: {
-            id: true,
-            authorId: true,
-            type: true,
-            category: true,
-            title: true,
-            description: true,
-            isHiddenByModeration: true,
-            updatedAt: true,
-          },
-        });
-
-        if (!post || post.isHiddenByModeration) {
-          throw new AppError("Marketplace listing not found", 404);
-        }
-        if (post.authorId === params.reporterId) {
-          throw new AppError("You cannot report your own listing.", 400);
-        }
-
-        targetAuthorId = post.authorId;
-        targetUpdatedAt = post.updatedAt;
-        targetSnapshot = {
-          postId: post.id,
-          type: post.type,
-          category: post.category,
-          title: post.title,
-          contentPreview: extractPlainText(post.description).slice(0, 400),
-        };
-      } else {
-        const comment = await tx.marketplaceComment.findUnique({
-          where: { id: params.targetId },
-          select: {
-            id: true,
-            postId: true,
-            authorId: true,
-            content: true,
-            isHiddenByModeration: true,
-            updatedAt: true,
-            post: {
-              select: {
-                id: true,
-                title: true,
-                isHiddenByModeration: true,
-              },
-            },
-          },
-        });
-
-        if (
-          !comment ||
-          comment.isHiddenByModeration ||
-          comment.post.isHiddenByModeration
-        ) {
-          throw new AppError("Marketplace comment not found", 404);
-        }
-        if (comment.authorId === params.reporterId) {
-          throw new AppError("You cannot report your own comment.", 400);
-        }
-
-        targetAuthorId = comment.authorId;
-        targetUpdatedAt = comment.updatedAt;
-        targetSnapshot = {
-          postId: comment.postId,
-          commentId: comment.id,
-          title: comment.post.title,
-          contentPreview: extractPlainText(comment.content).slice(0, 400),
-        };
-      }
+      const target = await loadModerationTargetInDb(
+        tx,
+        params.targetType,
+        params.targetId,
+        params.reporterId,
+      );
 
       const existing = await tx.contentReport.findUnique({
         where: {
@@ -112,19 +129,12 @@ export const createMarketplaceReportAndEvaluateAutoHideInDb = async (params: {
       let reopenReportId: string | undefined;
       if (existing) {
         if (existing.status !== "DISMISSED") {
-          throw new AppError(
-            params.targetType === "MARKETPLACE_POST"
-              ? "You have already reported this listing."
-              : "You have already reported this comment.",
-            409,
-          );
+          throw new AppError(`You have already reported this ${targetLabel}.`, 409);
         }
         const reviewedBoundary = existing.reviewedAt ?? existing.createdAt;
-        if (targetUpdatedAt <= reviewedBoundary) {
+        if (target.updatedAt <= reviewedBoundary) {
           throw new AppError(
-            params.targetType === "MARKETPLACE_POST"
-              ? "A moderator has already reviewed this listing."
-              : "A moderator has already reviewed this comment.",
+            `A moderator has already reviewed this ${targetLabel}.`,
             409,
           );
         }
@@ -137,7 +147,7 @@ export const createMarketplaceReportAndEvaluateAutoHideInDb = async (params: {
             data: {
               reason: params.reason,
               details: params.details ?? null,
-              targetSnapshot,
+              targetSnapshot: target.snapshot,
               status: "PENDING",
               reviewedById: null,
               reviewedAt: null,
@@ -150,10 +160,10 @@ export const createMarketplaceReportAndEvaluateAutoHideInDb = async (params: {
               reporterId: params.reporterId,
               targetType: params.targetType,
               targetId: params.targetId,
-              targetAuthorId,
+              targetAuthorId: target.authorId,
               reason: params.reason,
               details: params.details ?? null,
-              targetSnapshot,
+              targetSnapshot: target.snapshot,
             },
           });
 
@@ -195,12 +205,7 @@ export const createMarketplaceReportAndEvaluateAutoHideInDb = async (params: {
       err instanceof Prisma.PrismaClientKnownRequestError &&
       err.code === "P2002"
     ) {
-      throw new AppError(
-        params.targetType === "MARKETPLACE_POST"
-          ? "You have already reported this listing."
-          : "You have already reported this comment.",
-        409,
-      );
+      throw new AppError(`You have already reported this ${targetLabel}.`, 409);
     }
     throw err;
   }

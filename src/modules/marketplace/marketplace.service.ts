@@ -114,7 +114,7 @@ export const createPostService = async (
     ...payload,
     title: sanitized.cleanTitle!,
     description: sanitized.cleanDescription!,
-    condition: (normalized.condition as CreateMarketplacePayload["condition"]) ?? null,
+    condition: normalized.condition ?? null,
     price: normalized.price ?? 0,
   });
 };
@@ -184,9 +184,6 @@ export const deletePostService = async (
   }
 };
 
-// ---------------------------------------------------------------------------
-// Comments
-// ---------------------------------------------------------------------------
 export const createCommentService = async (
   postId: string,
   userId: string,
@@ -270,9 +267,6 @@ export const deleteCommentService = async (
   return deleteMarketplaceCommentFromDb(commentId);
 };
 
-// ---------------------------------------------------------------------------
-// UGC Moderation Reports
-// ---------------------------------------------------------------------------
 export const createMarketplaceReportService = async (
   reporterId: string,
   payload: CreateMarketplaceReportPayload,
