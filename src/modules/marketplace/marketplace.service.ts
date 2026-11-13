@@ -4,28 +4,25 @@ import { createNotifications } from "../notification/notification.service";
 import { findUserUgcTermsStatus } from "../forum/forum.repository";
 import {
   assertOwnership,
-  canCommentOnMarketplacePost,
   isMarketplaceItemVisibleToViewer,
   normalizeMarketplaceConditionAndPrice,
-  resolveTopLevelParentCommentId,
   validateAndSanitizeMarketplaceComment,
   validateAndSanitizeMarketplaceInput,
 } from "./marketplace.domain";
 import { deleteUnreferencedMarketplaceImages } from "./marketplace.media";
 import { createMarketplaceReportAndEvaluateAutoHideInDb } from "./marketplace.moderation.repository";
 import {
-  createMarketplaceCommentInDb,
+  createMarketplaceCommentAtomicInDb,
   createMarketplacePostInDb,
   deleteMarketplaceCommentFromDb,
   deleteMarketplacePostAtomicInDb,
   findMarketplaceCommentByIdInDb,
   findMarketplaceFeedInDb,
   findMarketplacePostByIdInDb,
-  findMarketplacePostSummaryInDb,
   getMarketplaceViewerContextInDb,
   MarketplaceFeedFilters,
   PaginationParams,
-  updateMarketplaceCommentInDb,
+  updateMarketplaceCommentAtomicInDb,
   updateMarketplacePostAtomicInDb,
   updateMarketplaceStatusAtomicInDb,
 } from "./marketplace.repository";
@@ -203,50 +200,17 @@ export const createCommentService = async (
     throw new AppError(sanitized.error ?? "Comment content cannot be empty.", 400);
   }
 
-  const [post, viewer] = await Promise.all([
-    findMarketplacePostSummaryInDb(postId),
-    getMarketplaceViewerContextInDb(userId, userRole),
-  ]);
+  const viewer = await getMarketplaceViewerContextInDb(userId, userRole);
+  const { comment, postAuthorId, postTitle, parentAuthorId } =
+    await createMarketplaceCommentAtomicInDb({
+      postId,
+      authorId: userId,
+      content: sanitized.cleanContent,
+      parentId: payload.parentId ?? null,
+      viewer,
+    });
 
-  if (
-    !post ||
-    !isMarketplaceItemVisibleToViewer(post, "MARKETPLACE_POST", viewer, {
-      includeOwnHidden: false,
-    })
-  ) {
-    throw new AppError("Marketplace listing not found", 404);
-  }
-
-  if (!canCommentOnMarketplacePost(post.status)) {
-    throw new AppError(
-      "Comments are closed for sold or closed listings.",
-      400,
-    );
-  }
-
-  let resolvedParentId: string | null = null;
-  let parentAuthorId: string | null = null;
-  if (payload.parentId) {
-    const parent = await findMarketplaceCommentByIdInDb(payload.parentId);
-    if (
-      !parent ||
-      parent.postId !== postId ||
-      !isMarketplaceItemVisibleToViewer(parent, "MARKETPLACE_COMMENT", viewer)
-    ) {
-      throw new AppError("Parent comment not found on this listing", 404);
-    }
-    resolvedParentId = resolveTopLevelParentCommentId(parent);
-    parentAuthorId = parent.authorId;
-  }
-
-  const comment = await createMarketplaceCommentInDb(
-    postId,
-    userId,
-    sanitized.cleanContent,
-    resolvedParentId,
-  );
-
-  const recipients = new Set<string>([post.authorId]);
+  const recipients = new Set<string>([postAuthorId]);
   if (parentAuthorId) recipients.add(parentAuthorId);
   recipients.delete(userId);
 
@@ -254,7 +218,7 @@ export const createCommentService = async (
     void createNotifications([...recipients], {
       type: "MARKETPLACE_COMMENT",
       title: "New buy & sell comment",
-      body: `Someone commented on “${post.title}”.`,
+      body: `Someone commented on “${postTitle}”.`,
       route: `/campus-hub/marketplace/${postId}`,
       dedupeKey: `marketplace-comment:${comment.id}`,
     }).catch((err) => {
@@ -278,14 +242,12 @@ export const updateCommentService = async (
     throw new AppError(sanitized.error ?? "Comment content cannot be empty.", 400);
   }
 
-  const comment = await findMarketplaceCommentByIdInDb(commentId);
-  if (!comment || comment.postId !== postId || comment.isHiddenByModeration) {
-    throw new AppError("Comment not found", 404);
-  }
-
-  assertOwnership(comment.authorId === userId, false, "edit this comment");
-
-  return updateMarketplaceCommentInDb(commentId, sanitized.cleanContent);
+  return updateMarketplaceCommentAtomicInDb(
+    postId,
+    commentId,
+    userId,
+    sanitized.cleanContent,
+  );
 };
 
 export const deleteCommentService = async (

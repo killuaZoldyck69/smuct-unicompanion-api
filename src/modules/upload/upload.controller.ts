@@ -149,9 +149,9 @@ export const deleteUploadedFile = catchAsync(
       }
 
       const viewerId = user?.id ?? "";
-      const isHttpsUrl =
-        url.startsWith("https://") || url.startsWith("http://");
-      const likePattern = `%${publicId.replace(/[\\%_]/g, "\\$&")}%`;
+      const escapedPublicId = publicId.replace(/[\\%_]/g, "\\$&");
+      const likePattern = `%/${escapedPublicId}%`;
+      const rawLikePattern = `%${escapedPublicId}%`;
 
       const [
         otherLfPost,
@@ -168,9 +168,7 @@ export const deleteUploadedFile = catchAsync(
         prisma.lostFoundClaim.findFirst({
           where: {
             claimantId: { not: viewerId },
-            ...(isHttpsUrl
-              ? { proofImage: url }
-              : { proofImage: { contains: publicId } }),
+            proofImage: { contains: publicId },
           },
           select: { id: true },
         }),
@@ -188,74 +186,48 @@ export const deleteUploadedFile = catchAsync(
           },
           select: { id: true },
         }),
-        isHttpsUrl
-          ? prisma.$queryRaw<Array<{ owned_by_other: boolean }>>`
-              SELECT (
-                EXISTS (
-                  SELECT 1 FROM "lost_found_post"
-                  WHERE "authorId" <> ${viewerId}
-                    AND "images" @> ARRAY[${url}]::text[]
-                )
-                OR EXISTS (
-                  SELECT 1 FROM "marketplace_post"
-                  WHERE "authorId" <> ${viewerId}
-                    AND "images" @> ARRAY[${url}]::text[]
-                )
-              ) AS owned_by_other
-            `
-          : prisma.$queryRaw<Array<{ owned_by_other: boolean }>>`
-              SELECT (
-                EXISTS (
-                  SELECT 1 FROM "lost_found_post"
-                  WHERE "authorId" <> ${viewerId}
-                    AND array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
-                )
-                OR EXISTS (
-                  SELECT 1 FROM "marketplace_post"
-                  WHERE "authorId" <> ${viewerId}
-                    AND array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
-                )
-              ) AS owned_by_other
-            `,
-        isHttpsUrl
-          ? prisma.$queryRaw<Array<{ actively_referenced: boolean }>>`
-              SELECT (
-                EXISTS (
-                  SELECT 1 FROM "lost_found_post"
-                  WHERE "authorId" = ${viewerId}
-                    AND "images" @> ARRAY[${url}]::text[]
-                )
-                OR EXISTS (
-                  SELECT 1 FROM "lost_found_claim"
-                  WHERE "claimantId" = ${viewerId}
-                    AND "proofImage" = ${url}
-                )
-                OR EXISTS (
-                  SELECT 1 FROM "marketplace_post"
-                  WHERE "authorId" = ${viewerId}
-                    AND "images" @> ARRAY[${url}]::text[]
-                )
-              ) AS actively_referenced
-            `
-          : prisma.$queryRaw<Array<{ actively_referenced: boolean }>>`
-              SELECT (
-                EXISTS (
-                  SELECT 1 FROM "lost_found_post"
-                  WHERE "authorId" = ${viewerId}
-                    AND array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
-                )
-                OR EXISTS (
-                  SELECT 1 FROM "lost_found_claim"
-                  WHERE "claimantId" = ${viewerId}
-                    AND "proofImage" LIKE ${likePattern} ESCAPE '\\'
-                )
-                OR EXISTS (
-                  SELECT 1 FROM "marketplace_post"
-                  WHERE "authorId" = ${viewerId}
-                    AND array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
-                )
-              ) AS actively_referenced
-            `,
+        // Always enforce both exact URL and publicId pattern matching so variant HTTPS delivery URLs cannot bypass ownership checks
+        prisma.$queryRaw<Array<{ owned_by_other: boolean }>>`
+          SELECT (
+            EXISTS (
+              SELECT 1 FROM "lost_found_post"
+              WHERE "authorId" <> ${viewerId}
+                AND ("images" @> ARRAY[${url}]::text[]
+                  OR array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
+                  OR array_to_string("images", ' ') LIKE ${rawLikePattern} ESCAPE '\\')
+            )
+            OR EXISTS (
+              SELECT 1 FROM "marketplace_post"
+              WHERE "authorId" <> ${viewerId}
+                AND ("images" @> ARRAY[${url}]::text[]
+                  OR array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
+                  OR array_to_string("images", ' ') LIKE ${rawLikePattern} ESCAPE '\\')
+            )
+          ) AS owned_by_other
+        `,
+        prisma.$queryRaw<Array<{ actively_referenced: boolean }>>`
+          SELECT (
+            EXISTS (
+              SELECT 1 FROM "lost_found_post"
+              WHERE "authorId" = ${viewerId}
+                AND ("images" @> ARRAY[${url}]::text[]
+                  OR array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
+                  OR array_to_string("images", ' ') LIKE ${rawLikePattern} ESCAPE '\\')
+            )
+            OR EXISTS (
+              SELECT 1 FROM "lost_found_claim"
+              WHERE "claimantId" = ${viewerId}
+                AND ("proofImage" = ${url} OR "proofImage" LIKE ${rawLikePattern} ESCAPE '\\')
+            )
+            OR EXISTS (
+              SELECT 1 FROM "marketplace_post"
+              WHERE "authorId" = ${viewerId}
+                AND ("images" @> ARRAY[${url}]::text[]
+                  OR array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
+                  OR array_to_string("images", ' ') LIKE ${rawLikePattern} ESCAPE '\\')
+            )
+          ) AS actively_referenced
+        `,
       ]);
 
       if (

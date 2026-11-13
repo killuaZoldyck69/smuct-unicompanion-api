@@ -5,7 +5,11 @@ import {
   LISTING_TYPE_VALUES,
   MARKETPLACE_CATEGORY_VALUES,
 } from "../../constants/enums";
-import { isAllowedAppCloudinaryImageUrl } from "../../lib/cloudinary";
+import {
+  buildOptimizedUrl,
+  extractPublicIdFromUrl,
+  isAllowedAppCloudinaryImageUrl,
+} from "../../lib/cloudinary";
 import {
   MARKETPLACE_CLOUDINARY_PREFIX,
   MAX_MARKETPLACE_COMMENT_LENGTH,
@@ -46,7 +50,17 @@ const verifiedMarketplaceImageUrl = z
       message:
         "Image URL must be a verified SMUCT UniCompanion Cloudinary Marketplace asset.",
     },
-  );
+  )
+  .transform((url) => {
+    const publicId = extractPublicIdFromUrl(url);
+    if (!publicId) return url;
+    try {
+      const cloudFromUrl = new URL(url).pathname.split("/").filter(Boolean)[0];
+      return buildOptimizedUrl(publicId, cloudFromUrl);
+    } catch {
+      return url;
+    }
+  });
 
 const postIdParams = z.object({
   id: z.string().uuid("Invalid Marketplace listing ID"),
@@ -123,6 +137,7 @@ export const createMarketplaceSchema = z.object({
       .optional()
       .default([]),
     contactPhone: phoneField,
+    idempotencyKey: z.string().trim().min(8).max(128).optional(),
   }),
 });
 

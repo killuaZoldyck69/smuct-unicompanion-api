@@ -52,6 +52,7 @@ model MarketplacePost {
   status               ListingStatus       @default(ACTIVE)
   images               String[]            @default([])
   contactPhone         String?
+  idempotencyKey       String?
   isHiddenByModeration Boolean             @default(false)
   hiddenAt             DateTime?
   createdAt            DateTime            @default(now())
@@ -60,6 +61,7 @@ model MarketplacePost {
   author   User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
   comments MarketplaceComment[]
 
+  @@unique([authorId, idempotencyKey])
   @@index([authorId])
   @@index([authorId, createdAt(sort: Desc)])
   @@index([status, type])

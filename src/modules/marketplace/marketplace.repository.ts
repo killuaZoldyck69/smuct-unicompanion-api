@@ -6,11 +6,14 @@ import {
   MarketplaceCategory,
 } from "../../constants/enums";
 import { AppError } from "../../utils/AppError";
-import { publicUserSelect } from "../forum/forum.domain";
+import { feedAuthorSelect, publicUserSelect } from "../forum/forum.domain";
 import {
   assertOwnership,
+  canCommentOnMarketplacePost,
+  isMarketplaceItemVisibleToViewer,
   MarketplaceViewerContext,
   normalizeMarketplaceConditionAndPrice,
+  resolveTopLevelParentCommentId,
 } from "./marketplace.domain";
 import { assertNoForeignMarketplaceMediaReferencesInTx } from "./marketplace.media";
 import {
@@ -47,15 +50,28 @@ export interface PaginatedResult<T> {
   counts: MarketplaceFeedCounts;
 }
 
-function buildFeedItemInclude(isAdmin: boolean) {
+function buildFeedItemSelect(isAdmin: boolean) {
   return {
-    author: { select: publicUserSelect },
+    id: true,
+    type: true,
+    title: true,
+    description: true,
+    price: true,
+    category: true,
+    condition: true,
+    status: true,
+    images: true,
+    authorId: true,
+    isHiddenByModeration: true,
+    createdAt: true,
+    updatedAt: true,
+    author: { select: feedAuthorSelect },
     _count: {
       select: {
         comments: isAdmin ? true : { where: { isHiddenByModeration: false } },
       },
     },
-  } satisfies Prisma.MarketplacePostInclude;
+  } satisfies Prisma.MarketplacePostSelect;
 }
 
 export const getMarketplaceViewerContextInDb = async (
@@ -157,7 +173,7 @@ export const findMarketplaceFeedInDb = async (
         cursor: { id: cursor },
         skip: 1,
       }),
-      include: buildFeedItemInclude(isAdmin),
+      select: buildFeedItemSelect(isAdmin),
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     }),
     cursor ? Promise.resolve(0) : prisma.marketplacePost.count({ where }),
@@ -234,19 +250,6 @@ export const findMarketplacePostByIdInDb = async (
   });
 };
 
-export const findMarketplacePostSummaryInDb = async (id: string) => {
-  return prisma.marketplacePost.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      authorId: true,
-      title: true,
-      status: true,
-      isHiddenByModeration: true,
-    },
-  });
-};
-
 // ---------------------------------------------------------------------------
 // Create / Update / Status / Delete posts (atomic + IDOR guarded)
 // ---------------------------------------------------------------------------
@@ -254,31 +257,56 @@ export const createMarketplacePostInDb = async (
   authorId: string,
   payload: CreateMarketplacePayload,
 ) => {
-  return prisma.$transaction(async (tx) => {
-    await assertNoForeignMarketplaceMediaReferencesInTx(
-      tx,
-      [authorId],
-      payload.images,
-    );
+  const idempotencyKey = payload.idempotencyKey?.trim() || null;
 
-    return tx.marketplacePost.create({
-      data: {
-        authorId,
-        type: payload.type,
-        title: payload.title,
-        description: payload.description,
-        price: payload.price ?? 0,
-        category: payload.category,
-        condition: payload.condition ?? null,
-        images: payload.images ?? [],
-        contactPhone: payload.contactPhone ?? null,
-      },
-      include: {
-        author: { select: publicUserSelect },
-        _count: { select: { comments: true } },
-      },
+  try {
+    return await prisma.$transaction(async (tx) => {
+      await assertNoForeignMarketplaceMediaReferencesInTx(
+        tx,
+        [authorId],
+        payload.images,
+      );
+
+      return tx.marketplacePost.create({
+        data: {
+          authorId,
+          type: payload.type,
+          title: payload.title,
+          description: payload.description,
+          price: payload.price ?? 0,
+          category: payload.category,
+          condition: payload.condition ?? null,
+          images: payload.images ?? [],
+          contactPhone: payload.contactPhone ?? null,
+          idempotencyKey,
+        },
+        include: {
+          author: { select: publicUserSelect },
+          _count: { select: { comments: true } },
+        },
+      });
     });
-  });
+  } catch (err) {
+    if (
+      idempotencyKey &&
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2002"
+    ) {
+      const existing = await prisma.marketplacePost.findUnique({
+        where: {
+          authorId_idempotencyKey: { authorId, idempotencyKey },
+        },
+        include: {
+          author: { select: publicUserSelect },
+          _count: { select: { comments: true } },
+        },
+      });
+      if (existing) {
+        return existing;
+      }
+    }
+    throw err;
+  }
 };
 
 export const updateMarketplacePostAtomicInDb = async (
@@ -435,23 +463,98 @@ export const deleteMarketplacePostAtomicInDb = async (
 };
 
 // ---------------------------------------------------------------------------
-// Comments
+// Comments (atomic visibility + status guards)
 // ---------------------------------------------------------------------------
-export const createMarketplaceCommentInDb = async (
-  postId: string,
-  authorId: string,
-  content: string,
-  parentId: string | null,
-) => {
-  return prisma.marketplaceComment.create({
-    data: {
-      postId,
-      authorId,
-      content,
-      parentId,
-    },
-    include: { author: { select: publicUserSelect } },
-  });
+export const createMarketplaceCommentAtomicInDb = async (params: {
+  postId: string;
+  authorId: string;
+  content: string;
+  parentId?: string | null;
+  viewer: MarketplaceViewerContext;
+}) => {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const post = await tx.marketplacePost.findUnique({
+        where: { id: params.postId },
+        select: {
+          id: true,
+          authorId: true,
+          title: true,
+          status: true,
+          isHiddenByModeration: true,
+        },
+      });
+
+      if (
+        !post ||
+        !isMarketplaceItemVisibleToViewer(post, "MARKETPLACE_POST", params.viewer, {
+          includeOwnHidden: false,
+        })
+      ) {
+        throw new AppError("Marketplace listing not found", 404);
+      }
+
+      if (!canCommentOnMarketplacePost(post.status)) {
+        throw new AppError(
+          "Comments are closed for sold or closed listings.",
+          400,
+        );
+      }
+
+      let resolvedParentId: string | null = null;
+      let parentAuthorId: string | null = null;
+      if (params.parentId) {
+        const parent = await tx.marketplaceComment.findUnique({
+          where: { id: params.parentId },
+          select: {
+            id: true,
+            authorId: true,
+            postId: true,
+            parentId: true,
+            isHiddenByModeration: true,
+          },
+        });
+        if (
+          !parent ||
+          parent.postId !== params.postId ||
+          !isMarketplaceItemVisibleToViewer(
+            parent,
+            "MARKETPLACE_COMMENT",
+            params.viewer,
+          )
+        ) {
+          throw new AppError("Parent comment not found on this listing", 404);
+        }
+        resolvedParentId = resolveTopLevelParentCommentId(parent);
+        parentAuthorId = parent.authorId;
+      }
+
+      const comment = await tx.marketplaceComment.create({
+        data: {
+          postId: params.postId,
+          authorId: params.authorId,
+          content: params.content,
+          parentId: resolvedParentId,
+        },
+        include: { author: { select: publicUserSelect } },
+      });
+
+      return {
+        comment,
+        postAuthorId: post.authorId,
+        postTitle: post.title,
+        parentAuthorId,
+      };
+    });
+  } catch (err) {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      (err.code === "P2003" || err.code === "P2025")
+    ) {
+      throw new AppError("Marketplace listing not found", 404);
+    }
+    throw err;
+  }
 };
 
 export const findMarketplaceCommentByIdInDb = async (commentId: string) => {
@@ -467,15 +570,41 @@ export const findMarketplaceCommentByIdInDb = async (commentId: string) => {
   });
 };
 
-export const updateMarketplaceCommentInDb = async (
+export const updateMarketplaceCommentAtomicInDb = async (
+  postId: string,
   commentId: string,
+  userId: string,
   content: string,
 ) => {
   try {
-    return await prisma.marketplaceComment.update({
-      where: { id: commentId },
-      data: { content },
-      include: { author: { select: publicUserSelect } },
+    return await prisma.$transaction(async (tx) => {
+      const comment = await tx.marketplaceComment.findUnique({
+        where: { id: commentId },
+        select: {
+          id: true,
+          authorId: true,
+          postId: true,
+          isHiddenByModeration: true,
+          post: { select: { isHiddenByModeration: true } },
+        },
+      });
+
+      if (
+        !comment ||
+        comment.postId !== postId ||
+        comment.isHiddenByModeration ||
+        comment.post.isHiddenByModeration
+      ) {
+        throw new AppError("Comment not found", 404);
+      }
+
+      assertOwnership(comment.authorId === userId, false, "edit this comment");
+
+      return tx.marketplaceComment.update({
+        where: { id: commentId },
+        data: { content },
+        include: { author: { select: publicUserSelect } },
+      });
     });
   } catch (err) {
     if (

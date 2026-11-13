@@ -351,11 +351,29 @@ test("API-5, PII & Media Regression Guards: no all-user broadcast, non-PII autho
     path.join(apiRoot, "src/modules/upload/upload.controller.ts"),
     "utf8",
   );
-  // Both owned_by_other and actively_referenced blocks check marketplace_post
+  // Both owned_by_other and actively_referenced blocks check marketplace_post unconditionally
   assert.equal(
-    uploadCtrlSrc.split('"marketplace_post"').length - 1 >= 4,
+    uploadCtrlSrc.split('"marketplace_post"').length - 1 >= 2,
     true,
   );
+  assert.equal(uploadCtrlSrc.includes("isHttpsUrl"), false);
+  assert.equal(uploadCtrlSrc.includes('array_to_string("images"'), true);
+
+  // Feed projection strips contactPhone/hiddenAt and uses compact feedAuthorSelect;
+  // comment writes run inside atomic transactions; media cleanup catches async DB errors cleanly.
+  assert.equal(repoSrc.includes("buildFeedItemSelect"), true);
+  assert.equal(repoSrc.includes("feedAuthorSelect"), true);
+  assert.equal(repoSrc.includes("createMarketplaceCommentAtomicInDb"), true);
+  assert.equal(repoSrc.includes("updateMarketplaceCommentAtomicInDb"), true);
+  assert.equal(repoSrc.includes("findMarketplacePostSummaryInDb"), false);
+
+  const mediaSrc = fs.readFileSync(
+    path.join(apiRoot, "src/modules/marketplace/marketplace.media.ts"),
+    "utf8",
+  );
+  assert.equal(mediaSrc.includes("expandWithCanonicalVariants"), true);
+  assert.equal(mediaSrc.includes("array_to_string"), false);
+  assert.equal(mediaSrc.includes("catch (err)"), true);
 
   const orphanSrc = fs.readFileSync(
     path.join(apiRoot, "src/services/orphan-cleanup.service.ts"),
@@ -367,4 +385,43 @@ test("API-5, PII & Media Regression Guards: no all-user broadcast, non-PII autho
   );
   assert.equal(mpSection.includes("DB_BATCH_SIZE"), true);
   assert.equal(mpSection.includes("cursor:"), true);
+});
+
+test("createMarketplaceSchema canonicalizes Cloudinary variant URLs and validates idempotencyKey", () => {
+  const cloud = process.env.CLOUDINARY_CLOUD_NAME || "demo";
+  const variantUrl = `https://res.cloudinary.com/${cloud}/image/upload/w_300,h_300/v1700000000/${MARKETPLACE_CLOUDINARY_PREFIX}/sample.jpg`;
+  const parsed = createMarketplaceSchema.safeParse({
+    body: {
+      type: "SELLING",
+      title: "Engineering Drawing Board",
+      description: "<p>Used once for ME101 lab.</p>",
+      price: 1500,
+      category: "LAB_DRAWING_TOOLS",
+      condition: "LIKE_NEW",
+      contactPhone: "+8801712345678",
+      images: [variantUrl],
+      idempotencyKey: "mp-draft-key-12345",
+    },
+  });
+  assert.equal(parsed.success, true);
+  if (parsed.success) {
+    assert.equal(
+      parsed.data.body.images[0],
+      `https://res.cloudinary.com/${cloud}/image/upload/q_auto:good,f_auto,w_1200,c_limit/${MARKETPLACE_CLOUDINARY_PREFIX}/sample`,
+    );
+    assert.equal(parsed.data.body.idempotencyKey, "mp-draft-key-12345");
+  }
+
+  const badKey = createMarketplaceSchema.safeParse({
+    body: {
+      type: "BUYING",
+      title: "Looking for calculator",
+      description: "<p>Need fx-991EX asap.</p>",
+      category: "ELECTRONICS",
+      contactPhone: "+8801712345678",
+      images: [],
+      idempotencyKey: "short",
+    },
+  });
+  assert.equal(badKey.success, false);
 });
