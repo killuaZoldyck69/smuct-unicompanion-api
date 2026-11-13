@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../../utils/catchAsync";
-import { getFeedQuerySchema } from "./lost-found.schema";
+import type { GetLostFoundFeedQuery } from "./lost-found.schema";
 import {
   acceptClaimService,
   createClaimService,
@@ -28,8 +28,7 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getFeed = catchAsync(async (req: Request, res: Response) => {
-  // Re-parse so Zod transforms run even if validateRequest leaves req.query untouched on Express 5.
-  const query = getFeedQuerySchema.shape.query.parse(req.query);
+  const query = req.query as GetLostFoundFeedQuery;
 
   const result = await getFeedService({
     type: query.type,

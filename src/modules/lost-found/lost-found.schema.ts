@@ -84,8 +84,8 @@ export const getFeedQuerySchema = z.object({
     category: z.enum(LOST_FOUND_CATEGORY_VALUES).optional(),
     search: z.string().trim().max(100).optional(),
     myPosts: z.enum(["true", "false"]).optional(),
-    page: z.string().regex(/^\d+$/).transform(Number).optional(),
-    limit: z.string().regex(/^\d+$/).transform(Number).optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
   }),
 });
 
@@ -154,6 +154,9 @@ export const createLostFoundReportSchema = z.object({
   }),
 });
 
+export type GetLostFoundFeedQuery = z.infer<
+  typeof getFeedQuerySchema
+>["query"];
 export type CreateLostFoundPayload = z.infer<
   typeof createLostFoundSchema
 >["body"];

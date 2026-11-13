@@ -22,10 +22,12 @@ const {
   createLostFoundSchema,
   createClaimSchema,
   createLostFoundReportSchema,
+  getFeedQuerySchema,
   lostFoundIdParamSchema,
   lostFoundClaimParamSchema,
   updateLostFoundStatusSchema,
 } = await import("../src/modules/lost-found/lost-found.schema");
+const { validateRequest } = await import("../src/middleware/validateRequest");
 const { claimRateLimiter, postRateLimiter } =
   await import("../src/modules/lost-found/lost-found.routes");
 const { adminForumReportsQuerySchema } =
@@ -330,4 +332,37 @@ test("Hardening source guards & PII/concurrency fixes: studentId redaction, P200
   assert.match(uploadCtrlSrc, /owned_by_other/);
   assert.match(uploadCtrlSrc, /actively_referenced/);
   assert.match(uploadRoutesSrc, /fileSize:\s*5\s*\*\s*1024\s*\*\s*1024/);
+});
+
+test("Feed query validation: coerces string pagination, remains idempotent after validateRequest, and rejects invalid bounds", async () => {
+  const middleware = validateRequest(getFeedQuerySchema);
+  const req: any = {
+    body: {},
+    params: {},
+    query: { page: "1", limit: "15", myPosts: "false" },
+  };
+
+  let passedErr: unknown = null;
+  await middleware(req, {} as any, (err?: unknown) => {
+    passedErr = err ?? null;
+  });
+
+  assert.equal(passedErr, null);
+  assert.deepEqual(req.query, { page: 1, limit: 15, myPosts: "false" });
+  assert.equal(
+    getFeedQuerySchema.safeParse({ query: req.query }).success,
+    true,
+  );
+  assert.equal(
+    getFeedQuerySchema.safeParse({ query: { page: "0", limit: "15" } }).success,
+    false,
+  );
+  assert.equal(
+    getFeedQuerySchema.safeParse({ query: { page: "abc", limit: "15" } }).success,
+    false,
+  );
+  assert.equal(
+    getFeedQuerySchema.safeParse({ query: { page: "1", limit: "101" } }).success,
+    false,
+  );
 });
