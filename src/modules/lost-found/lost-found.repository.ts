@@ -81,6 +81,43 @@ async function lockLostFoundClaimForUpdate(
   return rows[0];
 }
 
+function assertCanManagePost(
+  post: LockedPostRow,
+  actorId: string,
+  actorRole: string | undefined,
+  action: "modify" | "delete",
+): { isAuthor: boolean; isAdmin: boolean } {
+  const isAuthor = post.authorId === actorId;
+  const isAdmin = actorRole === "ADMIN";
+  if (!isAuthor && !isAdmin) {
+    throw new AppError(
+      `Unauthorized: You do not have permission to ${action} this post`,
+      403,
+    );
+  }
+  return { isAuthor, isAdmin };
+}
+
+function assertAuthorCanReviewActivePost(
+  post: LockedPostRow,
+  actorId: string,
+  actionVerb: "accept" | "reject",
+  inactiveMessage: string,
+): void {
+  if (post.isHiddenByModeration) {
+    throw new AppError("Lost & Found post not found", 404);
+  }
+  if (post.authorId !== actorId) {
+    throw new AppError(
+      `Unauthorized: Only the post author can ${actionVerb} claims`,
+      403,
+    );
+  }
+  if (post.status !== LostFoundStatus.ACTIVE) {
+    throw new AppError(inactiveMessage, 400);
+  }
+}
+
 export const createLostFoundPostInDb = async (
   authorId: string,
   payload: CreateLostFoundPayload,
@@ -175,15 +212,7 @@ export const updateLostFoundPostAtomicInDb = async (
 ) => {
   return prisma.$transaction(async (tx) => {
     const current = await lockLostFoundPostForUpdate(tx, id);
-    const isAuthor = current.authorId === actorId;
-    const isAdmin = actorRole === "ADMIN";
-
-    if (!isAuthor && !isAdmin) {
-      throw new AppError(
-        "Unauthorized: You do not have permission to modify this post",
-        403,
-      );
-    }
+    const { isAuthor, isAdmin } = assertCanManagePost(current, actorId, actorRole, "modify");
 
     if (current.isHiddenByModeration && !isAdmin) {
       throw new AppError(
@@ -237,15 +266,7 @@ export const updateLostFoundStatusAtomicInDb = async (
 ) => {
   return prisma.$transaction(async (tx) => {
     const previous = await lockLostFoundPostForUpdate(tx, id);
-    const isAuthor = previous.authorId === actorId;
-    const isAdmin = actorRole === "ADMIN";
-
-    if (!isAuthor && !isAdmin) {
-      throw new AppError(
-        "Unauthorized: You do not have permission to modify this post",
-        403,
-      );
-    }
+    const { isAuthor, isAdmin } = assertCanManagePost(previous, actorId, actorRole, "modify");
 
     if (status === LostFoundStatus.RESOLVED && !isAuthor) {
       throw new AppError(
@@ -344,15 +365,7 @@ export const deleteLostFoundPostAtomicInDb = async (
 ) => {
   return prisma.$transaction(async (tx) => {
     const current = await lockLostFoundPostForUpdate(tx, id);
-    const isAuthor = current.authorId === userId;
-    const isAdmin = userRole === "ADMIN";
-
-    if (!isAuthor && !isAdmin) {
-      throw new AppError(
-        "Unauthorized: You do not have permission to delete this post",
-        403,
-      );
-    }
+    assertCanManagePost(current, userId, userRole, "delete");
 
     const claimsWithProof = await tx.lostFoundClaim.findMany({
       where: {
@@ -538,20 +551,12 @@ export const acceptClaimAtomicInDb = async (
 ) => {
   return prisma.$transaction(async (tx) => {
     const currentPost = await lockLostFoundPostForUpdate(tx, postId);
-    if (currentPost.isHiddenByModeration) {
-      throw new AppError("Lost & Found post not found", 404);
-    }
-
-    if (currentPost.authorId !== actorId) {
-      throw new AppError(
-        "Unauthorized: Only the post author can accept claims",
-        403,
-      );
-    }
-
-    if (currentPost.status !== LostFoundStatus.ACTIVE) {
-      throw new AppError("This post has already been resolved or closed", 400);
-    }
+    assertAuthorCanReviewActivePost(
+      currentPost,
+      actorId,
+      "accept",
+      "This post has already been resolved or closed",
+    );
 
     const claimRow = await lockLostFoundClaimForUpdate(tx, claimId, postId);
     if (claimRow.status !== LostFoundClaimStatus.PENDING) {
@@ -598,23 +603,12 @@ export const rejectClaimAtomicInDb = async (
 ) => {
   return prisma.$transaction(async (tx) => {
     const postRow = await lockLostFoundPostForUpdate(tx, postId);
-    if (postRow.isHiddenByModeration) {
-      throw new AppError("Lost & Found post not found", 404);
-    }
-
-    if (postRow.authorId !== actorId) {
-      throw new AppError(
-        "Unauthorized: Only the post author can reject claims",
-        403,
-      );
-    }
-
-    if (postRow.status !== LostFoundStatus.ACTIVE) {
-      throw new AppError(
-        "Claims can only be rejected while the listing is active",
-        400,
-      );
-    }
+    assertAuthorCanReviewActivePost(
+      postRow,
+      actorId,
+      "reject",
+      "Claims can only be rejected while the listing is active",
+    );
 
     const claimRow = await lockLostFoundClaimForUpdate(tx, claimId, postId);
     if (claimRow.status !== LostFoundClaimStatus.PENDING) {

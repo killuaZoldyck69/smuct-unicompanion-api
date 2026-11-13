@@ -46,14 +46,13 @@ export interface LostFoundDetailPostInput {
   status: string;
   resolvedClaimId: string | null;
   verificationAnswer?: string | null;
-  author: LostFoundHandoverCounterpart & Record<string, unknown>;
+  author: LostFoundHandoverCounterpart;
   claims?: Array<{
     id: string;
     claimantId: string;
     claimant: LostFoundHandoverCounterpart;
   }>;
   _count?: { claims: number };
-  [key: string]: unknown;
 }
 
 export interface LostFoundHandoverData {
@@ -125,12 +124,34 @@ export function buildLostFoundUpdateData(
   return updateData;
 }
 
+export type PublicLostFoundAuthor = Omit<
+  LostFoundHandoverCounterpart,
+  "email" | "phoneNumber" | "studentProfile"
+> & {
+  studentProfile: Omit<LostFoundStudentProfileData, "studentId"> | null;
+};
+
+function redactAuthorContacts(
+  author: LostFoundHandoverCounterpart,
+): PublicLostFoundAuthor {
+  const { email: _email, phoneNumber: _phone, studentProfile, ...rest } = author;
+  return {
+    ...rest,
+    studentProfile: studentProfile
+      ? (({ studentId: _studentId, ...safe }) => safe)(studentProfile)
+      : null,
+  };
+}
+
 /**
  * Redacts private verification answers, contact details, and constructs handover
  * details strictly for active RESOLVED handovers between author and resolved claimant.
  */
-export function sanitizeLostFoundPostDetail<TClaim = unknown>(params: {
-  post: LostFoundDetailPostInput;
+export function sanitizeLostFoundPostDetail<
+  TPost extends LostFoundDetailPostInput,
+  TClaim = unknown,
+>(params: {
+  post: TPost;
   viewerId: string;
   viewerRole?: string;
   myClaim: TClaim | null;
@@ -155,16 +176,10 @@ export function sanitizeLostFoundPostDetail<TClaim = unknown>(params: {
     ...basePost
   } = post;
 
-  const sanitizedAuthor: Record<string, unknown> = { ...author };
-  if (!isAuthor && !isAcceptedClaimant && !isAdmin) {
-    delete sanitizedAuthor.email;
-    delete sanitizedAuthor.phoneNumber;
-    if (author.studentProfile) {
-      const { studentId: _omitStudentId, ...safeStudentProfile } =
-        author.studentProfile;
-      sanitizedAuthor.studentProfile = safeStudentProfile;
-    }
-  }
+  const sanitizedAuthor =
+    isAuthor || isAcceptedClaimant || isAdmin
+      ? author
+      : redactAuthorContacts(author);
 
   let handoverData: LostFoundHandoverData | null = null;
   if (isActiveResolvedHandover && acceptedClaim) {
@@ -187,7 +202,7 @@ export function sanitizeLostFoundPostDetail<TClaim = unknown>(params: {
     ...(isAuthor || isAcceptedClaimant || isAdmin
       ? { claims, _count, resolvedClaimId }
       : {}),
-    author: sanitizedAuthor as typeof post.author,
+    author: sanitizedAuthor,
     myClaim,
     handoverData,
   };
@@ -216,6 +231,3 @@ export function extractMatchTokens(input?: string | null): string[] {
 
   return [...new Set(rawTokens)].slice(0, 4);
 }
-
-// Preserved alias for existing test imports.
-export const extractLocationTokens = extractMatchTokens;

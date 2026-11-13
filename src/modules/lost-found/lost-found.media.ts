@@ -61,37 +61,43 @@ export async function assertNoForeignLostFoundMediaReferencesInTx(
   }
 
   // Guard against transformation-tweaked Cloudinary delivery URLs sharing a foreign asset's publicId.
-  const publicIds = [
+  const likePatterns = [
     ...new Set(
       uniqueUrls
         .map((url) => extractPublicIdFromUrl(url))
         .filter((id): id is string => Boolean(id)),
     ),
-  ];
+  ].map((publicId) => `%/${escapeLikePattern(publicId)}%`);
 
-  for (const publicId of publicIds) {
-    const likePattern = `%/${escapeLikePattern(publicId)}%`;
-    const rows = await tx.$queryRaw<Array<{ owned_by_other: boolean }>>`
-      SELECT (
-        EXISTS (
-          SELECT 1 FROM "lost_found_post"
-          WHERE "authorId" NOT IN (${Prisma.join(ownerList)})
-            AND array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
-        )
-        OR EXISTS (
-          SELECT 1 FROM "lost_found_claim"
-          WHERE "claimantId" NOT IN (${Prisma.join(ownerList)})
-            AND "proofImage" LIKE ${likePattern} ESCAPE '\\'
-        )
-      ) AS owned_by_other
-    `;
+  if (likePatterns.length === 0) return;
 
-    if (rows[0]?.owned_by_other) {
-      throw new AppError(
-        "Forbidden: You cannot attach media belonging to another user.",
-        403,
-      );
-    }
+  const postLikeClauses = likePatterns.map(
+    (pattern) => Prisma.sql`array_to_string("images", ' ') LIKE ${pattern} ESCAPE '\\'`,
+  );
+  const claimLikeClauses = likePatterns.map(
+    (pattern) => Prisma.sql`"proofImage" LIKE ${pattern} ESCAPE '\\'`,
+  );
+
+  const rows = await tx.$queryRaw<Array<{ owned_by_other: boolean }>>`
+    SELECT (
+      EXISTS (
+        SELECT 1 FROM "lost_found_post"
+        WHERE "authorId" NOT IN (${Prisma.join(ownerList)})
+          AND (${Prisma.join(postLikeClauses, " OR ")})
+      )
+      OR EXISTS (
+        SELECT 1 FROM "lost_found_claim"
+        WHERE "claimantId" NOT IN (${Prisma.join(ownerList)})
+          AND (${Prisma.join(claimLikeClauses, " OR ")})
+      )
+    ) AS owned_by_other
+  `;
+
+  if (rows[0]?.owned_by_other) {
+    throw new AppError(
+      "Forbidden: You cannot attach media belonging to another user.",
+      403,
+    );
   }
 }
 
@@ -134,28 +140,37 @@ export async function deleteUnreferencedLostFoundImages(
   const candidateUrls = uniqueUrls.filter((url) => !stillReferenced.has(url));
   if (candidateUrls.length === 0) return;
 
-  const unreferenced: string[] = [];
-  for (const url of candidateUrls) {
-    const publicId = extractPublicIdFromUrl(url);
-    if (!publicId) continue;
+  const patternChecks = candidateUrls
+    .map((url) => {
+      const publicId = extractPublicIdFromUrl(url);
+      return publicId
+        ? { url, likePattern: `%/${escapeLikePattern(publicId)}%` }
+        : null;
+    })
+    .filter((entry): entry is { url: string; likePattern: string } => Boolean(entry));
 
-    const likePattern = `%/${escapeLikePattern(publicId)}%`;
-    const refRows = await prisma.$queryRaw<Array<{ is_referenced: boolean }>>`
-      SELECT (
-        EXISTS (
-          SELECT 1 FROM "lost_found_post"
-          WHERE array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
-        )
-        OR EXISTS (
-          SELECT 1 FROM "lost_found_claim"
-          WHERE "proofImage" LIKE ${likePattern} ESCAPE '\\'
-        )
-      ) AS is_referenced
+  const unreferenced: string[] = [];
+  if (patternChecks.length > 0) {
+    const patterns = patternChecks.map((entry) => entry.likePattern);
+    const matchedRows = await prisma.$queryRaw<Array<{ idx: number }>>`
+      SELECT p.ord::int - 1 AS idx
+      FROM UNNEST(${patterns}::text[]) WITH ORDINALITY AS p(pattern, ord)
+      WHERE EXISTS (
+        SELECT 1 FROM "lost_found_post"
+        WHERE array_to_string("images", ' ') LIKE p.pattern ESCAPE '\\'
+      )
+      OR EXISTS (
+        SELECT 1 FROM "lost_found_claim"
+        WHERE "proofImage" LIKE p.pattern ESCAPE '\\'
+      )
     `;
 
-    if (!refRows[0]?.is_referenced) {
-      unreferenced.push(url);
-    }
+    const referencedIndices = new Set(matchedRows.map((row) => row.idx));
+    patternChecks.forEach((entry, idx) => {
+      if (!referencedIndices.has(idx)) {
+        unreferenced.push(entry.url);
+      }
+    });
   }
 
   if (unreferenced.length > 0) {

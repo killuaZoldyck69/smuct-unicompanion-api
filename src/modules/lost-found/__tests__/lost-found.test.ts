@@ -10,7 +10,7 @@ import {
 } from "../lost-found.schema";
 import {
   buildLostFoundUpdateData,
-  extractLocationTokens,
+  extractMatchTokens,
   isLostFoundPostVisibleToViewer,
   sanitizeLostFoundPostDetail,
 } from "../lost-found.domain";
@@ -418,7 +418,7 @@ async function runTests() {
     "Listing reported by viewer is hidden from viewer",
   );
   assert(
-    extractLocationTokens("UB-111 Central Library, 2nd Floor").includes(
+    extractMatchTokens("UB-111 Central Library, 2nd Floor").includes(
       "library",
     ),
     "Location token extractor extracts meaningful match keywords",

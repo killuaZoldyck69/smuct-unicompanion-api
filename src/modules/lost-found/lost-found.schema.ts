@@ -116,25 +116,9 @@ export const createClaimSchema = z.object({
       .max(1000, "Message cannot exceed 1000 characters"),
     answer: z.string().trim().max(300).optional().nullable(),
     proofImage: z
-      .union([
-        verifiedLostFoundImageUrl.max(
-          1000,
-          "Invalid proof image URL. Exactly 1 verified Cloudinary proof photo is allowed.",
-        ),
-        z.literal(""),
-      ])
+      .union([verifiedLostFoundImageUrl, z.literal("")])
       .optional()
-      .nullable()
-      .refine(
-        (val) => {
-          if (!val) return true;
-          return verifiedLostFoundImageUrl.safeParse(val).success;
-        },
-        {
-          message:
-            "Invalid proof image URL. Exactly 1 verified Cloudinary proof photo is allowed.",
-        },
-      ),
+      .nullable(),
   }),
 });
 

@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { AppError } from "../../utils/AppError";
 import { catchAsync } from "../../utils/catchAsync";
 import type { GetLostFoundFeedQuery } from "./lost-found.schema";
 import {
@@ -17,8 +18,21 @@ import {
   withdrawClaimService,
 } from "./lost-found.service";
 
+function getAuthActor(req: Request): { id: string; role?: string } {
+  if (!req.user) {
+    throw new AppError("Unauthorized", 401);
+  }
+  return { id: req.user.id, role: req.user.role };
+}
+
+function getParamId(req: Request, key: "id" | "claimId"): string {
+  const value = req.params[key];
+  return Array.isArray(value) ? value[0] : value;
+}
+
 export const createPost = catchAsync(async (req: Request, res: Response) => {
-  const result = await createPostService(req.user!.id, req.body);
+  const actor = getAuthActor(req);
+  const result = await createPostService(actor.id, req.body);
 
   res.status(201).json({
     success: true,
@@ -28,6 +42,7 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getFeed = catchAsync(async (req: Request, res: Response) => {
+  const actor = getAuthActor(req);
   const query = req.query as GetLostFoundFeedQuery;
 
   const result = await getFeedService({
@@ -36,8 +51,8 @@ export const getFeed = catchAsync(async (req: Request, res: Response) => {
     category: query.category,
     search: query.search,
     myPosts: query.myPosts === "true",
-    viewerId: req.user!.id,
-    viewerRole: req.user!.role,
+    viewerId: actor.id,
+    viewerRole: actor.role,
     page: query.page,
     limit: query.limit,
   });
@@ -51,10 +66,11 @@ export const getFeed = catchAsync(async (req: Request, res: Response) => {
 
 export const getPossibleMatches = catchAsync(
   async (req: Request, res: Response) => {
+    const actor = getAuthActor(req);
     const result = await getPossibleMatchesService(
-      req.params.id as string,
-      req.user!.id,
-      req.user!.role,
+      getParamId(req, "id"),
+      actor.id,
+      actor.role,
     );
 
     res.status(200).json({
@@ -65,10 +81,11 @@ export const getPossibleMatches = catchAsync(
 );
 
 export const getPostById = catchAsync(async (req: Request, res: Response) => {
+  const actor = getAuthActor(req);
   const result = await getPostByIdService(
-    req.params.id as string,
-    req.user!.id,
-    req.user!.role,
+    getParamId(req, "id"),
+    actor.id,
+    actor.role,
   );
 
   res.status(200).json({
@@ -78,10 +95,11 @@ export const getPostById = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const updatePost = catchAsync(async (req: Request, res: Response) => {
+  const actor = getAuthActor(req);
   const result = await updatePostService(
-    req.params.id as string,
-    req.user!.id,
-    req.user!.role,
+    getParamId(req, "id"),
+    actor.id,
+    actor.role,
     req.body,
   );
 
@@ -93,10 +111,11 @@ export const updatePost = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const updateStatus = catchAsync(async (req: Request, res: Response) => {
+  const actor = getAuthActor(req);
   const result = await updateStatusService(
-    req.params.id as string,
-    req.user!.id,
-    req.user!.role,
+    getParamId(req, "id"),
+    actor.id,
+    actor.role,
     req.body.status,
   );
 
@@ -108,11 +127,8 @@ export const updateStatus = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const deletePost = catchAsync(async (req: Request, res: Response) => {
-  await deletePostService(
-    req.params.id as string,
-    req.user!.id,
-    req.user!.role,
-  );
+  const actor = getAuthActor(req);
+  await deletePostService(getParamId(req, "id"), actor.id, actor.role);
 
   res.status(200).json({
     success: true,
@@ -121,9 +137,10 @@ export const deletePost = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const submitClaim = catchAsync(async (req: Request, res: Response) => {
+  const actor = getAuthActor(req);
   const result = await createClaimService(
-    req.params.id as string,
-    req.user!.id,
+    getParamId(req, "id"),
+    actor.id,
     req.body,
   );
 
@@ -135,10 +152,11 @@ export const submitClaim = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getClaims = catchAsync(async (req: Request, res: Response) => {
+  const actor = getAuthActor(req);
   const result = await getClaimsForPostService(
-    req.params.id as string,
-    req.user!.id,
-    req.user!.role,
+    getParamId(req, "id"),
+    actor.id,
+    actor.role,
   );
 
   res.status(200).json({
@@ -148,10 +166,11 @@ export const getClaims = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const acceptClaim = catchAsync(async (req: Request, res: Response) => {
+  const actor = getAuthActor(req);
   const result = await acceptClaimService(
-    req.params.id as string,
-    req.params.claimId as string,
-    req.user!.id,
+    getParamId(req, "id"),
+    getParamId(req, "claimId"),
+    actor.id,
   );
 
   res.status(200).json({
@@ -162,10 +181,11 @@ export const acceptClaim = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const rejectClaim = catchAsync(async (req: Request, res: Response) => {
+  const actor = getAuthActor(req);
   const result = await rejectClaimService(
-    req.params.id as string,
-    req.params.claimId as string,
-    req.user!.id,
+    getParamId(req, "id"),
+    getParamId(req, "claimId"),
+    actor.id,
   );
 
   res.status(200).json({
@@ -177,11 +197,12 @@ export const rejectClaim = catchAsync(async (req: Request, res: Response) => {
 
 export const withdrawClaim = catchAsync(
   async (req: Request, res: Response) => {
+    const actor = getAuthActor(req);
     const result = await withdrawClaimService(
-      req.params.id as string,
-      req.params.claimId as string,
-      req.user!.id,
-      req.user!.role,
+      getParamId(req, "id"),
+      getParamId(req, "claimId"),
+      actor.id,
+      actor.role,
     );
 
     res.status(200).json({
@@ -193,9 +214,10 @@ export const withdrawClaim = catchAsync(
 );
 
 export const reportPost = catchAsync(async (req: Request, res: Response) => {
+  const actor = getAuthActor(req);
   const result = await reportLostFoundPostService(
-    req.params.id as string,
-    req.user!.id,
+    getParamId(req, "id"),
+    actor.id,
     req.body,
   );
 
