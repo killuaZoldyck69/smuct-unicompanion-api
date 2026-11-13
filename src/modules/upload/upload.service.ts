@@ -30,14 +30,58 @@ export interface MulterFile {
   buffer: Buffer;
 }
 
+export function hasValidImageMagicBytes(buffer: Buffer): boolean {
+  if (!buffer || buffer.length < 4) return false;
+
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return true;
+  }
+  // PNG: 89 50 4E 47
+  if (
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47
+  ) {
+    return true;
+  }
+  // GIF87a / GIF89a: 47 49 46 38
+  if (
+    buffer[0] === 0x47 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x38
+  ) {
+    return true;
+  }
+  // WEBP: RIFF....WEBP
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+    buffer.subarray(8, 12).toString("ascii") === "WEBP"
+  ) {
+    return true;
+  }
+  // HEIC / HEIF / AVIF ISO-BMFF container: ....ftyp
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(4, 8).toString("ascii") === "ftyp"
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export function validateImageFile(
   file: MulterFile,
-  maxSizeBytes: number = MAX_FILE_SIZE
+  maxSizeBytes: number = MAX_FILE_SIZE,
 ): void {
   if (!ALLOWED_MIME_TYPES.has(file.mimetype.toLowerCase())) {
     throw new AppError(
       `Unsupported file type: ${file.mimetype}. Allowed types are JPEG, PNG, WEBP, GIF, and HEIC.`,
-      400
+      400,
     );
   }
 
@@ -45,7 +89,14 @@ export function validateImageFile(
     const limitMb = (maxSizeBytes / (1024 * 1024)).toFixed(0);
     throw new AppError(
       `File "${file.originalname}" exceeds the ${limitMb}MB limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Please choose an image under ${limitMb}MB.`,
-      400
+      400,
+    );
+  }
+
+  if (!hasValidImageMagicBytes(file.buffer)) {
+    throw new AppError(
+      `Invalid or corrupted image file "${file.originalname}".`,
+      400,
     );
   }
 }
@@ -53,9 +104,10 @@ export function validateImageFile(
 export async function uploadSingleImageService(
   file?: MulterFile,
   base64?: string,
-  folder: string = PROJECT_ROOT_FOLDER
+  folder: string = PROJECT_ROOT_FOLDER,
+  isAdmin: boolean = false,
 ): Promise<UploadResult> {
-  assertUploadFolderIsEnabled(folder);
+  assertUploadFolderIsEnabled(folder, isAdmin);
   const isProfile = folder.toLowerCase().includes("profile");
   const maxLimit = isProfile ? MAX_PROFILE_IMAGE_SIZE : MAX_FILE_SIZE;
 
@@ -71,8 +123,12 @@ export async function uploadSingleImageService(
       const limitMb = (maxLimit / (1024 * 1024)).toFixed(0);
       throw new AppError(
         `Payload size exceeds limit. Max allowed for this image is ${limitMb}MB.`,
-        400
+        400,
       );
+    }
+    const decodedHeader = Buffer.from(rawBase64.slice(0, 32), "base64");
+    if (!hasValidImageMagicBytes(decodedHeader)) {
+      throw new AppError("Invalid or unsupported base64 image payload.", 400);
     }
     return uploadBase64ToCloudinary(base64, folder);
   }
@@ -83,19 +139,26 @@ export async function uploadSingleImageService(
 export async function uploadMultipleImagesService(
   files: MulterFile[] = [],
   base64List: string[] = [],
-  folder: string = PROJECT_ROOT_FOLDER
+  folder: string = PROJECT_ROOT_FOLDER,
+  isAdmin: boolean = false,
 ): Promise<UploadResult[]> {
-  assertUploadFolderIsEnabled(folder);
+  assertUploadFolderIsEnabled(folder, isAdmin);
   const isLostFound = folder.toLowerCase().includes("lost-found");
   const isMarketplace = folder.toLowerCase().includes("marketplace");
   const totalCount = (files?.length || 0) + (base64List?.length || 0);
 
   if (isLostFound && totalCount > 2) {
-    throw new AppError("A maximum of 2 photos can be uploaded for Lost & Found items.", 400);
+    throw new AppError(
+      "A maximum of 2 photos can be uploaded for Lost & Found items.",
+      400,
+    );
   }
 
   if (isMarketplace && totalCount > 4) {
-    throw new AppError("A maximum of 4 photos can be uploaded for marketplace listings.", 400);
+    throw new AppError(
+      "A maximum of 4 photos can be uploaded for marketplace listings.",
+      400,
+    );
   }
 
   const uploadPromises: Promise<UploadResult>[] = [];
@@ -104,7 +167,7 @@ export async function uploadMultipleImagesService(
     for (const file of files) {
       validateImageFile(file, MAX_FILE_SIZE);
       uploadPromises.push(
-        uploadBufferToCloudinary(file.buffer, folder, file.originalname)
+        uploadBufferToCloudinary(file.buffer, folder, file.originalname),
       );
     }
   }
@@ -115,6 +178,13 @@ export async function uploadMultipleImagesService(
       const approxSizeBytes = Math.ceil((rawBase64.length * 3) / 4);
       if (approxSizeBytes > MAX_FILE_SIZE) {
         throw new AppError("One or more images exceed the 5MB limit.", 400);
+      }
+      const decodedHeader = Buffer.from(rawBase64.slice(0, 32), "base64");
+      if (!hasValidImageMagicBytes(decodedHeader)) {
+        throw new AppError(
+          "One or more base64 payloads are not valid images.",
+          400,
+        );
       }
       uploadPromises.push(uploadBase64ToCloudinary(b64, folder));
     }
@@ -144,12 +214,48 @@ const ALLOWED_FILE_MIME_TYPES = new Set([
 
 const MAX_DOCUMENT_FILE_SIZE = 25 * 1024 * 1024; // 25MB
 
-function assertUploadFolderIsEnabled(folder: string): void {
-  if (folder.split(/[\\/]/).some((part) => part.toLowerCase() === "hubs")) {
+const USER_ALLOWED_UPLOAD_FOLDERS = new Set([
+  "lost-found",
+  "campus-hub/lost-found",
+  "lost-found-proofs",
+  "claims",
+  "marketplace",
+  "campus-hub/marketplace",
+  "memes",
+  "campus-hub/memes",
+  "forum",
+  "campus-hub/forum",
+  "profiles",
+  "smuct-unicompanion/campus-hub/lost-found",
+  "smuct-unicompanion/campus-hub/lost-found/claims",
+  "smuct-unicompanion/campus-hub/marketplace",
+  "smuct-unicompanion/campus-hub/memes",
+  "smuct-unicompanion/campus-hub/forum",
+  "smuct-unicompanion/profiles",
+]);
+
+function assertUploadFolderIsEnabled(
+  folder: string,
+  isAdmin: boolean = false,
+): void {
+  const cleaned = (folder || "").trim().replace(/^\/+|\/+$/g, "");
+  if (cleaned.includes("..")) {
+    throw new AppError("Invalid upload folder path.", 400);
+  }
+  if (cleaned.split(/[\\/]/).some((part) => part.toLowerCase() === "hubs")) {
     throw new AppError(
       "Course Hub files must be uploaded to Google Drive.",
       403,
     );
+  }
+  if (!isAdmin) {
+    const normalized = cleaned.toLowerCase();
+    if (!USER_ALLOWED_UPLOAD_FOLDERS.has(normalized)) {
+      throw new AppError(
+        "Forbidden: You do not have permission to upload to the specified folder.",
+        403,
+      );
+    }
   }
 }
 
@@ -157,30 +263,55 @@ export function validateGenericFile(file: MulterFile): void {
   const mime = file.mimetype.toLowerCase();
   const ext = file.originalname.split(".").pop()?.toLowerCase();
   const allowedExtensions = new Set([
-    "pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "txt", "zip", "rar",
-    "jpg", "jpeg", "png", "webp", "gif", "heic"
+    "pdf",
+    "doc",
+    "docx",
+    "ppt",
+    "pptx",
+    "xls",
+    "xlsx",
+    "txt",
+    "zip",
+    "rar",
+    "jpg",
+    "jpeg",
+    "png",
+    "webp",
+    "gif",
+    "heic",
   ]);
 
-  if (!ALLOWED_FILE_MIME_TYPES.has(mime) && (!ext || !allowedExtensions.has(ext))) {
+  if (
+    !ALLOWED_FILE_MIME_TYPES.has(mime) &&
+    (!ext || !allowedExtensions.has(ext))
+  ) {
     throw new AppError(
       `Unsupported file type: ${file.mimetype}. Allowed types include PDF, Word, PowerPoint, Excel, text, zip, and images.`,
-      400
+      400,
     );
   }
 
   if (file.size > MAX_DOCUMENT_FILE_SIZE) {
     throw new AppError(
       `File size exceeds limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Max allowed is 25MB.`,
-      400
+      400,
     );
   }
 }
 
 export async function uploadSingleFileService(
   file?: MulterFile,
-  folder: string = PROJECT_ROOT_FOLDER
-): Promise<UploadResult & { originalName: string; size: number; mimeType: string; format?: string }> {
-  assertUploadFolderIsEnabled(folder);
+  folder: string = PROJECT_ROOT_FOLDER,
+  isAdmin: boolean = false,
+): Promise<
+  UploadResult & {
+    originalName: string;
+    size: number;
+    mimeType: string;
+    format?: string;
+  }
+> {
+  assertUploadFolderIsEnabled(folder, isAdmin);
   if (!file) {
     throw new AppError("No file provided", 400);
   }
@@ -191,7 +322,7 @@ export async function uploadSingleFileService(
     file.buffer,
     folder,
     file.originalname,
-    isImage ? "image" : "auto"
+    isImage ? "image" : "auto",
   );
 
   return {
@@ -205,9 +336,17 @@ export async function uploadSingleFileService(
 
 export async function uploadMultipleFilesService(
   files: MulterFile[] = [],
-  folder: string = PROJECT_ROOT_FOLDER
-): Promise<(UploadResult & { originalName: string; size: number; mimeType: string; format?: string })[]> {
-  assertUploadFolderIsEnabled(folder);
+  folder: string = PROJECT_ROOT_FOLDER,
+  isAdmin: boolean = false,
+): Promise<
+  (UploadResult & {
+    originalName: string;
+    size: number;
+    mimeType: string;
+    format?: string;
+  })[]
+> {
+  assertUploadFolderIsEnabled(folder, isAdmin);
   if (!files || files.length === 0) {
     throw new AppError("No files provided for upload", 400);
   }
@@ -219,7 +358,7 @@ export async function uploadMultipleFilesService(
       file.buffer,
       folder,
       file.originalname,
-      isImage ? "image" : "auto"
+      isImage ? "image" : "auto",
     );
     return {
       ...res,

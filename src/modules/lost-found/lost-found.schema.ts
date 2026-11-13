@@ -4,45 +4,77 @@ import {
   LOST_FOUND_STATUS_VALUES,
   LOST_FOUND_CATEGORY_VALUES,
 } from "../../constants/enums";
+import { isAllowedAppCloudinaryImageUrl } from "../../lib/cloudinary";
+
+const LOST_FOUND_CLOUDINARY_PREFIX = "smuct-unicompanion/campus-hub/lost-found";
+
+const verifiedLostFoundImageUrl = z
+  .string()
+  .trim()
+  .url("Invalid image URL")
+  .refine(
+    (url) =>
+      url.match(/https?:\/\//g)?.length === 1 &&
+      isAllowedAppCloudinaryImageUrl(url, [LOST_FOUND_CLOUDINARY_PREFIX]),
+    {
+      message:
+        "Image URL must be a verified SMUCT UniCompanion Cloudinary Lost & Found asset.",
+    },
+  );
+
+const postIdParams = z.object({
+  id: z.string().uuid("Invalid Lost & Found post ID"),
+});
+
+const claimRouteParams = postIdParams.extend({
+  claimId: z.string().uuid("Invalid claim ID"),
+});
+
+const lostFoundBodyFields = {
+  type: z.enum(LOST_FOUND_TYPE_VALUES, {
+    message: "Type must be LOST or FOUND",
+  }),
+  title: z
+    .string()
+    .trim()
+    .min(2, "Title must be at least 2 characters")
+    .max(150, "Title cannot exceed 150 characters"),
+  description: z.string().trim().max(3000).optional().nullable(),
+  category: z.enum(LOST_FOUND_CATEGORY_VALUES, {
+    message: "Invalid category selected",
+  }),
+  location: z.string().trim().max(150).optional().nullable(),
+  verificationQuestion: z.string().trim().max(200).optional().nullable(),
+  verificationAnswer: z.string().trim().max(200).optional().nullable(),
+};
+
+const imagesArraySchema = z
+  .array(verifiedLostFoundImageUrl)
+  .max(2, "Maximum 2 photos allowed for Lost & Found items");
+
+export const lostFoundIdParamSchema = z.object({
+  params: postIdParams,
+});
+
+export const lostFoundClaimParamSchema = z.object({
+  params: claimRouteParams,
+});
 
 export const createLostFoundSchema = z.object({
   body: z.object({
-    type: z.enum(LOST_FOUND_TYPE_VALUES, {
-      message: "Type must be LOST or FOUND",
-    }),
-    title: z.string().min(2, "Title must be at least 2 characters").max(150),
-    description: z.string().max(3000).optional().nullable(),
-    category: z.enum(LOST_FOUND_CATEGORY_VALUES, {
-      message: "Invalid category selected",
-    }),
-    location: z.string().max(150).optional().nullable(),
-    images: z
-      .array(z.string().url("Invalid image URL"))
-      .max(2, "Maximum 2 photos allowed for Lost & Found items")
-      .default([]),
-    verificationQuestion: z.string().max(200).optional().nullable(),
-    verificationAnswer: z.string().max(200).optional().nullable(),
+    ...lostFoundBodyFields,
+    images: imagesArraySchema.default([]),
   }),
 });
 
 export const updateLostFoundSchema = z.object({
-  body: z.object({
-    type: z.enum(LOST_FOUND_TYPE_VALUES, {
-      message: "Type must be LOST or FOUND",
-    }).optional(),
-    title: z.string().min(2, "Title must be at least 2 characters").max(150).optional(),
-    description: z.string().max(3000).optional().nullable(),
-    category: z.enum(LOST_FOUND_CATEGORY_VALUES, {
-      message: "Invalid category selected",
-    }).optional(),
-    location: z.string().max(150).optional().nullable(),
-    images: z
-      .array(z.string().url("Invalid image URL"))
-      .max(2, "Maximum 2 photos allowed for Lost & Found items")
-      .optional(),
-    verificationQuestion: z.string().max(200).optional().nullable(),
-    verificationAnswer: z.string().max(200).optional().nullable(),
-  }),
+  params: postIdParams,
+  body: z
+    .object({
+      ...lostFoundBodyFields,
+      images: imagesArraySchema,
+    })
+    .partial(),
 });
 
 export const getFeedQuerySchema = z.object({
@@ -50,14 +82,15 @@ export const getFeedQuerySchema = z.object({
     type: z.enum(LOST_FOUND_TYPE_VALUES).optional(),
     status: z.enum(LOST_FOUND_STATUS_VALUES).optional(),
     category: z.enum(LOST_FOUND_CATEGORY_VALUES).optional(),
-    search: z.string().max(100).optional(),
+    search: z.string().trim().max(100).optional(),
     myPosts: z.enum(["true", "false"]).optional(),
-    page: z.string().regex(/^\d+$/).optional(),
-    limit: z.string().regex(/^\d+$/).optional(),
+    page: z.string().regex(/^\d+$/).transform(Number).optional(),
+    limit: z.string().regex(/^\d+$/).transform(Number).optional(),
   }),
 });
 
 export const updateLostFoundStatusSchema = z.object({
+  params: postIdParams,
   body: z.object({
     status: z.enum(["ACTIVE", "RESOLVED", "CLOSED"], {
       message: "Status must be ACTIVE, RESOLVED, or CLOSED",
@@ -66,32 +99,58 @@ export const updateLostFoundStatusSchema = z.object({
 });
 
 export const createClaimSchema = z.object({
+  params: postIdParams,
   body: z.object({
     message: z
       .string()
+      .trim()
       .min(5, "Message must be at least 5 characters")
       .max(1000, "Message cannot exceed 1000 characters"),
-    answer: z.string().max(300).optional().nullable(),
+    answer: z.string().trim().max(300).optional().nullable(),
     proofImage: z
-      .string()
-      .max(1000)
+      .union([
+        verifiedLostFoundImageUrl.max(
+          1000,
+          "Invalid proof image URL. Exactly 1 verified Cloudinary proof photo is allowed.",
+        ),
+        z.literal(""),
+      ])
+      .optional()
+      .nullable()
       .refine(
         (val) => {
-          if (!val || !val.trim()) return true;
-          const trimmed = val.trim();
-          const matches = trimmed.match(/https?:\/\//g);
-          if (!matches || matches.length !== 1) return false;
-          try {
-            const parsed = new URL(trimmed);
-            return parsed.protocol === "http:" || parsed.protocol === "https:";
-          } catch {
-            return false;
-          }
+          if (!val) return true;
+          return verifiedLostFoundImageUrl.safeParse(val).success;
         },
-        { message: "Invalid proof image URL. Exactly 1 proof photo is allowed." }
-      )
-      .optional()
-      .nullable(),
+        {
+          message:
+            "Invalid proof image URL. Exactly 1 verified Cloudinary proof photo is allowed.",
+        },
+      ),
+  }),
+});
+
+export const createLostFoundReportSchema = z.object({
+  params: postIdParams,
+  body: z.object({
+    reason: z.enum(
+      [
+        "SPAM",
+        "HARASSMENT",
+        "HATE_SPEECH",
+        "INAPPROPRIATE",
+        "ACADEMIC_MISCONDUCT",
+        "OTHER",
+      ],
+      {
+        message: "Invalid report reason",
+      },
+    ),
+    details: z
+      .string()
+      .trim()
+      .max(500, "Additional details cannot exceed 500 characters")
+      .optional(),
   }),
 });
 
@@ -105,4 +164,6 @@ export type UpdateLostFoundStatusPayload = z.infer<
   typeof updateLostFoundStatusSchema
 >["body"];
 export type CreateClaimPayload = z.infer<typeof createClaimSchema>["body"];
-
+export type CreateLostFoundReportPayload = z.infer<
+  typeof createLostFoundReportSchema
+>["body"];

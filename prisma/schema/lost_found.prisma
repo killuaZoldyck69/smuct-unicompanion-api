@@ -54,6 +54,8 @@ model LostFoundPost {
   verificationQuestion String?
   verificationAnswer   String?
   resolvedClaimId      String?
+  isHiddenByModeration Boolean           @default(false)
+  hiddenAt             DateTime?
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
@@ -61,20 +63,27 @@ model LostFoundPost {
   claims LostFoundClaim[]
 
   @@index([authorId])
+  @@index([authorId, createdAt(sort: Desc)])
+  @@index([authorId, status, createdAt(sort: Desc)])
   @@index([status, type])
+  @@index([status, type, createdAt(sort: Desc)])
+  @@index([category, status, createdAt(sort: Desc)])
+  @@index([isHiddenByModeration, createdAt(sort: Desc)])
+  @@index([isHiddenByModeration, status, createdAt(sort: Desc)])
   @@map("lost_found_post")
 }
 
 model LostFoundClaim {
-  id         String               @id @default(uuid())
-  postId     String
-  claimantId String
-  status     LostFoundClaimStatus @default(PENDING)
-  message    String
-  answer     String?
-  proofImage String?
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
+  id           String               @id @default(uuid())
+  postId       String
+  claimantId   String
+  status       LostFoundClaimStatus @default(PENDING)
+  attemptCount Int                  @default(1)
+  message      String
+  answer       String?
+  proofImage   String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
 
   post     LostFoundPost @relation(fields: [postId], references: [id], onDelete: Cascade)
   claimant User          @relation(fields: [claimantId], references: [id], onDelete: Cascade)
@@ -82,6 +91,6 @@ model LostFoundClaim {
   @@unique([postId, claimantId])
   @@index([postId, status])
   @@index([claimantId])
+  @@index([claimantId, status])
   @@map("lost_found_claim")
 }
-

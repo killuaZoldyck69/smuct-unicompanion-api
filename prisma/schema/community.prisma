@@ -10,6 +10,7 @@ enum ForumReactionType {
 enum UgcReportTargetType {
   FORUM_POST
   FORUM_RESPONSE
+  LOST_FOUND_POST
 }
 
 enum UgcReportReason {

@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/prisma";
 import { appCache } from "../../lib/cache";
 import { AppError } from "../../utils/AppError";
+import { deleteMultipleImagesFromCloudinary } from "../../lib/cloudinary";
 import { publicUserSelect } from "../forum/forum.repository";
 import { extractPlainText } from "../forum/forum.sanitizer";
 import {
@@ -8,7 +9,11 @@ import {
   AdminResolveReportPayload,
 } from "./admin.schema";
 
-const FORUM_TARGET_TYPES = ["FORUM_POST", "FORUM_RESPONSE"] as const;
+const FORUM_TARGET_TYPES = [
+  "FORUM_POST",
+  "FORUM_RESPONSE",
+  "LOST_FOUND_POST",
+] as const;
 
 const safeModerationActorSelect = {
   id: true,
@@ -80,6 +85,13 @@ export const getForumReportsQueueService = async (
         .map((r) => r.targetId),
     ),
   ];
+  const uniqueLostFoundIds = [
+    ...new Set(
+      reports
+        .filter((r) => r.targetType === "LOST_FOUND_POST")
+        .map((r) => r.targetId),
+    ),
+  ];
   const uniqueTargetIds = [...new Set(targetPairs.map((p) => p.targetId))];
 
   const groupedTargetTypeFilter =
@@ -87,51 +99,66 @@ export const getForumReportsQueueService = async (
       ? { in: [...FORUM_TARGET_TYPES] }
       : query.targetType;
 
-  const [groupedTargetCounts, livePosts, liveResponses] = await Promise.all([
-    uniqueTargetIds.length
-      ? prisma.contentReport.groupBy({
-          by: ["targetType", "targetId"],
-          where: {
-            targetType: groupedTargetTypeFilter,
-            targetId: { in: uniqueTargetIds },
-            status: "PENDING",
-          },
-          _count: { _all: true },
-        })
-      : Promise.resolve([]),
-    uniquePostIds.length
-      ? prisma.helpPost.findMany({
-          where: { id: { in: uniquePostIds } },
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            isResolved: true,
-            isHiddenByModeration: true,
-            createdAt: true,
-          },
-        })
-      : Promise.resolve([]),
-    uniqueResponseIds.length
-      ? prisma.helpResponse.findMany({
-          where: { id: { in: uniqueResponseIds } },
-          select: {
-            id: true,
-            postId: true,
-            content: true,
-            isHiddenByModeration: true,
-            createdAt: true,
-            post: {
-              select: {
-                id: true,
-                title: true,
-                isHiddenByModeration: true,
+  const [groupedTargetCounts, livePosts, liveResponses, liveLostFoundPosts] =
+    await Promise.all([
+      uniqueTargetIds.length
+        ? prisma.contentReport.groupBy({
+            by: ["targetType", "targetId"],
+            where: {
+              targetType: groupedTargetTypeFilter,
+              targetId: { in: uniqueTargetIds },
+              status: "PENDING",
+            },
+            _count: { _all: true },
+          })
+        : Promise.resolve([]),
+      uniquePostIds.length
+        ? prisma.helpPost.findMany({
+            where: { id: { in: uniquePostIds } },
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              isResolved: true,
+              isHiddenByModeration: true,
+              createdAt: true,
+            },
+          })
+        : Promise.resolve([]),
+      uniqueResponseIds.length
+        ? prisma.helpResponse.findMany({
+            where: { id: { in: uniqueResponseIds } },
+            select: {
+              id: true,
+              postId: true,
+              content: true,
+              isHiddenByModeration: true,
+              createdAt: true,
+              post: {
+                select: {
+                  id: true,
+                  title: true,
+                  isHiddenByModeration: true,
+                },
               },
             },
-          },
-        })
-      : Promise.resolve([]),
-  ]);
+          })
+        : Promise.resolve([]),
+      uniqueLostFoundIds.length
+        ? prisma.lostFoundPost.findMany({
+            where: { id: { in: uniqueLostFoundIds } },
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              location: true,
+              status: true,
+              isHiddenByModeration: true,
+              createdAt: true,
+            },
+          })
+        : Promise.resolve([]),
+    ]);
 
   const pendingByTarget = new Map<string, number>();
   for (const row of groupedTargetCounts) {
@@ -140,6 +167,7 @@ export const getForumReportsQueueService = async (
 
   const postById = new Map(livePosts.map((p) => [p.id, p]));
   const responseById = new Map(liveResponses.map((resp) => [resp.id, resp]));
+  const lostFoundById = new Map(liveLostFoundPosts.map((lf) => [lf.id, lf]));
 
   const enriched = reports.map((report) => {
     const snapshot =
@@ -149,7 +177,8 @@ export const getForumReportsQueueService = async (
 
     if (report.targetType === "FORUM_POST") {
       const livePost = postById.get(report.targetId);
-      const resolvedPostId = livePost?.id ?? snapshot?.postId ?? report.targetId;
+      const resolvedPostId =
+        livePost?.id ?? snapshot?.postId ?? report.targetId;
       return {
         ...report,
         postId: resolvedPostId,
@@ -168,6 +197,35 @@ export const getForumReportsQueueService = async (
               isResolved: livePost.isResolved,
               isHiddenByModeration: livePost.isHiddenByModeration,
               createdAt: livePost.createdAt,
+            }
+          : null,
+        uniquePendingReportCount:
+          pendingByTarget.get(`${report.targetType}:${report.targetId}`) ?? 0,
+      };
+    }
+
+    if (report.targetType === "LOST_FOUND_POST") {
+      const liveLf = lostFoundById.get(report.targetId);
+      const resolvedPostId = liveLf?.id ?? snapshot?.postId ?? report.targetId;
+      return {
+        ...report,
+        postId: resolvedPostId,
+        responseId: null,
+        targetExists: Boolean(liveLf),
+        targetLive: liveLf
+          ? {
+              id: liveLf.id,
+              postId: liveLf.id,
+              title: liveLf.title,
+              postTitle: liveLf.title,
+              contentPreview: (
+                liveLf.description ||
+                liveLf.location ||
+                ""
+              ).slice(0, 800),
+              isResolved: liveLf.status === "RESOLVED",
+              isHiddenByModeration: liveLf.isHiddenByModeration,
+              createdAt: liveLf.createdAt,
             }
           : null,
         uniquePendingReportCount:
@@ -229,6 +287,7 @@ export const resolveForumReportService = async (
   const nextStatus = payload.action === "DISMISS" ? "DISMISSED" : "ACTIONED";
   const adminNote = payload.adminNote ?? null;
   let shouldInvalidateUserCaches = false;
+  const lostFoundImagesToDelete: string[] = [];
 
   await prisma.$transaction(async (tx) => {
     // Lock report row so concurrent moderation actions serialize and cannot double-resolve or flip state
@@ -249,10 +308,7 @@ export const resolveForumReportService = async (
     }
 
     if (report.status !== "PENDING") {
-      throw new AppError(
-        "This content report has already been reviewed.",
-        409,
-      );
+      throw new AppError("This content report has already been reviewed.", 409);
     }
 
     if (payload.action === "RESTRICT_USER") {
@@ -263,7 +319,10 @@ export const resolveForumReportService = async (
         );
       }
       if (report.targetAuthorId === adminId) {
-        throw new AppError("Administrators cannot restrict their own account.", 400);
+        throw new AppError(
+          "Administrators cannot restrict their own account.",
+          400,
+        );
       }
 
       const targetUser = await tx.user.findUnique({
@@ -345,6 +404,11 @@ export const resolveForumReportService = async (
             where: { id: report.targetId },
             data: { isHiddenByModeration: false, hiddenAt: null },
           });
+        } else if (report.targetType === "LOST_FOUND_POST") {
+          await tx.lostFoundPost.updateMany({
+            where: { id: report.targetId },
+            data: { isHiddenByModeration: false, hiddenAt: null },
+          });
         } else {
           await tx.helpResponse.updateMany({
             where: { id: report.targetId },
@@ -361,6 +425,11 @@ export const resolveForumReportService = async (
           where: { id: report.targetId },
           data: { isHiddenByModeration: true, hiddenAt: now },
         });
+      } else if (report.targetType === "LOST_FOUND_POST") {
+        await tx.lostFoundPost.updateMany({
+          where: { id: report.targetId },
+          data: { isHiddenByModeration: true, hiddenAt: now },
+        });
       } else {
         await tx.helpResponse.updateMany({
           where: { id: report.targetId },
@@ -370,11 +439,35 @@ export const resolveForumReportService = async (
     } else if (payload.action === "DELETE_CONTENT") {
       if (report.targetType === "FORUM_POST") {
         await tx.helpPost.deleteMany({ where: { id: report.targetId } });
+      } else if (report.targetType === "LOST_FOUND_POST") {
+        const lfPost = await tx.lostFoundPost.findUnique({
+          where: { id: report.targetId },
+          select: {
+            images: true,
+            claims: { select: { proofImage: true } },
+          },
+        });
+        if (lfPost) {
+          lostFoundImagesToDelete.push(...(lfPost.images || []));
+          for (const c of lfPost.claims) {
+            if (c.proofImage) lostFoundImagesToDelete.push(c.proofImage);
+          }
+          await tx.lostFoundPost.deleteMany({ where: { id: report.targetId } });
+        }
       } else {
         await tx.helpResponse.deleteMany({ where: { id: report.targetId } });
       }
     }
   });
+
+  if (lostFoundImagesToDelete.length > 0) {
+    deleteMultipleImagesFromCloudinary(lostFoundImagesToDelete).catch((err) =>
+      console.warn(
+        "[Moderation] Failed to purge deleted Lost & Found Cloudinary images:",
+        err,
+      ),
+    );
+  }
 
   if (shouldInvalidateUserCaches) {
     appCache.delPattern(/^users:list/);

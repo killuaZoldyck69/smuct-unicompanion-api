@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../../utils/catchAsync";
+import { getFeedQuerySchema } from "./lost-found.schema";
 import {
   acceptClaimService,
   createClaimService,
@@ -10,19 +11,14 @@ import {
   getPossibleMatchesService,
   getPostByIdService,
   rejectClaimService,
+  reportLostFoundPostService,
   updatePostService,
   updateStatusService,
   withdrawClaimService,
 } from "./lost-found.service";
-import {
-  LostFoundCategory,
-  LostFoundStatus,
-  LostFoundType,
-} from "../../constants/enums";
 
 export const createPost = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const result = await createPostService(userId, req.body);
+  const result = await createPostService(req.user!.id, req.body);
 
   res.status(201).json({
     success: true,
@@ -32,20 +28,19 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getFeed = catchAsync(async (req: Request, res: Response) => {
-  const { type, status, category, search, myPosts, page, limit } = req.query;
-  const userId = req.user?.id;
-  const userRole = req.user?.role;
+  // Re-parse so Zod transforms run even if validateRequest leaves req.query untouched on Express 5.
+  const query = getFeedQuerySchema.shape.query.parse(req.query);
 
   const result = await getFeedService({
-    type: type as LostFoundType | undefined,
-    status: status as LostFoundStatus | undefined,
-    category: category as LostFoundCategory | undefined,
-    search: typeof search === "string" ? search : undefined,
-    myPosts: myPosts === "true",
-    viewerId: userId,
-    viewerRole: userRole,
-    page: page ? Number(page) : undefined,
-    limit: limit ? Number(limit) : undefined,
+    type: query.type,
+    status: query.status,
+    category: query.category,
+    search: query.search,
+    myPosts: query.myPosts === "true",
+    viewerId: req.user!.id,
+    viewerRole: req.user!.role,
+    page: query.page,
+    limit: query.limit,
   });
 
   res.status(200).json({
@@ -55,22 +50,26 @@ export const getFeed = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-export const getPossibleMatches = catchAsync(async (req: Request, res: Response) => {
-  const result = await getPossibleMatchesService(req.params.id as string);
+export const getPossibleMatches = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await getPossibleMatchesService(
+      req.params.id as string,
+      req.user!.id,
+      req.user!.role,
+    );
 
-  res.status(200).json({
-    success: true,
-    data: result,
-  });
-});
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  },
+);
 
 export const getPostById = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const userRole = req.user?.role;
   const result = await getPostByIdService(
     req.params.id as string,
-    userId,
-    userRole
+    req.user!.id,
+    req.user!.role,
   );
 
   res.status(200).json({
@@ -83,9 +82,10 @@ export const updatePost = catchAsync(async (req: Request, res: Response) => {
   const result = await updatePostService(
     req.params.id as string,
     req.user!.id,
-    req.user?.role,
-    req.body
+    req.user!.role,
+    req.body,
   );
+
   res.status(200).json({
     success: true,
     message: "Post updated successfully",
@@ -94,15 +94,11 @@ export const updatePost = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const updateStatus = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const userRole = req.user?.role;
-  const { status } = req.body;
-
   const result = await updateStatusService(
     req.params.id as string,
-    userId,
-    userRole,
-    status
+    req.user!.id,
+    req.user!.role,
+    req.body.status,
   );
 
   res.status(200).json({
@@ -113,10 +109,11 @@ export const updateStatus = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const deletePost = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const userRole = req.user?.role;
-
-  await deletePostService(req.params.id as string, userId, userRole);
+  await deletePostService(
+    req.params.id as string,
+    req.user!.id,
+    req.user!.role,
+  );
 
   res.status(200).json({
     success: true,
@@ -124,15 +121,12 @@ export const deletePost = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-// ==============================
-// CLAIMS CONTROLLERS
-// ==============================
-
 export const submitClaim = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const postId = req.params.id as string;
-
-  const result = await createClaimService(postId, userId, req.body);
+  const result = await createClaimService(
+    req.params.id as string,
+    req.user!.id,
+    req.body,
+  );
 
   res.status(201).json({
     success: true,
@@ -142,11 +136,11 @@ export const submitClaim = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getClaims = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const userRole = req.user?.role;
-  const postId = req.params.id as string;
-
-  const result = await getClaimsForPostService(postId, userId, userRole);
+  const result = await getClaimsForPostService(
+    req.params.id as string,
+    req.user!.id,
+    req.user!.role,
+  );
 
   res.status(200).json({
     success: true,
@@ -155,11 +149,11 @@ export const getClaims = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const acceptClaim = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const postId = req.params.id as string;
-  const claimId = req.params.claimId as string;
-
-  const result = await acceptClaimService(postId, claimId, userId);
+  const result = await acceptClaimService(
+    req.params.id as string,
+    req.params.claimId as string,
+    req.user!.id,
+  );
 
   res.status(200).json({
     success: true,
@@ -169,11 +163,11 @@ export const acceptClaim = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const rejectClaim = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const postId = req.params.id as string;
-  const claimId = req.params.claimId as string;
-
-  const result = await rejectClaimService(postId, claimId, userId);
+  const result = await rejectClaimService(
+    req.params.id as string,
+    req.params.claimId as string,
+    req.user!.id,
+  );
 
   res.status(200).json({
     success: true,
@@ -182,18 +176,34 @@ export const rejectClaim = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-export const withdrawClaim = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const userRole = req.user?.role;
-  const postId = req.params.id as string;
-  const claimId = req.params.claimId as string;
+export const withdrawClaim = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await withdrawClaimService(
+      req.params.id as string,
+      req.params.claimId as string,
+      req.user!.id,
+      req.user!.role,
+    );
 
-  const result = await withdrawClaimService(postId, claimId, userId, userRole);
+    res.status(200).json({
+      success: true,
+      message: "Claim withdrawn successfully",
+      data: result,
+    });
+  },
+);
 
-  res.status(200).json({
+export const reportPost = catchAsync(async (req: Request, res: Response) => {
+  const result = await reportLostFoundPostService(
+    req.params.id as string,
+    req.user!.id,
+    req.body,
+  );
+
+  res.status(201).json({
     success: true,
-    message: "Claim withdrawn successfully",
+    message:
+      "Thank you. Your report has been submitted and this listing is now hidden from your feed.",
     data: result,
   });
 });
-

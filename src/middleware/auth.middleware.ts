@@ -32,7 +32,8 @@ export const requireAuth = async (
     if (!session.user.emailVerified) {
       res.status(403).json({
         success: false,
-        error: "Forbidden. Email verification is required before accessing this service.",
+        error:
+          "Forbidden. Email verification is required before accessing this service.",
       });
       return;
     }
@@ -41,7 +42,8 @@ export const requireAuth = async (
     if (session.user.isRestricted) {
       res.status(403).json({
         success: false,
-        error: "Forbidden. Your account has been restricted by an administrator.",
+        error:
+          "Forbidden. Your account has been restricted by an administrator.",
       });
       return;
     }
@@ -50,6 +52,10 @@ export const requireAuth = async (
     authenticatedUserLimiter(req, res, next);
     return;
   } catch (error) {
+    console.error(
+      "[Auth Middleware Error]:",
+      error instanceof Error ? error.message : "Unknown error",
+    );
     res.status(500).json({
       success: false,
       error: "Internal server error during authentication validation.",

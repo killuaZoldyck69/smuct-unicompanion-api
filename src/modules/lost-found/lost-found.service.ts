@@ -1,35 +1,97 @@
 import { AppError } from "../../utils/AppError";
-import { createNotifications } from "../notification/notification.service";
-import { LostFoundClaimStatus, LostFoundStatus } from "../../constants/enums";
 import { sendEmail } from "../../lib/email";
 import { deleteMultipleImagesFromCloudinary } from "../../lib/cloudinary";
+import { LostFoundStatus } from "../../constants/enums";
+import { createNotifications } from "../notification/notification.service";
+import { findUserUgcTermsStatus } from "../forum/forum.repository";
 import {
-  CreateClaimPayload,
-  CreateLostFoundPayload,
-} from "./lost-found.schema";
+  isLostFoundPostVisibleToViewer,
+  sanitizeLostFoundPostDetail,
+} from "./lost-found.domain";
 import {
-  acceptClaimAtomicInDb,
-  countPendingClaimsByClaimantInDb,
-  createClaimInDb,
-  createLostFoundPostInDb,
-  deleteLostFoundPostFromDb,
-  findClaimByIdInDb,
+  buildClaimRejectedEmail,
+  buildHandoverAuthorEmail,
+  buildHandoverClaimantEmail,
+  buildNewClaimEmail,
+} from "./lost-found.email-templates";
+import {
+  createLostFoundReportAndEvaluateAutoHideInDb,
+  findExistingLostFoundReportInDb,
+} from "./lost-found.moderation.repository";
+import {
   findClaimByPostAndClaimantInDb,
+  findClaimProofImagesByPostIdInDb,
   findClaimsByPostIdInDb,
   findLostFoundFeedInDb,
   findLostFoundPostByIdInDb,
+  findLostFoundPostSummaryInDb,
   findPossibleMatchesInDb,
+  getLostFoundViewerContextInDb,
   LostFoundFeedFilters,
-  rejectClaimInDb,
-  updateLostFoundPostInDb,
-  updateLostFoundStatusInDb,
-  withdrawClaimInDb,
+} from "./lost-found.queries";
+import {
+  acceptClaimAtomicInDb,
+  createLostFoundPostInDb,
+  createOrResubmitClaimInDb,
+  deleteLostFoundPostFromDb,
+  rejectClaimAtomicInDb,
+  updateLostFoundPostAtomicInDb,
+  updateLostFoundStatusAtomicInDb,
+  withdrawClaimAtomicInDb,
 } from "./lost-found.repository";
+import {
+  CreateClaimPayload,
+  CreateLostFoundPayload,
+  CreateLostFoundReportPayload,
+  UpdateLostFoundPayload,
+} from "./lost-found.schema";
+
+const assertUserAcceptedUgcTerms = async (userId: string) => {
+  const user = await findUserUgcTermsStatus(userId);
+  if (!user) {
+    throw new AppError("User account not found.", 404);
+  }
+  if (!user.ugcTermsAcceptedAt) {
+    throw new AppError(
+      "Please accept the Community Guidelines before posting or claiming.",
+      403,
+      "UGC_TERMS_REQUIRED",
+    );
+  }
+};
+
+function dispatchNotificationSafe(
+  recipientIds: string[],
+  payload: Parameters<typeof createNotifications>[1],
+): void {
+  if (recipientIds.length === 0) return;
+  void createNotifications(recipientIds, payload).catch((err) => {
+    console.warn("[LostFound] Failed to dispatch push notification:", err);
+  });
+}
+
+function dispatchEmailSafe(
+  options: Parameters<typeof sendEmail>[0],
+  contextLabel: string,
+): void {
+  void sendEmail(options)
+    .then((sent) => {
+      if (!sent) {
+        console.warn(
+          `[LostFound] Email delivery returned false (${contextLabel})`,
+        );
+      }
+    })
+    .catch((err) => {
+      console.error(`[LostFound] Email dispatch threw (${contextLabel}):`, err);
+    });
+}
 
 export const createPostService = async (
   userId: string,
-  payload: CreateLostFoundPayload
+  payload: CreateLostFoundPayload,
 ) => {
+  await assertUserAcceptedUgcTerms(userId);
   return createLostFoundPostInDb(userId, payload);
 };
 
@@ -37,167 +99,125 @@ export const updatePostService = async (
   id: string,
   userId: string,
   userRole: string | undefined,
-  payload: Partial<CreateLostFoundPayload>
+  payload: UpdateLostFoundPayload,
 ) => {
-  const post = await findLostFoundPostByIdInDb(id);
-  if (!post) {
-    throw new AppError("Lost & Found post not found", 404);
-  }
+  const { updated, removedImages } = await updateLostFoundPostAtomicInDb(
+    id,
+    userId,
+    userRole,
+    payload,
+  );
 
-  const isAuthor = post.authorId === userId;
-  const isAdmin = userRole === "ADMIN";
-
-  if (!isAuthor && !isAdmin) {
-    throw new AppError(
-      "Unauthorized: You do not have permission to modify this post",
-      403
+  if (removedImages.length > 0) {
+    deleteMultipleImagesFromCloudinary(removedImages).catch((err) =>
+      console.warn("[Cloudinary] Failed to clean up removed post images:", err),
     );
   }
 
-  // Prevent modifying post type if post is already RESOLVED
-  if (
-    post.status === LostFoundStatus.RESOLVED &&
-    payload.type &&
-    payload.type !== post.type
-  ) {
-    throw new AppError("Cannot change item type on a resolved listing", 400);
-  }
-
-  // Storage cleanup optimization: detect any removed images from Cloudinary
-  if (Array.isArray(payload.images) && Array.isArray(post.images)) {
-    const newImageSet = new Set(payload.images);
-    const removedImages = post.images.filter((img) => !newImageSet.has(img));
-    if (removedImages.length > 0) {
-      deleteMultipleImagesFromCloudinary(removedImages).catch((err) =>
-        console.warn("[Cloudinary] Failed to clean up removed post images:", err)
-      );
-    }
-  }
-
-  return updateLostFoundPostInDb(id, payload);
+  return updated;
 };
 
 export const getFeedService = async (filters: LostFoundFeedFilters) => {
-  return findLostFoundFeedInDb(filters);
+  const viewer = await getLostFoundViewerContextInDb(
+    filters.viewerId,
+    filters.viewerRole,
+  );
+  return findLostFoundFeedInDb(filters, viewer);
 };
 
-export const getPossibleMatchesService = async (postId: string) => {
-  const post = await findLostFoundPostByIdInDb(postId);
-  if (!post) {
+export const getPossibleMatchesService = async (
+  postId: string,
+  viewerId?: string,
+  viewerRole?: string,
+) => {
+  const [post, viewer] = await Promise.all([
+    findLostFoundPostSummaryInDb(postId),
+    getLostFoundViewerContextInDb(viewerId, viewerRole),
+  ]);
+  if (
+    !post ||
+    !isLostFoundPostVisibleToViewer(post, viewer, { includeOwnHidden: true })
+  ) {
     throw new AppError("Lost & Found post not found", 404);
   }
   return findPossibleMatchesInDb(
     post.id,
     post.category,
+    post.title,
     post.location,
-    post.type
+    post.type,
+    viewer,
   );
 };
 
 export const getPostByIdService = async (
   id: string,
   viewerId: string,
-  viewerRole?: string
+  viewerRole?: string,
 ) => {
-  const post = await findLostFoundPostByIdInDb(id);
-  if (!post) {
+  const [post, viewer] = await Promise.all([
+    findLostFoundPostByIdInDb(id),
+    getLostFoundViewerContextInDb(viewerId, viewerRole),
+  ]);
+
+  if (
+    !post ||
+    !isLostFoundPostVisibleToViewer(post, viewer, { includeOwnHidden: true })
+  ) {
     throw new AppError("Lost & Found post not found", 404);
   }
 
   const isAuthor = post.authorId === viewerId;
-  const isAdmin = viewerRole === "ADMIN";
-  const acceptedClaim = post.claims[0];
-  const isAcceptedClaimant = acceptedClaim?.claimantId === viewerId;
+  const myClaim = isAuthor
+    ? null
+    : await findClaimByPostAndClaimantInDb(id, viewerId);
 
-  // Retrieve viewer's claim on this post if not the author
-  let myClaim = null;
-  if (!isAuthor) {
-    myClaim = await findClaimByPostAndClaimantInDb(id, viewerId);
-  }
-
-  const postData: any = { ...post };
-
-  // Strip verification answer if viewer is not the author
-  if (!isAuthor) {
-    delete postData.verificationAnswer;
-  }
-
-  // Redact author private contact details if viewer is neither author nor accepted claimant nor admin
-  if (!isAuthor && !isAcceptedClaimant && !isAdmin) {
-    delete postData.author.email;
-    delete postData.author.phoneNumber;
-    delete postData.claims;
-  }
-
-  // Return handover card info if post is resolved
-  let handoverData = null;
-  if (post.status === LostFoundStatus.RESOLVED && acceptedClaim) {
-    if (isAuthor) {
-      handoverData = {
-        role: "AUTHOR",
-        counterpart: {
-          id: acceptedClaim.claimant.id,
-          name: acceptedClaim.claimant.name,
-          email: acceptedClaim.claimant.email,
-          phoneNumber: acceptedClaim.claimant.phoneNumber,
-          image: acceptedClaim.claimant.image,
-          studentProfile: acceptedClaim.claimant.studentProfile,
-          teacherProfile: acceptedClaim.claimant.teacherProfile,
-        },
-      };
-    } else if (isAcceptedClaimant) {
-      handoverData = {
-        role: "CLAIMANT",
-        counterpart: {
-          id: post.author.id,
-          name: post.author.name,
-          email: post.author.email,
-          phoneNumber: post.author.phoneNumber,
-          image: post.author.image,
-          studentProfile: post.author.studentProfile,
-          teacherProfile: post.author.teacherProfile,
-        },
-      };
-    }
-  }
-
-  return {
-    ...postData,
+  return sanitizeLostFoundPostDetail({
+    post,
+    viewerId,
+    viewerRole,
     myClaim,
-    handoverData,
-  };
+  });
 };
 
 export const updateStatusService = async (
   id: string,
   userId: string,
   userRole: string | undefined,
-  status: LostFoundStatus
+  status: LostFoundStatus,
 ) => {
-  const post = await findLostFoundPostByIdInDb(id);
-  if (!post) {
-    throw new AppError("Lost & Found post not found", 404);
+  const { post, postTitle, revokedClaimantIds, autoRejectedClaimantIds } =
+    await updateLostFoundStatusAtomicInDb(id, userId, userRole, status);
+
+  if (revokedClaimantIds.length > 0) {
+    dispatchNotificationSafe(revokedClaimantIds, {
+      type: "LOST_FOUND_CLAIM",
+      title: "Listing status updated",
+      body: `The listing “${postTitle}” was updated to ${status.toLowerCase()}, and the prior handover was cancelled.`,
+      route: `/campus-hub/lost-found/${id}`,
+      dedupeKey: `lost-found-reopen:${id}:${post.updatedAt.toISOString()}`,
+    });
   }
 
-  const isAuthor = post.authorId === userId;
-  const isAdmin = userRole === "ADMIN";
-
-  if (!isAuthor && !isAdmin) {
-    throw new AppError(
-      "Unauthorized: You do not have permission to modify this post",
-      403
-    );
+  if (autoRejectedClaimantIds.length > 0) {
+    dispatchNotificationSafe(autoRejectedClaimantIds, {
+      type: "LOST_FOUND_CLAIM",
+      title: "Listing closed",
+      body: `The listing “${postTitle}” was marked ${status.toLowerCase()} by the owner.`,
+      route: `/campus-hub/lost-found/${id}`,
+      dedupeKey: `lost-found-closed:${id}:${post.updatedAt.toISOString()}`,
+    });
   }
 
-  return updateLostFoundStatusInDb(id, status);
+  return post;
 };
 
 export const deletePostService = async (
   id: string,
   userId: string,
-  userRole: string | undefined
+  userRole: string | undefined,
 ) => {
-  const post = await findLostFoundPostByIdInDb(id);
+  const post = await findLostFoundPostSummaryInDb(id);
   if (!post) {
     throw new AppError("Lost & Found post not found", 404);
   }
@@ -208,99 +228,72 @@ export const deletePostService = async (
   if (!isAuthor && !isAdmin) {
     throw new AppError(
       "Unauthorized: You do not have permission to delete this post",
-      403
+      403,
     );
   }
 
-  // Collect post images and any claim proof images before deleting from DB
-  const imagesToDelete: string[] = [...(post.images || [])];
-  try {
-    const claims = await findClaimsByPostIdInDb(id);
-    if (Array.isArray(claims)) {
-      for (const claim of claims) {
-        if (claim.proofImage) {
-          imagesToDelete.push(claim.proofImage);
-        }
-      }
-    }
-  } catch {
-    // If fetching claims fails, proceed with deleting post images
-  }
+  const claimProofImages = await findClaimProofImagesByPostIdInDb(id).catch(
+    (err) => {
+      console.warn(
+        "[LostFound] Failed to collect claim proof images prior to delete:",
+        err,
+      );
+      return [] as string[];
+    },
+  );
+  const imagesToDelete = [...post.images, ...claimProofImages];
 
   const result = await deleteLostFoundPostFromDb(id);
 
-  // Storage cleanup optimization: delete associated images from Cloudinary
   if (imagesToDelete.length > 0) {
     deleteMultipleImagesFromCloudinary(imagesToDelete).catch((err) =>
-      console.warn("[Cloudinary] Failed to clean up lost-found post images:", err)
+      console.warn(
+        "[Cloudinary] Failed to clean up lost-found post images:",
+        err,
+      ),
     );
   }
 
   return result;
 };
 
-// ==============================
-// CLAIMS SERVICE
-// ==============================
-
 export const createClaimService = async (
   postId: string,
   claimantId: string,
-  payload: CreateClaimPayload
+  payload: CreateClaimPayload,
 ) => {
-  const post = await findLostFoundPostByIdInDb(postId);
-  if (!post) {
-    throw new AppError("Lost & Found post not found", 404);
-  }
+  await assertUserAcceptedUgcTerms(claimantId);
 
-  if (post.authorId === claimantId) {
-    throw new AppError("You cannot submit a claim on your own post", 400);
-  }
+  const { claim, postTitle, author, replacedProofImage } =
+    await createOrResubmitClaimInDb(postId, claimantId, payload);
 
-  if (post.status !== LostFoundStatus.ACTIVE) {
-    throw new AppError("This post is no longer accepting claims", 400);
-  }
-
-  const existingClaim = await findClaimByPostAndClaimantInDb(postId, claimantId);
-  if (existingClaim) {
-    throw new AppError("You have already submitted a claim for this item", 400);
-  }
-
-  const pendingCount = await countPendingClaimsByClaimantInDb(claimantId);
-  if (pendingCount >= 5) {
-    throw new AppError(
-      "You have reached the maximum limit of 5 pending claims. Please withdraw an existing claim before submitting a new one.",
-      429
+  if (replacedProofImage) {
+    deleteMultipleImagesFromCloudinary([replacedProofImage]).catch((err) =>
+      console.warn("[Cloudinary] Failed to remove replaced claim proof:", err),
     );
   }
 
-  const claim = await createClaimInDb(postId, claimantId, payload);
-  await createNotifications([post.authorId], {
-    type: "LOST_FOUND_CLAIM",
-    title: "New item claim",
-    body: `Someone submitted a claim for “${post.title}”.`,
-    route: `/campus-hub/lost-found/${postId}`,
-    dedupeKey: `lost-found-claim:${claim.id}`,
-  });
+  if (author) {
+    dispatchNotificationSafe([author.id], {
+      type: "LOST_FOUND_CLAIM",
+      title: "New item claim",
+      body: `Someone submitted a claim for “${postTitle}”.`,
+      route: `/campus-hub/lost-found/${postId}`,
+      dedupeKey: `lost-found-claim:${claim.id}:v${claim.attemptCount}`,
+    });
 
-  // Send notification email to post author
-  if (post.author.email) {
-    sendEmail({
-      to: post.author.email,
-      subject: `New Claim Received: ${post.title}`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 12px;">
-          <h2 style="color: #0284c7;">New Claim Received</h2>
-          <p>Hi ${post.author.name},</p>
-          <p>Someone has submitted a claim for your Lost & Found item <strong>"${post.title}"</strong>.</p>
-          <div style="background-color: #f8fafc; padding: 14px; border-radius: 8px; margin: 16px 0;">
-            <p style="margin: 0; color: #475569;"><strong>Claimant:</strong> ${claim.claimant.name}</p>
-            <p style="margin: 8px 0 0 0; color: #475569;"><strong>Message:</strong> ${claim.message}</p>
-          </div>
-          <p>Open SMUCT UniCompanion app to review the submitted claim and verification proof.</p>
-        </div>
-      `,
-    }).catch((err) => console.error("Failed to send claim notification email:", err));
+    if (author.email) {
+      const email = buildNewClaimEmail({
+        authorName: author.name,
+        postTitle,
+        claimantName: claim.claimant.name,
+        message: claim.message,
+      });
+      dispatchEmailSafe(
+        { to: author.email, ...email },
+        `new-claim:${claim.id}`,
+      );
+    }
   }
 
   return claim;
@@ -309,9 +302,9 @@ export const createClaimService = async (
 export const getClaimsForPostService = async (
   postId: string,
   userId: string,
-  userRole?: string
+  userRole?: string,
 ) => {
-  const post = await findLostFoundPostByIdInDb(postId);
+  const post = await findLostFoundPostSummaryInDb(postId);
   if (!post) {
     throw new AppError("Lost & Found post not found", 404);
   }
@@ -330,78 +323,45 @@ export const getClaimsForPostService = async (
 export const acceptClaimService = async (
   postId: string,
   claimId: string,
-  userId: string
+  userId: string,
 ) => {
-  const post = await findLostFoundPostByIdInDb(postId);
-  if (!post) {
-    throw new AppError("Lost & Found post not found", 404);
-  }
+  const result = await acceptClaimAtomicInDb(postId, claimId, userId);
 
-  if (post.authorId !== userId) {
-    throw new AppError("Unauthorized: Only the post author can accept claims", 403);
-  }
+  dispatchNotificationSafe(
+    [result.acceptedClaim.claimantId, result.post.authorId],
+    {
+      type: "LOST_FOUND_HANDOVER",
+      title: "Claim accepted",
+      body: `The claim for “${result.post.title}” was accepted. Arrange the handover in the app.`,
+      route: `/campus-hub/lost-found/${postId}`,
+      dedupeKey: `lost-found-handover:${claimId}`,
+    },
+  );
 
-  if (post.status === LostFoundStatus.RESOLVED) {
-    throw new AppError("This post is already resolved", 400);
-  }
-
-  const claim = await findClaimByIdInDb(claimId);
-  if (!claim || claim.postId !== postId) {
-    throw new AppError("Claim not found on this post", 404);
-  }
-
-  if (claim.status !== LostFoundClaimStatus.PENDING) {
-    throw new AppError("Only pending claims can be accepted", 400);
-  }
-
-  const result = await acceptClaimAtomicInDb(postId, claimId);
-  await createNotifications([result.acceptedClaim.claimantId, result.post.authorId], {
-    type: "LOST_FOUND_HANDOVER",
-    title: "Claim accepted",
-    body: `The claim for “${post.title}” was accepted. Arrange the handover in the app.`,
-    route: `/campus-hub/lost-found/${postId}`,
-    dedupeKey: `lost-found-handover:${claimId}`,
-  });
-
-  // Send mutual handover notification emails
   if (result.acceptedClaim.claimant.email) {
-    sendEmail({
-      to: result.acceptedClaim.claimant.email,
-      subject: `Claim Accepted! Handover Details for: ${post.title}`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #10b981; border-radius: 12px;">
-          <h2 style="color: #10b981;">Your Claim Was Accepted!</h2>
-          <p>Congratulations! The owner has verified your claim for <strong>"${post.title}"</strong>.</p>
-          <div style="background-color: #f0fdf4; padding: 16px; border-radius: 8px; margin: 16px 0; border: 1px solid #bbf7d0;">
-            <h3 style="margin-top: 0; color: #166534;">Safe Handover Contact</h3>
-            <p style="margin: 4px 0;"><strong>Name:</strong> ${result.post.author.name}</p>
-            <p style="margin: 4px 0;"><strong>Email:</strong> ${result.post.author.email}</p>
-            ${result.post.author.phoneNumber ? `<p style="margin: 4px 0;"><strong>Phone:</strong> ${result.post.author.phoneNumber}</p>` : ""}
-          </div>
-          <p style="color: #64748b; font-size: 13px;">Safety tip: Always meet in a populated, public area on campus (such as the Central Library or Department Office) for item handovers.</p>
-        </div>
-      `,
-    }).catch((err) => console.error("Failed to email accepted claimant:", err));
+    const email = buildHandoverClaimantEmail({
+      postTitle: result.post.title,
+      authorName: result.post.author.name,
+      authorEmail: result.post.author.email,
+      authorPhone: result.post.author.phoneNumber,
+    });
+    dispatchEmailSafe(
+      { to: result.acceptedClaim.claimant.email, ...email },
+      `handover-claimant:${claimId}`,
+    );
   }
 
   if (result.post.author.email) {
-    sendEmail({
-      to: result.post.author.email,
-      subject: `Claim Finalized: Handover Details for ${post.title}`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #0284c7; border-radius: 12px;">
-          <h2 style="color: #0284c7;">Claim Accepted & Post Resolved</h2>
-          <p>You have accepted <strong>${result.acceptedClaim.claimant.name}</strong>'s claim for <strong>"${post.title}"</strong>.</p>
-          <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; margin: 16px 0; border: 1px solid #e2e8f0;">
-            <h3 style="margin-top: 0; color: #0f172a;">Claimant Contact Details</h3>
-            <p style="margin: 4px 0;"><strong>Name:</strong> ${result.acceptedClaim.claimant.name}</p>
-            <p style="margin: 4px 0;"><strong>Email:</strong> ${result.acceptedClaim.claimant.email}</p>
-            ${result.acceptedClaim.claimant.phoneNumber ? `<p style="margin: 4px 0;"><strong>Phone:</strong> ${result.acceptedClaim.claimant.phoneNumber}</p>` : ""}
-          </div>
-          <p style="color: #64748b; font-size: 13px;">Safety tip: Always meet in a populated, public area on campus (such as the Central Library or Department Office) for item handovers.</p>
-        </div>
-      `,
-    }).catch((err) => console.error("Failed to email post author:", err));
+    const email = buildHandoverAuthorEmail({
+      postTitle: result.post.title,
+      claimantName: result.acceptedClaim.claimant.name,
+      claimantEmail: result.acceptedClaim.claimant.email,
+      claimantPhone: result.acceptedClaim.claimant.phoneNumber,
+    });
+    dispatchEmailSafe(
+      { to: result.post.author.email, ...email },
+      `handover-author:${claimId}`,
+    );
   }
 
   return result;
@@ -410,49 +370,31 @@ export const acceptClaimService = async (
 export const rejectClaimService = async (
   postId: string,
   claimId: string,
-  userId: string
+  userId: string,
 ) => {
-  const post = await findLostFoundPostByIdInDb(postId);
-  if (!post) {
-    throw new AppError("Lost & Found post not found", 404);
-  }
+  const { updatedClaim, postTitle } = await rejectClaimAtomicInDb(
+    postId,
+    claimId,
+    userId,
+  );
 
-  if (post.authorId !== userId) {
-    throw new AppError("Unauthorized: Only the post author can reject claims", 403);
-  }
-
-  const claim = await findClaimByIdInDb(claimId);
-  if (!claim || claim.postId !== postId) {
-    throw new AppError("Claim not found on this post", 404);
-  }
-
-  if (claim.status !== LostFoundClaimStatus.PENDING) {
-    throw new AppError("Only pending claims can be rejected", 400);
-  }
-
-  const updatedClaim = await rejectClaimInDb(claimId);
-  await createNotifications([claim.claimantId], {
+  dispatchNotificationSafe([updatedClaim.claimantId], {
     type: "LOST_FOUND_CLAIM",
     title: "Claim update",
-    body: `Your claim for “${post.title}” was not accepted.`,
+    body: `Your claim for “${postTitle}” was not accepted.`,
     route: `/campus-hub/lost-found/${postId}`,
-    dedupeKey: `lost-found-rejection:${claimId}`,
+    dedupeKey: `lost-found-rejection:${claimId}:v${updatedClaim.attemptCount}`,
   });
 
-  // Notify claimant via Brevo
-  if (claim.claimant.email) {
-    sendEmail({
-      to: claim.claimant.email,
-      subject: `Claim Update: ${post.title}`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ef4444; border-radius: 12px;">
-          <h2 style="color: #ef4444;">Claim Status Update</h2>
-          <p>Hi ${claim.claimant.name},</p>
-          <p>The owner of <strong>"${post.title}"</strong> has reviewed your claim and marked it as not verified.</p>
-          <p>If you believe this was in error or you have additional details, check the post in the app.</p>
-        </div>
-      `,
-    }).catch((err) => console.error("Failed to email claimant regarding rejection:", err));
+  if (updatedClaim.claimant.email) {
+    const email = buildClaimRejectedEmail({
+      claimantName: updatedClaim.claimant.name,
+      postTitle,
+    });
+    dispatchEmailSafe(
+      { to: updatedClaim.claimant.email, ...email },
+      `reject-claim:${claimId}`,
+    );
   }
 
   return updatedClaim;
@@ -462,35 +404,68 @@ export const withdrawClaimService = async (
   postId: string,
   claimId: string,
   userId: string,
-  userRole?: string
+  userRole?: string,
 ) => {
-  const claim = await findClaimByIdInDb(claimId);
-  if (!claim || claim.postId !== postId) {
-    throw new AppError("Claim not found on this post", 404);
-  }
-
-  const isClaimant = claim.claimantId === userId;
   const isAdmin = userRole === "ADMIN";
+  const { proofImage } = await withdrawClaimAtomicInDb(
+    postId,
+    claimId,
+    userId,
+    isAdmin,
+  );
 
-  if (!isClaimant && !isAdmin) {
-    throw new AppError(
-      "Unauthorized: You do not have permission to delete this claim",
-      403
-    );
-  }
-
-  if (claim.status === LostFoundClaimStatus.ACCEPTED) {
-    throw new AppError("Cannot withdraw or delete an accepted claim", 400);
-  }
-
-  await withdrawClaimInDb(claimId);
-
-  if (claim.proofImage) {
-    deleteMultipleImagesFromCloudinary([claim.proofImage]).catch((err) =>
-      console.warn("[Cloudinary] Failed to clean up withdrawn claim proof image:", err)
+  if (proofImage) {
+    deleteMultipleImagesFromCloudinary([proofImage]).catch((err) =>
+      console.warn(
+        "[Cloudinary] Failed to clean up withdrawn claim proof image:",
+        err,
+      ),
     );
   }
 
   return { message: "Claim withdrawn successfully" };
 };
 
+export const reportLostFoundPostService = async (
+  postId: string,
+  reporterId: string,
+  data: CreateLostFoundReportPayload,
+) => {
+  const post = await findLostFoundPostSummaryInDb(postId);
+  if (!post || post.isHiddenByModeration) {
+    throw new AppError("Lost & Found post not found", 404);
+  }
+  if (post.authorId === reporterId) {
+    throw new AppError("You cannot report your own listing.", 400);
+  }
+
+  const existing = await findExistingLostFoundReportInDb(reporterId, postId);
+  let reopenReportId: string | undefined;
+
+  if (existing) {
+    if (existing.status !== "DISMISSED") {
+      throw new AppError("You have already reported this listing.", 409);
+    }
+    const reviewedBoundary = existing.reviewedAt ?? existing.createdAt;
+    if (post.updatedAt <= reviewedBoundary) {
+      throw new AppError("A moderator has already reviewed this listing.", 409);
+    }
+    reopenReportId = existing.id;
+  }
+
+  return createLostFoundReportAndEvaluateAutoHideInDb({
+    reporterId,
+    postId,
+    targetAuthorId: post.authorId,
+    reason: data.reason,
+    details: data.details,
+    targetSnapshot: {
+      postId: post.id,
+      type: post.type,
+      category: post.category,
+      title: post.title,
+      contentPreview: (post.description || post.location || "").slice(0, 400),
+    },
+    reopenReportId,
+  });
+};

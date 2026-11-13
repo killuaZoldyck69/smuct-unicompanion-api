@@ -3,9 +3,11 @@ import { envConfig } from "../config/env";
 import { AppError } from "../utils/AppError";
 
 cloudinary.config({
-  cloud_name: envConfig.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME,
+  cloud_name:
+    envConfig.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME,
   api_key: envConfig.CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY,
-  api_secret: envConfig.CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET,
+  api_secret:
+    envConfig.CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET,
   secure: true,
 });
 
@@ -19,14 +21,16 @@ export interface UploadResult {
 }
 
 function ensureConfigured(): void {
-  const cloudName = envConfig.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME;
+  const cloudName =
+    envConfig.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME;
   const apiKey = envConfig.CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY;
-  const apiSecret = envConfig.CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET;
+  const apiSecret =
+    envConfig.CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET;
 
   if (!cloudName || !apiKey || !apiSecret) {
     throw new AppError(
       "Cloudinary is not configured on the server. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in backend .env",
-      500
+      500,
     );
   }
 }
@@ -80,7 +84,10 @@ export function resolveCloudinaryFolder(folder?: string): string {
 /**
  * Builds an optimized delivery URL using Cloudinary transformations
  */
-export function buildOptimizedUrl(publicId: string, cloudName?: string): string {
+export function buildOptimizedUrl(
+  publicId: string,
+  cloudName?: string,
+): string {
   const cName =
     cloudName ||
     envConfig.CLOUDINARY_CLOUD_NAME ||
@@ -91,8 +98,8 @@ export function buildOptimizedUrl(publicId: string, cloudName?: string): string 
   const transformation = isProfile
     ? "q_auto:eco,f_auto,w_400,h_400,c_fill,g_face"
     : isMarketplace
-    ? "q_auto:good,f_auto,w_1200,c_limit"
-    : "q_auto,f_auto,w_1000,c_limit";
+      ? "q_auto:good,f_auto,w_1200,c_limit"
+      : "q_auto,f_auto,w_1000,c_limit";
 
   return `https://res.cloudinary.com/${cName}/image/upload/${transformation}/${publicId}`;
 }
@@ -104,7 +111,7 @@ export async function uploadBufferToCloudinary(
   buffer: Buffer,
   folder: string = PROJECT_ROOT_FOLDER,
   filename?: string,
-  resourceType: "image" | "auto" | "raw" = "image"
+  resourceType: "image" | "auto" | "raw" = "image",
 ): Promise<UploadResult> {
   ensureConfigured();
 
@@ -157,8 +164,8 @@ export async function uploadBufferToCloudinary(
           return reject(
             new AppError(
               `Cloudinary upload error: ${error?.message || "Unknown error"}`,
-              502
-            )
+              502,
+            ),
           );
         }
 
@@ -173,7 +180,7 @@ export async function uploadBufferToCloudinary(
           originalFilename: result.original_filename,
           resourceType: result.resource_type,
         });
-      }
+      },
     );
 
     uploadStream.end(buffer);
@@ -185,7 +192,7 @@ export async function uploadBufferToCloudinary(
  */
 export async function uploadBase64ToCloudinary(
   base64Data: string,
-  folder: string = PROJECT_ROOT_FOLDER
+  folder: string = PROJECT_ROOT_FOLDER,
 ): Promise<UploadResult> {
   ensureConfigured();
 
@@ -232,7 +239,7 @@ export async function uploadBase64ToCloudinary(
   } catch (error: any) {
     throw new AppError(
       `Cloudinary upload error: ${error?.message || "Upload failed"}`,
-      502
+      502,
     );
   }
 }
@@ -254,7 +261,10 @@ export function extractPublicIdFromUrl(urlOrPublicId: string): string | null {
   }
 
   // If external URL (e.g. Google auth avatar, external link), ignore
-  if (!trimmed.includes("cloudinary.com") && !trimmed.includes("/image/upload/")) {
+  if (
+    !trimmed.includes("cloudinary.com") &&
+    !trimmed.includes("/image/upload/")
+  ) {
     return null;
   }
 
@@ -301,17 +311,22 @@ export function extractPublicIdFromUrl(urlOrPublicId: string): string | null {
  * Safe & non-blocking: returns true/false without throwing errors.
  */
 export async function deleteImageFromCloudinary(
-  urlOrPublicId: string
+  urlOrPublicId: string,
 ): Promise<boolean> {
   const publicId = extractPublicIdFromUrl(urlOrPublicId);
   if (!publicId) return false;
 
-  const cloudName = envConfig.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME;
+  const cloudName =
+    envConfig.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME;
   const apiKey = envConfig.CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY;
-  const apiSecret = envConfig.CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET;
+  const apiSecret =
+    envConfig.CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET;
 
   if (!cloudName || !apiKey || !apiSecret) {
-    console.warn("[Cloudinary] Missing credentials. Skipping image deletion for:", publicId);
+    console.warn(
+      "[Cloudinary] Missing credentials. Skipping image deletion for:",
+      publicId,
+    );
     return false;
   }
 
@@ -329,14 +344,16 @@ export async function deleteImageFromCloudinary(
 
 export async function deleteFileFromCloudinary(
   urlOrPublicId: string,
-  resourceType: "image" | "raw" | "video" = "image"
+  resourceType: "image" | "raw" | "video" = "image",
 ): Promise<boolean> {
   const publicId = extractPublicIdFromUrl(urlOrPublicId);
   if (!publicId) return false;
 
-  const cloudName = envConfig.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME;
+  const cloudName =
+    envConfig.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME;
   const apiKey = envConfig.CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY;
-  const apiSecret = envConfig.CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET;
+  const apiSecret =
+    envConfig.CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET;
 
   if (!cloudName || !apiKey || !apiSecret) {
     return false;
@@ -346,10 +363,16 @@ export async function deleteFileFromCloudinary(
   let rawPublicId = publicId;
   if (urlOrPublicId.includes("/upload/")) {
     const uploadIdx = urlOrPublicId.indexOf("/upload/");
-    const after = urlOrPublicId.substring(uploadIdx + "/upload/".length).split("?")[0].split("#")[0];
+    const after = urlOrPublicId
+      .substring(uploadIdx + "/upload/".length)
+      .split("?")[0]
+      .split("#")[0];
     const parts = after.split("/");
     let s = 0;
-    while (s < parts.length && (/^v\d+$/.test(parts[s]) || parts[s].includes(","))) {
+    while (
+      s < parts.length &&
+      (/^v\d+$/.test(parts[s]) || parts[s].includes(","))
+    ) {
       s++;
     }
     if (s < parts.length) {
@@ -390,19 +413,78 @@ export async function deleteFileFromCloudinary(
 }
 
 /**
+ * Verifies that an uploaded image URL points to this application's Cloudinary
+ * image delivery path and expected folder namespace.
+ */
+export function isAllowedAppCloudinaryImageUrl(
+  rawUrl: string,
+  allowedFolderPrefixes: readonly string[] = [PROJECT_ROOT_FOLDER],
+): boolean {
+  if (typeof rawUrl !== "string") return false;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return false;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return false;
+  }
+
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.hostname !== "res.cloudinary.com"
+  ) {
+    return false;
+  }
+
+  const configuredCloudName =
+    envConfig.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME;
+  const expectedPathPrefix = configuredCloudName
+    ? `/${configuredCloudName}/image/upload/`
+    : null;
+
+  if (expectedPathPrefix) {
+    if (!parsed.pathname.startsWith(expectedPathPrefix)) {
+      return false;
+    }
+  } else if (!/^\/[^/]+\/image\/upload\//.test(parsed.pathname)) {
+    return false;
+  }
+
+  const publicId = extractPublicIdFromUrl(trimmed);
+  if (!publicId || publicId.includes("..")) {
+    return false;
+  }
+
+  const normalizedPrefixes = allowedFolderPrefixes.map((prefix) =>
+    prefix.startsWith(PROJECT_ROOT_FOLDER)
+      ? prefix
+      : `${PROJECT_ROOT_FOLDER}/${prefix.replace(/^\/+/, "")}`,
+  );
+
+  return normalizedPrefixes.some(
+    (prefix) => publicId === prefix || publicId.startsWith(`${prefix}/`),
+  );
+}
+
+/**
  * Deletes multiple images from Cloudinary storage in parallel.
  */
 export async function deleteMultipleImagesFromCloudinary(
-  urlsOrPublicIds: (string | null | undefined)[]
+  urlsOrPublicIds: (string | null | undefined)[],
 ): Promise<void> {
   if (!Array.isArray(urlsOrPublicIds) || urlsOrPublicIds.length === 0) return;
 
   const valid = urlsOrPublicIds.filter(
-    (item): item is string => typeof item === "string" && item.trim().length > 0
+    (item): item is string =>
+      typeof item === "string" && item.trim().length > 0,
   );
   if (valid.length === 0) return;
 
-  await Promise.allSettled(valid.map((item) => deleteImageFromCloudinary(item)));
+  await Promise.allSettled(
+    valid.map((item) => deleteImageFromCloudinary(item)),
+  );
 }
 
 export default cloudinary;

@@ -56,14 +56,13 @@ export const formatErrorResponse = (
     if (err.code === "P2002") {
       isExpectedOperational = true;
       statusCode = 409;
-      const target = Array.isArray(err.meta?.target)
-        ? err.meta.target.join(", ")
-        : typeof err.meta?.target === "string"
-        ? err.meta.target
-        : "Record";
-      message = `${target} is already registered in the system.`;
+      console.warn(
+        "[Prisma P2002 Conflict]:",
+        err.meta?.target ?? "unknown_target",
+      );
+      message = "A conflicting record already exists.";
       errorSources = [
-        { path: err.meta?.target, message: `${target} is already in use.` },
+        { message: "Duplicate value conflicts with an existing record." },
       ];
     } else if (err.code === "P2025" || err.code === "P2003") {
       isExpectedOperational = true;
@@ -86,7 +85,10 @@ export const formatErrorResponse = (
     statusCode = 400;
     if (err.code === "LIMIT_FILE_SIZE") {
       message = "Uploaded file exceeds the maximum allowed size limit.";
-    } else if (err.code === "LIMIT_FILE_COUNT" || err.code === "LIMIT_UNEXPECTED_FILE") {
+    } else if (
+      err.code === "LIMIT_FILE_COUNT" ||
+      err.code === "LIMIT_UNEXPECTED_FILE"
+    ) {
       message = "Too many or unexpected upload fields provided.";
     } else {
       message = err.message || "Invalid file upload payload.";
@@ -121,6 +123,10 @@ export const globalErrorHandler = (
   res: Response,
   _next: NextFunction,
 ): void => {
-  const { statusCode, body } = formatErrorResponse(err, req, envConfig.NODE_ENV);
+  const { statusCode, body } = formatErrorResponse(
+    err,
+    req,
+    envConfig.NODE_ENV,
+  );
   res.status(statusCode).json(body);
 };

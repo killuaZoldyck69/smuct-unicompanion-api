@@ -1,6 +1,7 @@
 import { APIError } from "better-auth/api";
 import { maskEmail, sendEmail } from "../lib/email";
 import { prisma } from "../lib/prisma";
+import { escapeHtml } from "../utils/html";
 
 export const UNICOMPANION_SPLASH_LOGO_URL =
   "https://res.cloudinary.com/gzgfeoqn/image/upload/v1794486793/smuct-unicompanion/branding/unicompanion-splash-logo.png";
@@ -11,16 +12,10 @@ export const DEVELOPER_CREDIT = {
   linkedInUrl: "https://www.linkedin.com/in/nahid-hassan-tanver-582132436",
 } as const;
 
-function escapeHtml(value: string): string {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function renderEmailBrandHeader(badgeText: string, subtitleText: string): string {
+function renderEmailBrandHeader(
+  badgeText: string,
+  subtitleText: string,
+): string {
   return `
     <div style="text-align: center; padding-bottom: 22px; border-bottom: 1px solid #e2e8f0; margin-bottom: 24px;">
       <div style="margin: 0 auto 14px; width: 76px; height: 76px;">
