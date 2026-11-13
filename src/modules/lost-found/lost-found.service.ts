@@ -96,6 +96,7 @@ export const updatePostService = async (
   userRole: string | undefined,
   payload: UpdateLostFoundPayload,
 ) => {
+  await assertUserAcceptedUgcTerms(userId);
   const { updated, removedImages } = await updateLostFoundPostAtomicInDb(
     id,
     userId,

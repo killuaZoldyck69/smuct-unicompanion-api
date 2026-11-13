@@ -4,9 +4,20 @@ import {
   LOST_FOUND_STATUS_VALUES,
   LOST_FOUND_CATEGORY_VALUES,
 } from "../../constants/enums";
-import { isAllowedAppCloudinaryImageUrl } from "../../lib/cloudinary";
+import {
+  buildOptimizedUrl,
+  extractPublicIdFromUrl,
+  isAllowedAppCloudinaryImageUrl,
+} from "../../lib/cloudinary";
 
 const LOST_FOUND_CLOUDINARY_PREFIX = "smuct-unicompanion/campus-hub/lost-found";
+const MAX_FEED_PAGE = 1000;
+
+const emptyToUndefined = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess(
+    (val) => (typeof val === "string" && val.trim() === "" ? undefined : val),
+    schema,
+  );
 
 const verifiedLostFoundImageUrl = z
   .string()
@@ -21,7 +32,17 @@ const verifiedLostFoundImageUrl = z
       message:
         "Image URL must be a verified SMUCT UniCompanion Cloudinary Lost & Found asset.",
     },
-  );
+  )
+  .transform((url) => {
+    const publicId = extractPublicIdFromUrl(url);
+    if (!publicId) return url;
+    try {
+      const cloudFromUrl = new URL(url).pathname.split("/").filter(Boolean)[0];
+      return buildOptimizedUrl(publicId, cloudFromUrl);
+    } catch {
+      return url;
+    }
+  });
 
 const postIdParams = z.object({
   id: z.string().uuid("Invalid Lost & Found post ID"),
@@ -87,13 +108,17 @@ export const updateLostFoundSchema = z.object({
 
 export const getFeedQuerySchema = z.object({
   query: z.object({
-    type: z.enum(LOST_FOUND_TYPE_VALUES).optional(),
-    status: z.enum(LOST_FOUND_STATUS_VALUES).optional(),
-    category: z.enum(LOST_FOUND_CATEGORY_VALUES).optional(),
-    search: z.string().trim().max(100).optional(),
-    myPosts: z.enum(["true", "false"]).optional(),
-    page: z.coerce.number().int().min(1).optional(),
-    limit: z.coerce.number().int().min(1).max(100).optional(),
+    type: emptyToUndefined(z.enum(LOST_FOUND_TYPE_VALUES).optional()),
+    status: emptyToUndefined(z.enum(LOST_FOUND_STATUS_VALUES).optional()),
+    category: emptyToUndefined(z.enum(LOST_FOUND_CATEGORY_VALUES).optional()),
+    search: emptyToUndefined(z.string().trim().max(100).optional()),
+    myPosts: emptyToUndefined(z.enum(["true", "false"]).optional()),
+    page: emptyToUndefined(
+      z.coerce.number().int().min(1).max(MAX_FEED_PAGE).optional(),
+    ),
+    limit: emptyToUndefined(
+      z.coerce.number().int().min(1).max(100).optional(),
+    ),
   }),
 });
 

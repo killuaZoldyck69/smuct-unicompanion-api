@@ -459,6 +459,46 @@ test("Security & reliability audit regression guards: URL length/traversal, empt
   assert.match(repoSrc, /claimantEmail/);
   assert.match(serviceSrc, /deleteUnreferencedLostFoundImages/);
   assert.match(serviceSrc, /isLostFoundPostVisibleToViewer/);
+  assert.match(
+    serviceSrc,
+    /updatePostService[\s\S]*?assertUserAcceptedUgcTerms\(userId\)/,
+  );
   assert.match(uploadSvcSrc, /Promise\.allSettled/);
   assert.match(modRepoSrc, /tx\.lostFoundPost\.findUnique/);
+
+  // Empty-string filter normalization, page upper bound, and Cloudinary URL canonicalization
+  const emptyFilters = getFeedQuerySchema.safeParse({
+    query: {
+      type: "",
+      status: "",
+      category: "",
+      search: "   ",
+      myPosts: "",
+      page: "",
+      limit: "",
+    },
+  });
+  assert.equal(emptyFilters.success, true);
+  assert.equal(
+    getFeedQuerySchema.safeParse({ query: { page: "1001" } }).success,
+    false,
+  );
+
+  const canonicalizedPost = createLostFoundSchema.safeParse({
+    body: {
+      type: "LOST",
+      title: "Student ID",
+      category: "ID_CARD",
+      images: [
+        `https://res.cloudinary.com/${cloud}/image/upload/smuct-unicompanion/campus-hub/lost-found/raw_sample.jpg`,
+      ],
+    },
+  });
+  assert.equal(canonicalizedPost.success, true);
+  if (canonicalizedPost.success) {
+    assert.equal(
+      canonicalizedPost.data.body.images[0],
+      `https://res.cloudinary.com/${cloud}/image/upload/q_auto,f_auto,w_1000,c_limit/smuct-unicompanion/campus-hub/lost-found/raw_sample`,
+    );
+  }
 });
