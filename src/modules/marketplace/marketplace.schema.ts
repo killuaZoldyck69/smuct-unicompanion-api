@@ -106,41 +106,44 @@ export const getMarketplaceFeedQuerySchema = z.object({
   }),
 });
 
+const marketplaceSharedFields = z.object({
+  type: z.enum(LISTING_TYPE_VALUES, {
+    message: "Type must be SELLING or BUYING",
+  }),
+  title: z
+    .string()
+    .trim()
+    .min(
+      MIN_MARKETPLACE_TITLE_LENGTH,
+      `Title must be at least ${MIN_MARKETPLACE_TITLE_LENGTH} characters`,
+    )
+    .max(MAX_MARKETPLACE_TITLE_LENGTH),
+  description: z
+    .string()
+    .trim()
+    .min(1, "Description is required")
+    .max(
+      MAX_MARKETPLACE_DESCRIPTION_HTML_LENGTH,
+      "Description payload exceeds maximum allowed size",
+    ),
+  price: nonNullPriceSchema,
+  category: z.enum(MARKETPLACE_CATEGORY_VALUES, {
+    message: "Invalid category selected",
+  }),
+  condition: z.enum(ITEM_CONDITION_VALUES).optional().nullable(),
+  images: z
+    .array(verifiedMarketplaceImageUrl)
+    .max(
+      MAX_MARKETPLACE_IMAGES,
+      `Maximum ${MAX_MARKETPLACE_IMAGES} photos allowed for marketplace listings`,
+    ),
+  contactPhone: phoneField,
+});
+
 export const createMarketplaceSchema = z.object({
-  body: z.object({
-    type: z.enum(LISTING_TYPE_VALUES, {
-      message: "Type must be SELLING or BUYING",
-    }),
-    title: z
-      .string()
-      .trim()
-      .min(
-        MIN_MARKETPLACE_TITLE_LENGTH,
-        `Title must be at least ${MIN_MARKETPLACE_TITLE_LENGTH} characters`,
-      )
-      .max(MAX_MARKETPLACE_TITLE_LENGTH),
-    description: z
-      .string()
-      .trim()
-      .min(1, "Description is required")
-      .max(
-        MAX_MARKETPLACE_DESCRIPTION_HTML_LENGTH,
-        "Description payload exceeds maximum allowed size",
-      ),
-    price: nonNullPriceSchema.optional().default(0),
-    category: z.enum(MARKETPLACE_CATEGORY_VALUES, {
-      message: "Invalid category selected",
-    }),
-    condition: z.enum(ITEM_CONDITION_VALUES).optional().nullable(),
-    images: z
-      .array(verifiedMarketplaceImageUrl)
-      .max(
-        MAX_MARKETPLACE_IMAGES,
-        `Maximum ${MAX_MARKETPLACE_IMAGES} photos allowed for marketplace listings`,
-      )
-      .optional()
-      .default([]),
-    contactPhone: phoneField,
+  body: marketplaceSharedFields.extend({
+    price: marketplaceSharedFields.shape.price.optional().default(0),
+    images: marketplaceSharedFields.shape.images.optional().default([]),
     idempotencyKey: z.string().trim().min(8).max(128).optional(),
   }),
 });
@@ -156,39 +159,8 @@ export const updateMarketplaceStatusSchema = z.object({
 
 export const updateMarketplaceSchema = z.object({
   params: postIdParams,
-  body: z
-    .object({
-      type: z.enum(LISTING_TYPE_VALUES).optional(),
-      title: z
-        .string()
-        .trim()
-        .min(
-          MIN_MARKETPLACE_TITLE_LENGTH,
-          `Title must be at least ${MIN_MARKETPLACE_TITLE_LENGTH} characters`,
-        )
-        .max(MAX_MARKETPLACE_TITLE_LENGTH)
-        .optional(),
-      description: z
-        .string()
-        .trim()
-        .min(1, "Description cannot be empty")
-        .max(
-          MAX_MARKETPLACE_DESCRIPTION_HTML_LENGTH,
-          "Description payload exceeds maximum allowed size",
-        )
-        .optional(),
-      price: nonNullPriceSchema.optional(),
-      category: z.enum(MARKETPLACE_CATEGORY_VALUES).optional(),
-      condition: z.enum(ITEM_CONDITION_VALUES).optional().nullable(),
-      images: z
-        .array(verifiedMarketplaceImageUrl)
-        .max(
-          MAX_MARKETPLACE_IMAGES,
-          `Maximum ${MAX_MARKETPLACE_IMAGES} photos allowed for marketplace listings`,
-        )
-        .optional(),
-      contactPhone: phoneField.optional(),
-    })
+  body: marketplaceSharedFields
+    .partial()
     .refine((body) => Object.values(body).some((val) => val !== undefined), {
       message: "At least one field must be provided for update",
     }),

@@ -4,6 +4,7 @@ import { AppError } from "../../utils/AppError";
 import { prisma } from "../../lib/prisma";
 import {
   deleteFileFromCloudinary,
+  expandCloudinaryUrlVariants,
   extractPublicIdFromUrl,
   PROJECT_ROOT_FOLDER,
 } from "../../lib/cloudinary";
@@ -152,6 +153,7 @@ export const deleteUploadedFile = catchAsync(
       const escapedPublicId = publicId.replace(/[\\%_]/g, "\\$&");
       const likePattern = `%/${escapedPublicId}%`;
       const rawLikePattern = `%${escapedPublicId}%`;
+      const marketplaceCandidateUrls = expandCloudinaryUrlVariants([url]);
 
       const [
         otherLfPost,
@@ -186,7 +188,7 @@ export const deleteUploadedFile = catchAsync(
           },
           select: { id: true },
         }),
-        // Always enforce both exact URL and publicId pattern matching so variant HTTPS delivery URLs cannot bypass ownership checks
+        // Always enforce both exact URL and variant matching; marketplace_post uses GIN array overlap (`&&`).
         prisma.$queryRaw<Array<{ owned_by_other: boolean }>>`
           SELECT (
             EXISTS (
@@ -199,9 +201,7 @@ export const deleteUploadedFile = catchAsync(
             OR EXISTS (
               SELECT 1 FROM "marketplace_post"
               WHERE "authorId" <> ${viewerId}
-                AND ("images" @> ARRAY[${url}]::text[]
-                  OR array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
-                  OR array_to_string("images", ' ') LIKE ${rawLikePattern} ESCAPE '\\')
+                AND "images" && ${marketplaceCandidateUrls}::text[]
             )
           ) AS owned_by_other
         `,
@@ -222,9 +222,7 @@ export const deleteUploadedFile = catchAsync(
             OR EXISTS (
               SELECT 1 FROM "marketplace_post"
               WHERE "authorId" = ${viewerId}
-                AND ("images" @> ARRAY[${url}]::text[]
-                  OR array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
-                  OR array_to_string("images", ' ') LIKE ${rawLikePattern} ESCAPE '\\')
+                AND "images" && ${marketplaceCandidateUrls}::text[]
             )
           ) AS actively_referenced
         `,

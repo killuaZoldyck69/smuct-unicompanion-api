@@ -455,6 +455,17 @@ export const resolveForumReportService = async (
       throw new AppError("This content report has already been reviewed.", 409);
     }
 
+    // Lock Marketplace target row so admin moderation and concurrent report auto-hide serialize cleanly.
+    if (report.targetType === "MARKETPLACE_POST") {
+      await tx.$queryRaw`
+        SELECT id FROM "marketplace_post" WHERE id = ${report.targetId} FOR UPDATE
+      `;
+    } else if (report.targetType === "MARKETPLACE_COMMENT") {
+      await tx.$queryRaw`
+        SELECT id FROM "marketplace_comment" WHERE id = ${report.targetId} FOR UPDATE
+      `;
+    }
+
     if (payload.action === "RESTRICT_USER") {
       if (!report.targetAuthorId) {
         throw new AppError(
@@ -606,7 +617,9 @@ export const resolveForumReportService = async (
         });
         if (mpPost) {
           marketplaceImagesToDelete.push(...(mpPost.images || []));
-          await tx.marketplacePost.deleteMany({ where: { id: report.targetId } });
+          await tx.marketplacePost.deleteMany({
+            where: { id: report.targetId },
+          });
         }
       } else if (report.targetType === "MARKETPLACE_COMMENT") {
         await tx.marketplaceComment.deleteMany({

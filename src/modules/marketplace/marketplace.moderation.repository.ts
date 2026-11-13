@@ -103,6 +103,17 @@ export const createMarketplaceReportAndEvaluateAutoHideInDb = async (params: {
 
   try {
     return await prisma.$transaction(async (tx) => {
+      // Serialize concurrent reports and admin moderation on the same target row so auto-hide counts are exact.
+      if (params.targetType === "MARKETPLACE_POST") {
+        await tx.$queryRaw`
+          SELECT id FROM "marketplace_post" WHERE id = ${params.targetId} FOR UPDATE
+        `;
+      } else {
+        await tx.$queryRaw`
+          SELECT id FROM "marketplace_comment" WHERE id = ${params.targetId} FOR UPDATE
+        `;
+      }
+
       const target = await loadModerationTargetInDb(
         tx,
         params.targetType,
@@ -129,7 +140,10 @@ export const createMarketplaceReportAndEvaluateAutoHideInDb = async (params: {
       let reopenReportId: string | undefined;
       if (existing) {
         if (existing.status !== "DISMISSED") {
-          throw new AppError(`You have already reported this ${targetLabel}.`, 409);
+          throw new AppError(
+            `You have already reported this ${targetLabel}.`,
+            409,
+          );
         }
         const reviewedBoundary = existing.reviewedAt ?? existing.createdAt;
         if (target.updatedAt <= reviewedBoundary) {

@@ -1,22 +1,17 @@
 import { AppError } from "../../utils/AppError";
-import { ListingStatus } from "../../constants/enums";
 import { createNotifications } from "../notification/notification.service";
 import { findUserUgcTermsStatus } from "../forum/forum.repository";
 import {
-  assertOwnership,
   isMarketplaceItemVisibleToViewer,
   normalizeMarketplaceConditionAndPrice,
   validateAndSanitizeMarketplaceComment,
   validateAndSanitizeMarketplaceInput,
 } from "./marketplace.domain";
 import { deleteUnreferencedMarketplaceImages } from "./marketplace.media";
-import { createMarketplaceReportAndEvaluateAutoHideInDb } from "./marketplace.moderation.repository";
 import {
   createMarketplaceCommentAtomicInDb,
   createMarketplacePostInDb,
-  deleteMarketplaceCommentFromDb,
   deleteMarketplacePostAtomicInDb,
-  findMarketplaceCommentByIdInDb,
   findMarketplaceFeedInDb,
   findMarketplacePostByIdInDb,
   getMarketplaceViewerContextInDb,
@@ -24,12 +19,10 @@ import {
   PaginationParams,
   updateMarketplaceCommentAtomicInDb,
   updateMarketplacePostAtomicInDb,
-  updateMarketplaceStatusAtomicInDb,
 } from "./marketplace.repository";
 import {
   CreateMarketplaceCommentPayload,
   CreateMarketplacePayload,
-  CreateMarketplaceReportPayload,
   UpdateMarketplacePayload,
 } from "./marketplace.schema";
 
@@ -79,12 +72,20 @@ export const getPostByIdService = async (
     ...post,
     comments: post.comments
       .filter((comment) =>
-        isMarketplaceItemVisibleToViewer(comment, "MARKETPLACE_COMMENT", viewer),
+        isMarketplaceItemVisibleToViewer(
+          comment,
+          "MARKETPLACE_COMMENT",
+          viewer,
+        ),
       )
       .map((comment) => ({
         ...comment,
         replies: (comment.replies ?? []).filter((reply) =>
-          isMarketplaceItemVisibleToViewer(reply, "MARKETPLACE_COMMENT", viewer),
+          isMarketplaceItemVisibleToViewer(
+            reply,
+            "MARKETPLACE_COMMENT",
+            viewer,
+          ),
         ),
       })),
   };
@@ -160,21 +161,16 @@ export const updatePostService = async (
   return updated;
 };
 
-export const updateStatusService = async (
-  id: string,
-  userId: string,
-  userRole: string | undefined,
-  status: ListingStatus,
-) => {
-  return updateMarketplaceStatusAtomicInDb(id, userId, userRole, status);
-};
-
 export const deletePostService = async (
   id: string,
   userId: string,
   userRole: string | undefined,
 ) => {
-  const { images } = await deleteMarketplacePostAtomicInDb(id, userId, userRole);
+  const { images } = await deleteMarketplacePostAtomicInDb(
+    id,
+    userId,
+    userRole,
+  );
 
   if (images.length > 0) {
     void deleteUnreferencedMarketplaceImages(
@@ -194,7 +190,10 @@ export const createCommentService = async (
 
   const sanitized = validateAndSanitizeMarketplaceComment(payload.content);
   if (sanitized.error || !sanitized.cleanContent) {
-    throw new AppError(sanitized.error ?? "Comment content cannot be empty.", 400);
+    throw new AppError(
+      sanitized.error ?? "Comment content cannot be empty.",
+      400,
+    );
   }
 
   const viewer = await getMarketplaceViewerContextInDb(userId, userRole);
@@ -219,7 +218,10 @@ export const createCommentService = async (
       route: `/campus-hub/marketplace/${postId}`,
       dedupeKey: `marketplace-comment:${comment.id}`,
     }).catch((err) => {
-      console.warn("[Marketplace] Failed to dispatch comment notification:", err);
+      console.warn(
+        "[Marketplace] Failed to dispatch comment notification:",
+        err,
+      );
     });
   }
 
@@ -236,7 +238,10 @@ export const updateCommentService = async (
 
   const sanitized = validateAndSanitizeMarketplaceComment(content);
   if (sanitized.error || !sanitized.cleanContent) {
-    throw new AppError(sanitized.error ?? "Comment content cannot be empty.", 400);
+    throw new AppError(
+      sanitized.error ?? "Comment content cannot be empty.",
+      400,
+    );
   }
 
   return updateMarketplaceCommentAtomicInDb(
@@ -245,37 +250,4 @@ export const updateCommentService = async (
     userId,
     sanitized.cleanContent,
   );
-};
-
-export const deleteCommentService = async (
-  postId: string,
-  commentId: string,
-  userId: string,
-  userRole: string | undefined,
-) => {
-  const comment = await findMarketplaceCommentByIdInDb(commentId);
-  if (!comment || comment.postId !== postId) {
-    throw new AppError("Comment not found", 404);
-  }
-
-  assertOwnership(
-    comment.authorId === userId,
-    userRole === "ADMIN",
-    "delete this comment",
-  );
-
-  return deleteMarketplaceCommentFromDb(commentId);
-};
-
-export const createMarketplaceReportService = async (
-  reporterId: string,
-  payload: CreateMarketplaceReportPayload,
-) => {
-  return createMarketplaceReportAndEvaluateAutoHideInDb({
-    reporterId,
-    targetType: payload.targetType,
-    targetId: payload.targetId,
-    reason: payload.reason,
-    details: payload.details,
-  });
 };

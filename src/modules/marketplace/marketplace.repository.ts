@@ -50,10 +50,53 @@ export interface PaginatedResult<T> {
   counts: MarketplaceFeedCounts;
 }
 
-const postDetailInclude = {
+function buildCommentCountSelect(
+  isAdmin: boolean,
+  reportedCommentIds?: ReadonlySet<string>,
+) {
+  if (isAdmin) return true;
+  return {
+    where: {
+      isHiddenByModeration: false,
+      ...(reportedCommentIds?.size
+        ? { id: { notIn: [...reportedCommentIds] } }
+        : {}),
+    },
+  };
+}
+
+const commentNodeSelect = {
+  id: true,
+  postId: true,
+  authorId: true,
+  parentId: true,
+  content: true,
+  isHiddenByModeration: true,
+  createdAt: true,
+  updatedAt: true,
   author: { select: publicUserSelect },
-  _count: { select: { comments: true } },
-} satisfies Prisma.MarketplacePostInclude;
+} satisfies Prisma.MarketplaceCommentSelect;
+
+function buildPostMutationSelect(isAdmin: boolean) {
+  return {
+    id: true,
+    type: true,
+    title: true,
+    description: true,
+    price: true,
+    category: true,
+    condition: true,
+    status: true,
+    images: true,
+    contactPhone: true,
+    authorId: true,
+    isHiddenByModeration: true,
+    createdAt: true,
+    updatedAt: true,
+    author: { select: publicUserSelect },
+    _count: { select: { comments: buildCommentCountSelect(isAdmin) } },
+  } satisfies Prisma.MarketplacePostSelect;
+}
 
 function mapPrismaNotFound(
   err: unknown,
@@ -69,7 +112,10 @@ function mapPrismaNotFound(
   throw err;
 }
 
-function buildFeedItemSelect(isAdmin: boolean) {
+function buildFeedItemSelect(
+  isAdmin: boolean,
+  reportedCommentIds?: ReadonlySet<string>,
+) {
   return {
     id: true,
     type: true,
@@ -87,7 +133,7 @@ function buildFeedItemSelect(isAdmin: boolean) {
     author: { select: feedAuthorSelect },
     _count: {
       select: {
-        comments: isAdmin ? true : { where: { isHiddenByModeration: false } },
+        comments: buildCommentCountSelect(isAdmin, reportedCommentIds),
       },
     },
   } satisfies Prisma.MarketplacePostSelect;
@@ -135,14 +181,15 @@ export const getMarketplaceViewerContextInDb = async (
   };
 };
 
-// ---------------------------------------------------------------------------
-// Feed — deterministic cursor pagination
-// ---------------------------------------------------------------------------
+export type MarketplaceFeedItem = Prisma.MarketplacePostGetPayload<{
+  select: ReturnType<typeof buildFeedItemSelect>;
+}>;
+
 export const findMarketplaceFeedInDb = async (
   filters: MarketplaceFeedFilters,
   pagination: PaginationParams,
   viewer: MarketplaceViewerContext,
-): Promise<PaginatedResult<Record<string, unknown>>> => {
+): Promise<PaginatedResult<MarketplaceFeedItem>> => {
   const { cursor, limit } = pagination;
   const isAdmin = viewer.role === "ADMIN";
   const isMyPosts = Boolean(filters.myPosts && viewer.userId);
@@ -192,7 +239,7 @@ export const findMarketplaceFeedInDb = async (
         cursor: { id: cursor },
         skip: 1,
       }),
-      select: buildFeedItemSelect(isAdmin),
+      select: buildFeedItemSelect(isAdmin, viewer.reportedCommentIds),
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     }),
     cursor ? Promise.resolve(0) : prisma.marketplacePost.count({ where }),
@@ -239,7 +286,21 @@ export const findMarketplacePostByIdInDb = async (
 
   return prisma.marketplacePost.findUnique({
     where: { id },
-    include: {
+    select: {
+      id: true,
+      type: true,
+      title: true,
+      description: true,
+      price: true,
+      category: true,
+      condition: true,
+      status: true,
+      images: true,
+      contactPhone: true,
+      authorId: true,
+      isHiddenByModeration: true,
+      createdAt: true,
+      updatedAt: true,
       author: { select: publicUserSelect },
       comments: {
         where: {
@@ -248,21 +309,19 @@ export const findMarketplacePostByIdInDb = async (
         },
         take: 100,
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-        include: {
-          author: { select: publicUserSelect },
+        select: {
+          ...commentNodeSelect,
           replies: {
             where: commentVisibilityWhere,
             take: 50,
-            include: { author: { select: publicUserSelect } },
+            select: commentNodeSelect,
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           },
         },
       },
       _count: {
         select: {
-          comments: isAdmin
-            ? true
-            : { where: { isHiddenByModeration: false } },
+          comments: buildCommentCountSelect(isAdmin, viewer.reportedCommentIds),
         },
       },
     },
@@ -299,7 +358,7 @@ export const createMarketplacePostInDb = async (
           contactPhone: payload.contactPhone ?? null,
           idempotencyKey,
         },
-        include: postDetailInclude,
+        select: buildPostMutationSelect(false),
       });
     });
   } catch (err) {
@@ -312,7 +371,7 @@ export const createMarketplacePostInDb = async (
         where: {
           authorId_idempotencyKey: { authorId, idempotencyKey },
         },
-        include: postDetailInclude,
+        select: buildPostMutationSelect(false),
       });
       if (existing) {
         return existing;
@@ -382,10 +441,11 @@ export const updateMarketplacePostAtomicInDb = async (
       }),
     };
 
+    const isAdmin = userRole === "ADMIN";
     const updated = await tx.marketplacePost.update({
       where: { id },
       data: updateData,
-      include: postDetailInclude,
+      select: buildPostMutationSelect(isAdmin),
     });
 
     return { updated, removedImages };
@@ -398,10 +458,11 @@ export const updateMarketplaceStatusAtomicInDb = async (
   userRole: string | undefined,
   status: ListingStatus,
 ) => {
+  const isAdmin = userRole === "ADMIN";
   return prisma.$transaction(async (tx) => {
     const existing = await tx.marketplacePost.findUnique({
       where: { id },
-      include: postDetailInclude,
+      select: buildPostMutationSelect(isAdmin),
     });
 
     if (!existing) {
@@ -410,7 +471,7 @@ export const updateMarketplaceStatusAtomicInDb = async (
 
     assertOwnership(
       existing.authorId === userId,
-      userRole === "ADMIN",
+      isAdmin,
       "modify this listing",
     );
 
@@ -421,7 +482,7 @@ export const updateMarketplaceStatusAtomicInDb = async (
     return tx.marketplacePost.update({
       where: { id },
       data: { status },
-      include: postDetailInclude,
+      select: buildPostMutationSelect(isAdmin),
     });
   });
 };
@@ -531,7 +592,7 @@ export const createMarketplaceCommentAtomicInDb = async (params: {
           content: params.content,
           parentId: resolvedParentId,
         },
-        include: { author: { select: publicUserSelect } },
+        select: commentNodeSelect,
       });
 
       return {
@@ -544,19 +605,6 @@ export const createMarketplaceCommentAtomicInDb = async (params: {
   } catch (err) {
     mapPrismaNotFound(err, "Marketplace listing not found", ["P2003", "P2025"]);
   }
-};
-
-export const findMarketplaceCommentByIdInDb = async (commentId: string) => {
-  return prisma.marketplaceComment.findUnique({
-    where: { id: commentId },
-    select: {
-      id: true,
-      authorId: true,
-      postId: true,
-      parentId: true,
-      isHiddenByModeration: true,
-    },
-  });
 };
 
 export const updateMarketplaceCommentAtomicInDb = async (
@@ -592,7 +640,7 @@ export const updateMarketplaceCommentAtomicInDb = async (
       return tx.marketplaceComment.update({
         where: { id: commentId },
         data: { content },
-        include: { author: { select: publicUserSelect } },
+        select: commentNodeSelect,
       });
     });
   } catch (err) {
@@ -600,9 +648,44 @@ export const updateMarketplaceCommentAtomicInDb = async (
   }
 };
 
-export const deleteMarketplaceCommentFromDb = async (commentId: string) => {
+export const deleteMarketplaceCommentAtomicInDb = async (
+  postId: string,
+  commentId: string,
+  userId: string,
+  userRole: string | undefined,
+) => {
   try {
-    return await prisma.marketplaceComment.delete({ where: { id: commentId } });
+    return await prisma.$transaction(async (tx) => {
+      const comment = await tx.marketplaceComment.findUnique({
+        where: { id: commentId },
+        select: {
+          id: true,
+          authorId: true,
+          postId: true,
+          isHiddenByModeration: true,
+          post: { select: { isHiddenByModeration: true } },
+        },
+      });
+
+      const isAdmin = userRole === "ADMIN";
+      if (
+        !comment ||
+        comment.postId !== postId ||
+        (!isAdmin &&
+          (comment.isHiddenByModeration || comment.post.isHiddenByModeration))
+      ) {
+        throw new AppError("Comment not found", 404);
+      }
+
+      assertOwnership(
+        comment.authorId === userId,
+        isAdmin,
+        "delete this comment",
+      );
+
+      await tx.marketplaceComment.delete({ where: { id: commentId } });
+      return { id: comment.id };
+    });
   } catch (err) {
     mapPrismaNotFound(err, "Comment not found");
   }

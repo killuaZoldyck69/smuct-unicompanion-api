@@ -1,41 +1,54 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../../utils/catchAsync";
+import { AppError } from "../../utils/AppError";
 import { ListingStatus } from "../../constants/enums";
 import type { GetMarketplaceFeedQuery } from "./marketplace.schema";
+import { createMarketplaceReportAndEvaluateAutoHideInDb } from "./marketplace.moderation.repository";
+import {
+  deleteMarketplaceCommentAtomicInDb,
+  updateMarketplaceStatusAtomicInDb,
+} from "./marketplace.repository";
 import {
   createCommentService,
-  createMarketplaceReportService,
   createPostService,
-  deleteCommentService,
   deletePostService,
   getFeedService,
   getPostByIdService,
   updateCommentService,
   updatePostService,
-  updateStatusService,
 } from "./marketplace.service";
 
+function requireViewer(req: Request) {
+  if (!req.user?.id) {
+    throw new AppError("Authentication required", 401);
+  }
+  return { id: req.user.id, role: req.user.role };
+}
+
 export const getFeed = catchAsync(async (req: Request, res: Response) => {
+  const viewer = requireViewer(req);
   const { limit, cursor, ...filters } =
     req.query as unknown as GetMarketplaceFeedQuery;
   const result = await getFeedService(
-    { ...filters, viewerId: req.user!.id, viewerRole: req.user?.role },
+    { ...filters, viewerId: viewer.id, viewerRole: viewer.role },
     { limit, cursor },
   );
   res.status(200).json({ success: true, data: result });
 });
 
 export const getPostById = catchAsync(async (req: Request, res: Response) => {
+  const viewer = requireViewer(req);
   const result = await getPostByIdService(
-    req.params.id as string,
-    req.user!.id,
-    req.user?.role,
+    String(req.params.id),
+    viewer.id,
+    viewer.role,
   );
   res.status(200).json({ success: true, data: result });
 });
 
 export const createPost = catchAsync(async (req: Request, res: Response) => {
-  const result = await createPostService(req.user!.id, req.body);
+  const viewer = requireViewer(req);
+  const result = await createPostService(viewer.id, req.body);
   res.status(201).json({
     success: true,
     message: "Listing created successfully",
@@ -44,10 +57,11 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const updatePost = catchAsync(async (req: Request, res: Response) => {
+  const viewer = requireViewer(req);
   const result = await updatePostService(
-    req.params.id as string,
-    req.user!.id,
-    req.user?.role,
+    String(req.params.id),
+    viewer.id,
+    viewer.role,
     req.body,
   );
   res.status(200).json({
@@ -58,10 +72,11 @@ export const updatePost = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const updateStatus = catchAsync(async (req: Request, res: Response) => {
-  const result = await updateStatusService(
-    req.params.id as string,
-    req.user!.id,
-    req.user?.role,
+  const viewer = requireViewer(req);
+  const result = await updateMarketplaceStatusAtomicInDb(
+    String(req.params.id),
+    viewer.id,
+    viewer.role,
     req.body.status,
   );
   res.status(200).json({
@@ -72,10 +87,11 @@ export const updateStatus = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const markAsSold = catchAsync(async (req: Request, res: Response) => {
-  const result = await updateStatusService(
-    req.params.id as string,
-    req.user!.id,
-    req.user?.role,
+  const viewer = requireViewer(req);
+  const result = await updateMarketplaceStatusAtomicInDb(
+    String(req.params.id),
+    viewer.id,
+    viewer.role,
     ListingStatus.SOLD,
   );
   res.status(200).json({
@@ -86,7 +102,8 @@ export const markAsSold = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const deletePost = catchAsync(async (req: Request, res: Response) => {
-  await deletePostService(req.params.id as string, req.user!.id, req.user?.role);
+  const viewer = requireViewer(req);
+  await deletePostService(String(req.params.id), viewer.id, viewer.role);
   res.status(200).json({
     success: true,
     message: "Listing deleted successfully",
@@ -94,10 +111,11 @@ export const deletePost = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const createComment = catchAsync(async (req: Request, res: Response) => {
+  const viewer = requireViewer(req);
   const result = await createCommentService(
-    req.params.id as string,
-    req.user!.id,
-    req.user?.role,
+    String(req.params.id),
+    viewer.id,
+    viewer.role,
     req.body,
   );
   res.status(201).json({
@@ -108,10 +126,11 @@ export const createComment = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const updateComment = catchAsync(async (req: Request, res: Response) => {
+  const viewer = requireViewer(req);
   const result = await updateCommentService(
-    req.params.id as string,
-    req.params.commentId as string,
-    req.user!.id,
+    String(req.params.id),
+    String(req.params.commentId),
+    viewer.id,
     req.body.content,
   );
   res.status(200).json({
@@ -122,11 +141,12 @@ export const updateComment = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const deleteComment = catchAsync(async (req: Request, res: Response) => {
-  await deleteCommentService(
-    req.params.id as string,
-    req.params.commentId as string,
-    req.user!.id,
-    req.user?.role,
+  const viewer = requireViewer(req);
+  await deleteMarketplaceCommentAtomicInDb(
+    String(req.params.id),
+    String(req.params.commentId),
+    viewer.id,
+    viewer.role,
   );
   res.status(200).json({
     success: true,
@@ -136,7 +156,14 @@ export const deleteComment = catchAsync(async (req: Request, res: Response) => {
 
 export const reportMarketplaceContent = catchAsync(
   async (req: Request, res: Response) => {
-    const result = await createMarketplaceReportService(req.user!.id, req.body);
+    const viewer = requireViewer(req);
+    const result = await createMarketplaceReportAndEvaluateAutoHideInDb({
+      reporterId: viewer.id,
+      targetType: req.body.targetType,
+      targetId: req.body.targetId,
+      reason: req.body.reason,
+      details: req.body.details,
+    });
     res.status(201).json({
       success: true,
       message: result.autoHidden

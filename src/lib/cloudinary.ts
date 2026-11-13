@@ -468,7 +468,11 @@ export function isAllowedAppCloudinaryImageUrl(
   }
 
   const publicId = extractPublicIdFromUrl(parsed.href);
-  if (!publicId || publicId.includes("..") || publicId.toLowerCase().includes("%2e%2e")) {
+  if (
+    !publicId ||
+    publicId.includes("..") ||
+    publicId.toLowerCase().includes("%2e%2e")
+  ) {
     return false;
   }
 
@@ -481,6 +485,30 @@ export function isAllowedAppCloudinaryImageUrl(
   return normalizedPrefixes.some(
     (prefix) => publicId === prefix || publicId.startsWith(`${prefix}/`),
   );
+}
+
+/**
+ * Expands Cloudinary URLs to include each asset's canonical optimized delivery variant
+ * so array-overlap queries (`hasSome` / `&&`) match variant URLs without `LIKE` table scans.
+ */
+export function expandCloudinaryUrlVariants(urls: readonly string[]): string[] {
+  const expanded = new Set<string>();
+  for (const raw of urls) {
+    const url = typeof raw === "string" ? raw.trim() : "";
+    if (!url) continue;
+    expanded.add(url);
+
+    const publicId = extractPublicIdFromUrl(url);
+    if (!publicId) continue;
+
+    try {
+      const cloudFromUrl = new URL(url).pathname.split("/").filter(Boolean)[0];
+      expanded.add(buildOptimizedUrl(publicId, cloudFromUrl));
+    } catch {
+      expanded.add(buildOptimizedUrl(publicId));
+    }
+  }
+  return [...expanded];
 }
 
 /**

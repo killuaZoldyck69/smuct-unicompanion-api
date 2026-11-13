@@ -39,12 +39,10 @@ const {
 } = await import("../src/modules/marketplace/marketplace.routes");
 const { adminForumReportsQuerySchema } =
   await import("../src/modules/admin/admin.schema");
-const { publicUserSelect } =
-  await import("../src/modules/forum/forum.domain");
+const { publicUserSelect } = await import("../src/modules/forum/forum.domain");
 const { isAllowedAppCloudinaryImageUrl } =
   await import("../src/lib/cloudinary");
-const { ListingStatus, ListingType } =
-  await import("../src/constants/enums");
+const { ListingStatus, ListingType } = await import("../src/constants/enums");
 
 function invokeLimiter(
   limiter: any,
@@ -107,22 +105,49 @@ test("API-1: Marketplace Cloudinary validator accepts verified folder URLs and b
 test("API-8: Marketplace rate limiters isolate users behind a shared campus NAT IP", () => {
   const natIp = "103.55.12.9";
   for (let i = 0; i < 10; i++) {
-    assert.equal(invokeLimiter(marketplacePostRateLimiter, "mp-a", natIp).statusCode, 200);
+    assert.equal(
+      invokeLimiter(marketplacePostRateLimiter, "mp-a", natIp).statusCode,
+      200,
+    );
   }
-  assert.equal(invokeLimiter(marketplacePostRateLimiter, "mp-a", natIp).statusCode, 429);
-  assert.equal(invokeLimiter(marketplacePostRateLimiter, "mp-b", natIp).statusCode, 200);
+  assert.equal(
+    invokeLimiter(marketplacePostRateLimiter, "mp-a", natIp).statusCode,
+    429,
+  );
+  assert.equal(
+    invokeLimiter(marketplacePostRateLimiter, "mp-b", natIp).statusCode,
+    200,
+  );
 
   for (let i = 0; i < 25; i++) {
-    assert.equal(invokeLimiter(marketplaceCommentRateLimiter, "mp-c", natIp).statusCode, 200);
+    assert.equal(
+      invokeLimiter(marketplaceCommentRateLimiter, "mp-c", natIp).statusCode,
+      200,
+    );
   }
-  assert.equal(invokeLimiter(marketplaceCommentRateLimiter, "mp-c", natIp).statusCode, 429);
-  assert.equal(invokeLimiter(marketplaceCommentRateLimiter, "mp-d", natIp).statusCode, 200);
+  assert.equal(
+    invokeLimiter(marketplaceCommentRateLimiter, "mp-c", natIp).statusCode,
+    429,
+  );
+  assert.equal(
+    invokeLimiter(marketplaceCommentRateLimiter, "mp-d", natIp).statusCode,
+    200,
+  );
 
   for (let i = 0; i < 10; i++) {
-    assert.equal(invokeLimiter(marketplaceReportRateLimiter, "mp-e", natIp).statusCode, 200);
+    assert.equal(
+      invokeLimiter(marketplaceReportRateLimiter, "mp-e", natIp).statusCode,
+      200,
+    );
   }
-  assert.equal(invokeLimiter(marketplaceReportRateLimiter, "mp-e", natIp).statusCode, 429);
-  assert.equal(invokeLimiter(marketplaceReportRateLimiter, "mp-f", natIp).statusCode, 200);
+  assert.equal(
+    invokeLimiter(marketplaceReportRateLimiter, "mp-e", natIp).statusCode,
+    429,
+  );
+  assert.equal(
+    invokeLimiter(marketplaceReportRateLimiter, "mp-f", natIp).statusCode,
+    200,
+  );
 });
 
 test("API-15: Marketplace HTML sanitization neutralizes executable payloads and validates plain-text length", () => {
@@ -150,7 +175,7 @@ test("API-15: Marketplace HTML sanitization neutralizes executable payloads and 
   assert.match(longPlain.error ?? "", /cannot exceed 3,000/);
 
   const commentRes = validateAndSanitizeMarketplaceComment(
-    '<p>Still available? <script>evil()</script></p>',
+    "<p>Still available? <script>evil()</script></p>",
   );
   assert.equal(commentRes.cleanContent, "Still available?");
 });
@@ -238,8 +263,10 @@ test("API-16: Marketplace schemas validate UUIDs, query coercion, cross-module r
     params: {},
   };
   await new Promise<void>((resolve, reject) => {
-    validateRequest(getMarketplaceFeedQuerySchema)(req, {} as any, (err?: any) =>
-      err ? reject(err) : resolve(),
+    validateRequest(getMarketplaceFeedQuerySchema)(
+      req,
+      {} as any,
+      (err?: any) => (err ? reject(err) : resolve()),
     );
   });
   assert.equal(req.query.type, undefined);
@@ -329,7 +356,10 @@ test("API-5, PII & Media Regression Guards: no all-user broadcast, non-PII autho
   );
   assert.equal(serviceSrc.includes("createNotificationsForAllUsers"), false);
   assert.equal(serviceSrc.includes("assertUserAcceptedUgcTerms"), true);
-  assert.equal(serviceSrc.includes("deleteUnreferencedMarketplaceImages"), true);
+  assert.equal(
+    serviceSrc.includes("deleteUnreferencedMarketplaceImages"),
+    true,
+  );
 
   const repoSrc = fs.readFileSync(
     path.join(apiRoot, "src/modules/marketplace/marketplace.repository.ts"),
@@ -351,27 +381,71 @@ test("API-5, PII & Media Regression Guards: no all-user broadcast, non-PII autho
     path.join(apiRoot, "src/modules/upload/upload.controller.ts"),
     "utf8",
   );
-  // Both owned_by_other and actively_referenced blocks check marketplace_post unconditionally
+  // Both owned_by_other and actively_referenced blocks check marketplace_post via GIN array overlap
+  assert.equal(uploadCtrlSrc.split('"marketplace_post"').length - 1 >= 2, true);
+  assert.equal(uploadCtrlSrc.includes("isHttpsUrl"), false);
+  assert.equal(uploadCtrlSrc.includes("expandCloudinaryUrlVariants"), true);
   assert.equal(
-    uploadCtrlSrc.split('"marketplace_post"').length - 1 >= 2,
+    uploadCtrlSrc.split('"images" && ${marketplaceCandidateUrls}::text[]')
+      .length -
+      1 >=
+      2,
     true,
   );
-  assert.equal(uploadCtrlSrc.includes("isHttpsUrl"), false);
-  assert.equal(uploadCtrlSrc.includes('array_to_string("images"'), true);
+  const mpUploadBlocks = [
+    ...uploadCtrlSrc.matchAll(/FROM "marketplace_post"[\s\S]*?\)/g),
+  ];
+  assert.equal(mpUploadBlocks.length >= 2, true);
+  for (const block of mpUploadBlocks) {
+    assert.equal(block[0].includes("array_to_string"), false);
+  }
 
-  // Feed projection strips contactPhone/hiddenAt and uses compact feedAuthorSelect;
-  // comment writes run inside atomic transactions; media cleanup catches async DB errors cleanly.
+  // Feed/detail projections omit internal idempotencyKey/hiddenAt and filter reported comments from counts;
+  // comment create/update/delete run inside atomic transactions with moderation locks.
   assert.equal(repoSrc.includes("buildFeedItemSelect"), true);
   assert.equal(repoSrc.includes("feedAuthorSelect"), true);
+  assert.equal(repoSrc.includes("buildCommentCountSelect"), true);
+  assert.equal(repoSrc.includes("buildPostMutationSelect"), true);
+  assert.equal(repoSrc.includes("postDetailInclude"), false);
   assert.equal(repoSrc.includes("createMarketplaceCommentAtomicInDb"), true);
   assert.equal(repoSrc.includes("updateMarketplaceCommentAtomicInDb"), true);
+  assert.equal(repoSrc.includes("deleteMarketplaceCommentAtomicInDb"), true);
   assert.equal(repoSrc.includes("findMarketplacePostSummaryInDb"), false);
+
+  const modRepoSrc = fs.readFileSync(
+    path.join(
+      apiRoot,
+      "src/modules/marketplace/marketplace.moderation.repository.ts",
+    ),
+    "utf8",
+  );
+  assert.match(
+    modRepoSrc,
+    /FROM "marketplace_post" WHERE id = \$\{params\.targetId\} FOR UPDATE/,
+  );
+  assert.match(
+    modRepoSrc,
+    /FROM "marketplace_comment" WHERE id = \$\{params\.targetId\} FOR UPDATE/,
+  );
+
+  const adminModSrc = fs.readFileSync(
+    path.join(apiRoot, "src/modules/admin/admin-moderation.service.ts"),
+    "utf8",
+  );
+  assert.match(
+    adminModSrc,
+    /FROM "marketplace_post" WHERE id = \$\{report\.targetId\} FOR UPDATE/,
+  );
+  assert.match(
+    adminModSrc,
+    /FROM "marketplace_comment" WHERE id = \$\{report\.targetId\} FOR UPDATE/,
+  );
 
   const mediaSrc = fs.readFileSync(
     path.join(apiRoot, "src/modules/marketplace/marketplace.media.ts"),
     "utf8",
   );
-  assert.equal(mediaSrc.includes("expandWithCanonicalVariants"), true);
+  assert.equal(mediaSrc.includes("expandCloudinaryUrlVariants"), true);
   assert.equal(mediaSrc.includes("array_to_string"), false);
   assert.equal(mediaSrc.includes("catch (err)"), true);
 
@@ -424,4 +498,27 @@ test("createMarketplaceSchema canonicalizes Cloudinary variant URLs and validate
     },
   });
   assert.equal(badKey.success, false);
+});
+
+test("Code-quality refactors: typed feed result, pass-through removal, and guarded viewer lookup", () => {
+  const repoSrc = fs.readFileSync(
+    path.resolve("src/modules/marketplace/marketplace.repository.ts"),
+    "utf8",
+  );
+  const serviceSrc = fs.readFileSync(
+    path.resolve("src/modules/marketplace/marketplace.service.ts"),
+    "utf8",
+  );
+  const controllerSrc = fs.readFileSync(
+    path.resolve("src/modules/marketplace/marketplace.controller.ts"),
+    "utf8",
+  );
+
+  assert.equal(repoSrc.includes("PaginatedResult<MarketplaceFeedItem>"), true);
+  assert.equal(repoSrc.includes("Record<string, unknown>"), false);
+  assert.equal(serviceSrc.includes("updateStatusService"), false);
+  assert.equal(serviceSrc.includes("deleteCommentService"), false);
+  assert.equal(serviceSrc.includes("createMarketplaceReportService"), false);
+  assert.equal(controllerSrc.includes("req.user!"), false);
+  assert.equal(controllerSrc.includes("requireViewer"), true);
 });

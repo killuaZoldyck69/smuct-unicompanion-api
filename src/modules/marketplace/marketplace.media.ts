@@ -1,15 +1,17 @@
 import { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../lib/prisma";
 import {
-  buildOptimizedUrl,
   deleteMultipleImagesFromCloudinary,
+  expandCloudinaryUrlVariants,
   extractPublicIdFromUrl,
   isAllowedAppCloudinaryImageUrl,
 } from "../../lib/cloudinary";
 import { AppError } from "../../utils/AppError";
 import { MARKETPLACE_CLOUDINARY_PREFIX } from "./marketplace.domain";
 
-function normalizeCandidateUrls(urls: Array<string | null | undefined>): string[] {
+function normalizeCandidateUrls(
+  urls: Array<string | null | undefined>,
+): string[] {
   return [
     ...new Set(
       urls
@@ -18,21 +20,6 @@ function normalizeCandidateUrls(urls: Array<string | null | undefined>): string[
         .filter(Boolean),
     ),
   ];
-}
-
-function expandWithCanonicalVariants(urls: readonly string[]): string[] {
-  const expanded = new Set<string>(urls);
-  for (const url of urls) {
-    const publicId = extractPublicIdFromUrl(url);
-    if (!publicId) continue;
-    try {
-      const cloudFromUrl = new URL(url).pathname.split("/").filter(Boolean)[0];
-      expanded.add(buildOptimizedUrl(publicId, cloudFromUrl));
-    } catch {
-      expanded.add(buildOptimizedUrl(publicId));
-    }
-  }
-  return [...expanded];
 }
 
 /**
@@ -51,7 +38,7 @@ export async function assertNoForeignMarketplaceMediaReferencesInTx(
   const ownerList = [...new Set(allowedOwnerIds.filter(Boolean))];
   if (ownerList.length === 0) return;
 
-  const candidateUrls = expandWithCanonicalVariants(uniqueUrls);
+  const candidateUrls = expandCloudinaryUrlVariants(uniqueUrls);
   const foreignPost = await tx.marketplacePost.findFirst({
     where: {
       authorId: { notIn: ownerList },
@@ -82,7 +69,7 @@ export async function deleteUnreferencedMarketplaceImages(
     );
     if (uniqueUrls.length === 0) return;
 
-    const lookupUrls = expandWithCanonicalVariants(uniqueUrls);
+    const lookupUrls = expandCloudinaryUrlVariants(uniqueUrls);
     const postsWithUrls = await prisma.marketplacePost.findMany({
       where: { images: { hasSome: lookupUrls } },
       select: { images: true },
