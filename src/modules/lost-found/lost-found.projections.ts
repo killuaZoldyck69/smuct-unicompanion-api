@@ -1,3 +1,4 @@
+import { LostFoundClaimStatus } from "../../constants/enums";
 import { publicUserSelect } from "../forum/forum.domain";
 
 export const publicAuthorSelection = publicUserSelect;
@@ -44,5 +45,11 @@ export const safePostResponseSelect = {
   createdAt: true,
   updatedAt: true,
   author: { select: publicAuthorSelection },
-  _count: { select: { claims: true } },
+  _count: {
+    select: {
+      claims: {
+        where: { status: LostFoundClaimStatus.PENDING },
+      },
+    },
+  },
 } as const;

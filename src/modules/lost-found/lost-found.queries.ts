@@ -106,7 +106,7 @@ export const findLostFoundFeedInDb = async (
         }
       : { isHiddenByModeration: false };
 
-  const shouldFetchGlobalCounts = page === 1 && !term && !isMyPosts;
+  const shouldFetchGlobalCounts = page === 1;
 
   const [posts, total, groupedCounts] = await Promise.all([
     prisma.lostFoundPost.findMany({
@@ -271,7 +271,13 @@ export const findLostFoundPostByIdInDb = async (id: string) => {
           claimant: { select: privateContactSelection },
         },
       },
-      _count: { select: { claims: true } },
+      _count: {
+        select: {
+          claims: {
+            where: { status: LostFoundClaimStatus.PENDING },
+          },
+        },
+      },
     },
   });
 };
