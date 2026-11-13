@@ -16,7 +16,14 @@ export const adminForumReportsQuerySchema = z.object({
       .enum(["PENDING", "DISMISSED", "ACTIONED", "ALL"])
       .default("PENDING"),
     targetType: z
-      .enum(["ALL", "FORUM_POST", "FORUM_RESPONSE", "LOST_FOUND_POST"])
+      .enum([
+        "ALL",
+        "FORUM_POST",
+        "FORUM_RESPONSE",
+        "LOST_FOUND_POST",
+        "MARKETPLACE_POST",
+        "MARKETPLACE_COMMENT",
+      ])
       .default("ALL"),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(50).default(20),

@@ -230,6 +230,11 @@ export const deleteUploadedFile = catchAsync(
                   WHERE "claimantId" = ${viewerId}
                     AND "proofImage" = ${url}
                 )
+                OR EXISTS (
+                  SELECT 1 FROM "marketplace_post"
+                  WHERE "authorId" = ${viewerId}
+                    AND "images" @> ARRAY[${url}]::text[]
+                )
               ) AS actively_referenced
             `
           : prisma.$queryRaw<Array<{ actively_referenced: boolean }>>`
@@ -243,6 +248,11 @@ export const deleteUploadedFile = catchAsync(
                   SELECT 1 FROM "lost_found_claim"
                   WHERE "claimantId" = ${viewerId}
                     AND "proofImage" LIKE ${likePattern} ESCAPE '\\'
+                )
+                OR EXISTS (
+                  SELECT 1 FROM "marketplace_post"
+                  WHERE "authorId" = ${viewerId}
+                    AND array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
                 )
               ) AS actively_referenced
             `,

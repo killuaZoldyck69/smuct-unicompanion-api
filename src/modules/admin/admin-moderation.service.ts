@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma";
 import { appCache } from "../../lib/cache";
 import { AppError } from "../../utils/AppError";
 import { deleteUnreferencedLostFoundImages } from "../lost-found/lost-found.media";
+import { deleteUnreferencedMarketplaceImages } from "../marketplace/marketplace.media";
 import { publicUserSelect } from "../forum/forum.repository";
 import { extractPlainText } from "../forum/forum.sanitizer";
 import {
@@ -13,6 +14,8 @@ const FORUM_TARGET_TYPES = [
   "FORUM_POST",
   "FORUM_RESPONSE",
   "LOST_FOUND_POST",
+  "MARKETPLACE_POST",
+  "MARKETPLACE_COMMENT",
 ] as const;
 
 const safeModerationActorSelect = {
@@ -92,6 +95,20 @@ export const getForumReportsQueueService = async (
         .map((r) => r.targetId),
     ),
   ];
+  const uniqueMarketplacePostIds = [
+    ...new Set(
+      reports
+        .filter((r) => r.targetType === "MARKETPLACE_POST")
+        .map((r) => r.targetId),
+    ),
+  ];
+  const uniqueMarketplaceCommentIds = [
+    ...new Set(
+      reports
+        .filter((r) => r.targetType === "MARKETPLACE_COMMENT")
+        .map((r) => r.targetId),
+    ),
+  ];
   const uniqueTargetIds = [...new Set(targetPairs.map((p) => p.targetId))];
 
   const groupedTargetTypeFilter =
@@ -99,66 +116,104 @@ export const getForumReportsQueueService = async (
       ? { in: [...FORUM_TARGET_TYPES] }
       : query.targetType;
 
-  const [groupedTargetCounts, livePosts, liveResponses, liveLostFoundPosts] =
-    await Promise.all([
-      uniqueTargetIds.length
-        ? prisma.contentReport.groupBy({
-            by: ["targetType", "targetId"],
-            where: {
-              targetType: groupedTargetTypeFilter,
-              targetId: { in: uniqueTargetIds },
-              status: "PENDING",
-            },
-            _count: { _all: true },
-          })
-        : Promise.resolve([]),
-      uniquePostIds.length
-        ? prisma.helpPost.findMany({
-            where: { id: { in: uniquePostIds } },
-            select: {
-              id: true,
-              title: true,
-              description: true,
-              isResolved: true,
-              isHiddenByModeration: true,
-              createdAt: true,
-            },
-          })
-        : Promise.resolve([]),
-      uniqueResponseIds.length
-        ? prisma.helpResponse.findMany({
-            where: { id: { in: uniqueResponseIds } },
-            select: {
-              id: true,
-              postId: true,
-              content: true,
-              isHiddenByModeration: true,
-              createdAt: true,
-              post: {
-                select: {
-                  id: true,
-                  title: true,
-                  isHiddenByModeration: true,
-                },
+  const [
+    groupedTargetCounts,
+    livePosts,
+    liveResponses,
+    liveLostFoundPosts,
+    liveMarketplacePosts,
+    liveMarketplaceComments,
+  ] = await Promise.all([
+    uniqueTargetIds.length
+      ? prisma.contentReport.groupBy({
+          by: ["targetType", "targetId"],
+          where: {
+            targetType: groupedTargetTypeFilter,
+            targetId: { in: uniqueTargetIds },
+            status: "PENDING",
+          },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
+    uniquePostIds.length
+      ? prisma.helpPost.findMany({
+          where: { id: { in: uniquePostIds } },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            isResolved: true,
+            isHiddenByModeration: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve([]),
+    uniqueResponseIds.length
+      ? prisma.helpResponse.findMany({
+          where: { id: { in: uniqueResponseIds } },
+          select: {
+            id: true,
+            postId: true,
+            content: true,
+            isHiddenByModeration: true,
+            createdAt: true,
+            post: {
+              select: {
+                id: true,
+                title: true,
+                isHiddenByModeration: true,
               },
             },
-          })
-        : Promise.resolve([]),
-      uniqueLostFoundIds.length
-        ? prisma.lostFoundPost.findMany({
-            where: { id: { in: uniqueLostFoundIds } },
-            select: {
-              id: true,
-              title: true,
-              description: true,
-              location: true,
-              status: true,
-              isHiddenByModeration: true,
-              createdAt: true,
+          },
+        })
+      : Promise.resolve([]),
+    uniqueLostFoundIds.length
+      ? prisma.lostFoundPost.findMany({
+          where: { id: { in: uniqueLostFoundIds } },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            location: true,
+            status: true,
+            isHiddenByModeration: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve([]),
+    uniqueMarketplacePostIds.length
+      ? prisma.marketplacePost.findMany({
+          where: { id: { in: uniqueMarketplacePostIds } },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            status: true,
+            isHiddenByModeration: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve([]),
+    uniqueMarketplaceCommentIds.length
+      ? prisma.marketplaceComment.findMany({
+          where: { id: { in: uniqueMarketplaceCommentIds } },
+          select: {
+            id: true,
+            postId: true,
+            content: true,
+            isHiddenByModeration: true,
+            createdAt: true,
+            post: {
+              select: {
+                id: true,
+                title: true,
+                isHiddenByModeration: true,
+              },
             },
-          })
-        : Promise.resolve([]),
-    ]);
+          },
+        })
+      : Promise.resolve([]),
+  ]);
 
   const pendingByTarget = new Map<string, number>();
   for (const row of groupedTargetCounts) {
@@ -168,12 +223,20 @@ export const getForumReportsQueueService = async (
   const postById = new Map(livePosts.map((p) => [p.id, p]));
   const responseById = new Map(liveResponses.map((resp) => [resp.id, resp]));
   const lostFoundById = new Map(liveLostFoundPosts.map((lf) => [lf.id, lf]));
+  const marketplacePostById = new Map(
+    liveMarketplacePosts.map((mp) => [mp.id, mp]),
+  );
+  const marketplaceCommentById = new Map(
+    liveMarketplaceComments.map((mc) => [mc.id, mc]),
+  );
 
   const enriched = reports.map((report) => {
     const snapshot =
       report.targetSnapshot && typeof report.targetSnapshot === "object"
         ? (report.targetSnapshot as Record<string, any>)
         : null;
+    const uniquePendingReportCount =
+      pendingByTarget.get(`${report.targetType}:${report.targetId}`) ?? 0;
 
     if (report.targetType === "FORUM_POST") {
       const livePost = postById.get(report.targetId);
@@ -199,8 +262,7 @@ export const getForumReportsQueueService = async (
               createdAt: livePost.createdAt,
             }
           : null,
-        uniquePendingReportCount:
-          pendingByTarget.get(`${report.targetType}:${report.targetId}`) ?? 0,
+        uniquePendingReportCount,
       };
     }
 
@@ -228,8 +290,63 @@ export const getForumReportsQueueService = async (
               createdAt: liveLf.createdAt,
             }
           : null,
-        uniquePendingReportCount:
-          pendingByTarget.get(`${report.targetType}:${report.targetId}`) ?? 0,
+        uniquePendingReportCount,
+      };
+    }
+
+    if (report.targetType === "MARKETPLACE_POST") {
+      const liveMp = marketplacePostById.get(report.targetId);
+      const resolvedPostId = liveMp?.id ?? snapshot?.postId ?? report.targetId;
+      return {
+        ...report,
+        postId: resolvedPostId,
+        responseId: null,
+        targetExists: Boolean(liveMp),
+        targetLive: liveMp
+          ? {
+              id: liveMp.id,
+              postId: liveMp.id,
+              title: liveMp.title,
+              postTitle: liveMp.title,
+              contentPreview: extractPlainText(liveMp.description).slice(
+                0,
+                800,
+              ),
+              isResolved: liveMp.status !== "ACTIVE",
+              isHiddenByModeration: liveMp.isHiddenByModeration,
+              createdAt: liveMp.createdAt,
+            }
+          : null,
+        uniquePendingReportCount,
+      };
+    }
+
+    if (report.targetType === "MARKETPLACE_COMMENT") {
+      const liveComment = marketplaceCommentById.get(report.targetId);
+      const resolvedPostId =
+        liveComment?.postId ??
+        (typeof snapshot?.postId === "string" ? snapshot.postId : null);
+      return {
+        ...report,
+        postId: resolvedPostId,
+        responseId: report.targetId,
+        targetExists: Boolean(liveComment),
+        targetLive: liveComment
+          ? {
+              id: liveComment.id,
+              postId: liveComment.postId,
+              title: null,
+              postTitle: liveComment.post?.title ?? null,
+              contentPreview: extractPlainText(liveComment.content).slice(
+                0,
+                800,
+              ),
+              isResolved: null,
+              isHiddenByModeration: liveComment.isHiddenByModeration,
+              createdAt: liveComment.createdAt,
+            }
+          : null,
+        uniquePendingReportCount,
       };
     }
 
@@ -258,8 +375,7 @@ export const getForumReportsQueueService = async (
             createdAt: liveResponse.createdAt,
           }
         : null,
-      uniquePendingReportCount:
-        pendingByTarget.get(`${report.targetType}:${report.targetId}`) ?? 0,
+      uniquePendingReportCount,
     };
   });
 
@@ -278,6 +394,33 @@ export const getForumReportsQueueService = async (
   };
 };
 
+async function setTargetModerationVisibilityInTx(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  targetType: string,
+  targetId: string,
+  isHiddenByModeration: boolean,
+  hiddenAt: Date | null,
+) {
+  const data = { isHiddenByModeration, hiddenAt };
+  switch (targetType) {
+    case "FORUM_POST":
+      await tx.helpPost.updateMany({ where: { id: targetId }, data });
+      break;
+    case "LOST_FOUND_POST":
+      await tx.lostFoundPost.updateMany({ where: { id: targetId }, data });
+      break;
+    case "MARKETPLACE_POST":
+      await tx.marketplacePost.updateMany({ where: { id: targetId }, data });
+      break;
+    case "MARKETPLACE_COMMENT":
+      await tx.marketplaceComment.updateMany({ where: { id: targetId }, data });
+      break;
+    default:
+      await tx.helpResponse.updateMany({ where: { id: targetId }, data });
+      break;
+  }
+}
+
 export const resolveForumReportService = async (
   reportId: string,
   adminId: string,
@@ -288,6 +431,7 @@ export const resolveForumReportService = async (
   const adminNote = payload.adminNote ?? null;
   let shouldInvalidateUserCaches = false;
   const lostFoundImagesToDelete: string[] = [];
+  const marketplaceImagesToDelete: string[] = [];
 
   await prisma.$transaction(async (tx) => {
     // Lock report row so concurrent moderation actions serialize and cannot double-resolve or flip state
@@ -349,18 +493,24 @@ export const resolveForumReportService = async (
     }
 
     let childResponseIds: string[] = [];
-    if (
-      payload.action === "DELETE_CONTENT" &&
-      report.targetType === "FORUM_POST"
-    ) {
-      const childResponses = await tx.helpResponse.findMany({
-        where: { postId: report.targetId },
-        select: { id: true },
-      });
-      childResponseIds = childResponses.map((r) => r.id);
+    let childMarketplaceCommentIds: string[] = [];
+    if (payload.action === "DELETE_CONTENT") {
+      if (report.targetType === "FORUM_POST") {
+        const childResponses = await tx.helpResponse.findMany({
+          where: { postId: report.targetId },
+          select: { id: true },
+        });
+        childResponseIds = childResponses.map((r) => r.id);
+      } else if (report.targetType === "MARKETPLACE_POST") {
+        const childComments = await tx.marketplaceComment.findMany({
+          where: { postId: report.targetId },
+          select: { id: true },
+        });
+        childMarketplaceCommentIds = childComments.map((c) => c.id);
+      }
     }
 
-    // Resolve target report, sibling reports on same target, and any pending child-response reports if deleting parent post
+    // Resolve target report, sibling reports on same target, and pending child-comment reports if deleting parent post
     await tx.contentReport.updateMany({
       where: {
         OR: [
@@ -375,6 +525,15 @@ export const resolveForumReportService = async (
                 {
                   targetType: "FORUM_RESPONSE" as const,
                   targetId: { in: childResponseIds },
+                  status: "PENDING" as const,
+                },
+              ]
+            : []),
+          ...(childMarketplaceCommentIds.length
+            ? [
+                {
+                  targetType: "MARKETPLACE_COMMENT" as const,
+                  targetId: { in: childMarketplaceCommentIds },
                   status: "PENDING" as const,
                 },
               ]
@@ -399,43 +558,25 @@ export const resolveForumReportService = async (
       });
 
       if (remainingActioned === 0) {
-        if (report.targetType === "FORUM_POST") {
-          await tx.helpPost.updateMany({
-            where: { id: report.targetId },
-            data: { isHiddenByModeration: false, hiddenAt: null },
-          });
-        } else if (report.targetType === "LOST_FOUND_POST") {
-          await tx.lostFoundPost.updateMany({
-            where: { id: report.targetId },
-            data: { isHiddenByModeration: false, hiddenAt: null },
-          });
-        } else {
-          await tx.helpResponse.updateMany({
-            where: { id: report.targetId },
-            data: { isHiddenByModeration: false, hiddenAt: null },
-          });
-        }
+        await setTargetModerationVisibilityInTx(
+          tx,
+          report.targetType,
+          report.targetId,
+          false,
+          null,
+        );
       }
     } else if (
       payload.action === "HIDE_CONTENT" ||
       payload.action === "RESTRICT_USER"
     ) {
-      if (report.targetType === "FORUM_POST") {
-        await tx.helpPost.updateMany({
-          where: { id: report.targetId },
-          data: { isHiddenByModeration: true, hiddenAt: now },
-        });
-      } else if (report.targetType === "LOST_FOUND_POST") {
-        await tx.lostFoundPost.updateMany({
-          where: { id: report.targetId },
-          data: { isHiddenByModeration: true, hiddenAt: now },
-        });
-      } else {
-        await tx.helpResponse.updateMany({
-          where: { id: report.targetId },
-          data: { isHiddenByModeration: true, hiddenAt: now },
-        });
-      }
+      await setTargetModerationVisibilityInTx(
+        tx,
+        report.targetType,
+        report.targetId,
+        true,
+        now,
+      );
     } else if (payload.action === "DELETE_CONTENT") {
       if (report.targetType === "FORUM_POST") {
         await tx.helpPost.deleteMany({ where: { id: report.targetId } });
@@ -458,6 +599,19 @@ export const resolveForumReportService = async (
           }
           await tx.lostFoundPost.deleteMany({ where: { id: report.targetId } });
         }
+      } else if (report.targetType === "MARKETPLACE_POST") {
+        const mpPost = await tx.marketplacePost.findUnique({
+          where: { id: report.targetId },
+          select: { images: true },
+        });
+        if (mpPost) {
+          marketplaceImagesToDelete.push(...(mpPost.images || []));
+          await tx.marketplacePost.deleteMany({ where: { id: report.targetId } });
+        }
+      } else if (report.targetType === "MARKETPLACE_COMMENT") {
+        await tx.marketplaceComment.deleteMany({
+          where: { id: report.targetId },
+        });
       } else {
         await tx.helpResponse.deleteMany({ where: { id: report.targetId } });
       }
@@ -468,6 +622,13 @@ export const resolveForumReportService = async (
     void deleteUnreferencedLostFoundImages(
       lostFoundImagesToDelete,
       "deleted Lost & Found moderation images",
+    );
+  }
+
+  if (marketplaceImagesToDelete.length > 0) {
+    void deleteUnreferencedMarketplaceImages(
+      marketplaceImagesToDelete,
+      "deleted Marketplace moderation images",
     );
   }
 

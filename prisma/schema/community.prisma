@@ -11,6 +11,8 @@ enum UgcReportTargetType {
   FORUM_POST
   FORUM_RESPONSE
   LOST_FOUND_POST
+  MARKETPLACE_POST
+  MARKETPLACE_COMMENT
 }
 
 enum UgcReportReason {

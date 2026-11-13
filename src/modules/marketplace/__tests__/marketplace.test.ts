@@ -1,9 +1,15 @@
 import assert from "node:assert";
+import { envConfig } from "../../../config/env";
 import {
   createMarketplaceSchema,
   updateMarketplaceSchema,
 } from "../marketplace.schema";
 import { MARKETPLACE_CATEGORY_VALUES } from "../../../constants/enums";
+
+const CLOUD_NAME = envConfig.CLOUDINARY_CLOUD_NAME || "demo";
+const makeMpImageUrl = (index: number) =>
+  `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/smuct-unicompanion/campus-hub/marketplace/sample${index}.jpg`;
+const SAMPLE_UUID = "11111111-1111-4111-8111-111111111111";
 
 console.log("🧪 Running Marketplace Validation & Category Tests...\n");
 
@@ -162,10 +168,10 @@ const fourImagesRes = createMarketplaceSchema.safeParse({
     category: "TEXTBOOKS",
     contactPhone: "+8801956014045",
     images: [
-      "https://res.cloudinary.com/demo/image/upload/sample1.jpg",
-      "https://res.cloudinary.com/demo/image/upload/sample2.jpg",
-      "https://res.cloudinary.com/demo/image/upload/sample3.jpg",
-      "https://res.cloudinary.com/demo/image/upload/sample4.jpg",
+      makeMpImageUrl(1),
+      makeMpImageUrl(2),
+      makeMpImageUrl(3),
+      makeMpImageUrl(4),
     ],
   },
 });
@@ -181,11 +187,11 @@ const fiveImagesRes = createMarketplaceSchema.safeParse({
     category: "TEXTBOOKS",
     contactPhone: "+8801956014045",
     images: [
-      "https://res.cloudinary.com/demo/image/upload/sample1.jpg",
-      "https://res.cloudinary.com/demo/image/upload/sample2.jpg",
-      "https://res.cloudinary.com/demo/image/upload/sample3.jpg",
-      "https://res.cloudinary.com/demo/image/upload/sample4.jpg",
-      "https://res.cloudinary.com/demo/image/upload/sample5.jpg",
+      makeMpImageUrl(1),
+      makeMpImageUrl(2),
+      makeMpImageUrl(3),
+      makeMpImageUrl(4),
+      makeMpImageUrl(5),
     ],
   },
 });
@@ -194,6 +200,7 @@ console.log("  ✓ 5 photos is rejected with max 4 limit");
 
 // 6. Update schema validation
 const updateRes = updateMarketplaceSchema.safeParse({
+  params: { id: SAMPLE_UUID },
   body: {
     price: 2000,
     category: "CALCULATORS",

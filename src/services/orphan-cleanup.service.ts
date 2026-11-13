@@ -132,11 +132,19 @@ export function cleanupMarketplaceOrphanImages(
     dryRun,
     collectReferencedIdentifiers: async () => {
       const identifiers = new Set<string>();
-      const posts = await prisma.marketplacePost.findMany({
-        select: { images: true },
-      });
-      for (const post of posts) {
-        for (const url of post.images) addReferencedUrl(identifiers, url);
+      let cursor: string | undefined;
+      while (true) {
+        const posts = await prisma.marketplacePost.findMany({
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+          take: DB_BATCH_SIZE,
+          orderBy: { id: "asc" },
+          select: { id: true, images: true },
+        });
+        for (const post of posts) {
+          for (const url of post.images) addReferencedUrl(identifiers, url);
+        }
+        if (posts.length < DB_BATCH_SIZE) break;
+        cursor = posts[posts.length - 1].id;
       }
       return identifiers;
     },

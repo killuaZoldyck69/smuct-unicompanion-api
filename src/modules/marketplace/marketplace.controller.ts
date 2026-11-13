@@ -1,57 +1,47 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../../utils/catchAsync";
+import { ListingStatus } from "../../constants/enums";
 import {
   createCommentService,
-  updateCommentService,
+  createMarketplaceReportService,
   createPostService,
   deleteCommentService,
   deletePostService,
   getFeedService,
   getPostByIdService,
+  updateCommentService,
   updatePostService,
   updateStatusService,
 } from "./marketplace.service";
-import {
-  ListingStatus,
-  ListingType,
-  MarketplaceCategory,
-} from "../../constants/enums";
+import type { GetMarketplaceFeedQuery } from "./marketplace.schema";
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
 const DEFAULT_PAGE_LIMIT = 20;
 const MAX_PAGE_LIMIT = 50;
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-const parseLimit = (raw: unknown): number => {
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 1) return DEFAULT_PAGE_LIMIT;
-  return Math.min(n, MAX_PAGE_LIMIT);
-};
-
-const parseCursor = (raw: unknown): string | undefined =>
-  typeof raw === "string" && raw.length > 0 ? raw : undefined;
-
-// ---------------------------------------------------------------------------
-// Feed — GET /marketplace?type=&status=&category=&search=&limit=&cursor=
+// Feed — GET /marketplace?type=&status=&category=&search=&myPosts=&limit=&cursor=
 // ---------------------------------------------------------------------------
 export const getFeed = catchAsync(async (req: Request, res: Response) => {
-  const { type, status, category, search, limit, cursor } = req.query;
+  const q = req.query as unknown as GetMarketplaceFeedQuery;
+  const parsedLimit =
+    typeof q.limit === "number" && Number.isFinite(q.limit) && q.limit >= 1
+      ? Math.min(q.limit, MAX_PAGE_LIMIT)
+      : DEFAULT_PAGE_LIMIT;
 
   const result = await getFeedService(
     {
-      type: type as ListingType | undefined,
-      status: status as ListingStatus | undefined,
-      category: category as MarketplaceCategory | undefined,
-      search: typeof search === "string" ? search.trim() : undefined,
+      type: q.type,
+      status: q.status,
+      category: q.category,
+      search: q.search,
+      myPosts: q.myPosts === "true",
+      viewerId: req.user!.id,
+      viewerRole: req.user?.role,
     },
     {
-      limit: parseLimit(limit),
-      cursor: parseCursor(cursor),
-    }
+      limit: parsedLimit,
+      cursor: q.cursor,
+    },
   );
 
   res.status(200).json({ success: true, data: result });
@@ -61,7 +51,11 @@ export const getFeed = catchAsync(async (req: Request, res: Response) => {
 // Single post
 // ---------------------------------------------------------------------------
 export const getPostById = catchAsync(async (req: Request, res: Response) => {
-  const result = await getPostByIdService(req.params.id as string);
+  const result = await getPostByIdService(
+    req.params.id as string,
+    req.user!.id,
+    req.user?.role,
+  );
   res.status(200).json({ success: true, data: result });
 });
 
@@ -85,7 +79,7 @@ export const updatePost = catchAsync(async (req: Request, res: Response) => {
     req.params.id as string,
     req.user!.id,
     req.user?.role,
-    req.body
+    req.body,
   );
   res.status(200).json({
     success: true,
@@ -102,7 +96,21 @@ export const updateStatus = catchAsync(async (req: Request, res: Response) => {
     req.params.id as string,
     req.user!.id,
     req.user?.role,
-    req.body.status
+    req.body.status,
+  );
+  res.status(200).json({
+    success: true,
+    message: "Status updated successfully",
+    data: result,
+  });
+});
+
+export const markAsSold = catchAsync(async (req: Request, res: Response) => {
+  const result = await updateStatusService(
+    req.params.id as string,
+    req.user!.id,
+    req.user?.role,
+    ListingStatus.SOLD,
   );
   res.status(200).json({
     success: true,
@@ -116,7 +124,10 @@ export const updateStatus = catchAsync(async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 export const deletePost = catchAsync(async (req: Request, res: Response) => {
   await deletePostService(req.params.id as string, req.user!.id, req.user?.role);
-  res.status(200).json({ success: true, message: "Listing deleted successfully" });
+  res.status(200).json({
+    success: true,
+    message: "Listing deleted successfully",
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -126,7 +137,8 @@ export const createComment = catchAsync(async (req: Request, res: Response) => {
   const result = await createCommentService(
     req.params.id as string,
     req.user!.id,
-    req.body
+    req.user?.role,
+    req.body,
   );
   res.status(201).json({
     success: true,
@@ -137,10 +149,10 @@ export const createComment = catchAsync(async (req: Request, res: Response) => {
 
 export const updateComment = catchAsync(async (req: Request, res: Response) => {
   const result = await updateCommentService(
+    req.params.id as string,
     req.params.commentId as string,
     req.user!.id,
-    req.user?.role,
-    req.body.content
+    req.body.content,
   );
   res.status(200).json({
     success: true,
@@ -151,9 +163,29 @@ export const updateComment = catchAsync(async (req: Request, res: Response) => {
 
 export const deleteComment = catchAsync(async (req: Request, res: Response) => {
   await deleteCommentService(
+    req.params.id as string,
     req.params.commentId as string,
     req.user!.id,
-    req.user?.role
+    req.user?.role,
   );
-  res.status(200).json({ success: true, message: "Comment deleted successfully" });
+  res.status(200).json({
+    success: true,
+    message: "Comment deleted successfully",
+  });
 });
+
+// ---------------------------------------------------------------------------
+// UGC Moderation Reports
+// ---------------------------------------------------------------------------
+export const reportMarketplaceContent = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await createMarketplaceReportService(req.user!.id, req.body);
+    res.status(201).json({
+      success: true,
+      message: result.autoHidden
+        ? "Report submitted. Content has been hidden pending moderator review."
+        : "Report submitted. Our moderators will review this content.",
+      data: result,
+    });
+  },
+);

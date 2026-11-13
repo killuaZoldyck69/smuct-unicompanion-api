@@ -41,36 +41,45 @@ enum MarketplaceCategory {
 // ==============================
 
 model MarketplacePost {
-  id           String              @id @default(uuid())
-  authorId     String
-  type         ListingType
-  title        String
-  description  String
-  price        Float?              @default(0)
-  category     MarketplaceCategory
-  condition    ItemCondition?
-  status       ListingStatus       @default(ACTIVE)
-  images       String[]            @default([])
-  contactPhone String?
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  id                   String              @id @default(uuid())
+  authorId             String
+  type                 ListingType
+  title                String
+  description          String
+  price                Float?              @default(0)
+  category             MarketplaceCategory
+  condition            ItemCondition?
+  status               ListingStatus       @default(ACTIVE)
+  images               String[]            @default([])
+  contactPhone         String?
+  isHiddenByModeration Boolean             @default(false)
+  hiddenAt             DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
 
   author   User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
   comments MarketplaceComment[]
 
   @@index([authorId])
+  @@index([authorId, createdAt(sort: Desc)])
   @@index([status, type])
+  @@index([status, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([type, status, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([category, status, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([isHiddenByModeration, status, createdAt(sort: Desc), id(sort: Desc)])
   @@map("marketplace_post")
 }
 
 model MarketplaceComment {
-  id        String   @id @default(uuid())
-  postId    String
-  authorId  String
-  parentId  String?
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                   String    @id @default(uuid())
+  postId               String
+  authorId             String
+  parentId             String?
+  content              String
+  isHiddenByModeration Boolean   @default(false)
+  hiddenAt             DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   post    MarketplacePost      @relation(fields: [postId], references: [id], onDelete: Cascade)
   author  User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
@@ -80,5 +89,6 @@ model MarketplaceComment {
   @@index([postId])
   @@index([authorId])
   @@index([parentId])
+  @@index([postId, isHiddenByModeration, parentId, createdAt])
   @@map("marketplace_comment")
 }
