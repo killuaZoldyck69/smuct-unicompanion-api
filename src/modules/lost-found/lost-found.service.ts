@@ -1,6 +1,5 @@
 import { AppError } from "../../utils/AppError";
 import { sendEmail } from "../../lib/email";
-import { deleteMultipleImagesFromCloudinary } from "../../lib/cloudinary";
 import { LostFoundStatus } from "../../constants/enums";
 import { createNotifications } from "../notification/notification.service";
 import { findUserUgcTermsStatus } from "../forum/forum.repository";
@@ -8,19 +7,16 @@ import {
   isLostFoundPostVisibleToViewer,
   sanitizeLostFoundPostDetail,
 } from "./lost-found.domain";
+import { deleteUnreferencedLostFoundImages } from "./lost-found.media";
 import {
   buildClaimRejectedEmail,
   buildHandoverAuthorEmail,
   buildHandoverClaimantEmail,
   buildNewClaimEmail,
 } from "./lost-found.email-templates";
-import {
-  createLostFoundReportAndEvaluateAutoHideInDb,
-  findExistingLostFoundReportInDb,
-} from "./lost-found.moderation.repository";
+import { createLostFoundReportAndEvaluateAutoHideInDb } from "./lost-found.moderation.repository";
 import {
   findClaimByPostAndClaimantInDb,
-  findClaimProofImagesByPostIdInDb,
   findClaimsByPostIdInDb,
   findLostFoundFeedInDb,
   findLostFoundPostByIdInDb,
@@ -33,7 +29,7 @@ import {
   acceptClaimAtomicInDb,
   createLostFoundPostInDb,
   createOrResubmitClaimInDb,
-  deleteLostFoundPostFromDb,
+  deleteLostFoundPostAtomicInDb,
   rejectClaimAtomicInDb,
   updateLostFoundPostAtomicInDb,
   updateLostFoundStatusAtomicInDb,
@@ -109,9 +105,7 @@ export const updatePostService = async (
   );
 
   if (removedImages.length > 0) {
-    deleteMultipleImagesFromCloudinary(removedImages).catch((err) =>
-      console.warn("[Cloudinary] Failed to clean up removed post images:", err),
-    );
+    void deleteUnreferencedLostFoundImages(removedImages, "removed post images");
   }
 
   return updated;
@@ -217,44 +211,20 @@ export const deletePostService = async (
   userId: string,
   userRole: string | undefined,
 ) => {
-  const post = await findLostFoundPostSummaryInDb(id);
-  if (!post) {
-    throw new AppError("Lost & Found post not found", 404);
-  }
-
-  const isAuthor = post.authorId === userId;
-  const isAdmin = userRole === "ADMIN";
-
-  if (!isAuthor && !isAdmin) {
-    throw new AppError(
-      "Unauthorized: You do not have permission to delete this post",
-      403,
-    );
-  }
-
-  const claimProofImages = await findClaimProofImagesByPostIdInDb(id).catch(
-    (err) => {
-      console.warn(
-        "[LostFound] Failed to collect claim proof images prior to delete:",
-        err,
-      );
-      return [] as string[];
-    },
+  const { deleted, imagesToDelete } = await deleteLostFoundPostAtomicInDb(
+    id,
+    userId,
+    userRole,
   );
-  const imagesToDelete = [...post.images, ...claimProofImages];
-
-  const result = await deleteLostFoundPostFromDb(id);
 
   if (imagesToDelete.length > 0) {
-    deleteMultipleImagesFromCloudinary(imagesToDelete).catch((err) =>
-      console.warn(
-        "[Cloudinary] Failed to clean up lost-found post images:",
-        err,
-      ),
+    void deleteUnreferencedLostFoundImages(
+      imagesToDelete,
+      "lost-found post images",
     );
   }
 
-  return result;
+  return deleted;
 };
 
 export const createClaimService = async (
@@ -268,8 +238,9 @@ export const createClaimService = async (
     await createOrResubmitClaimInDb(postId, claimantId, payload);
 
   if (replacedProofImage) {
-    deleteMultipleImagesFromCloudinary([replacedProofImage]).catch((err) =>
-      console.warn("[Cloudinary] Failed to remove replaced claim proof:", err),
+    void deleteUnreferencedLostFoundImages(
+      [replacedProofImage],
+      "replaced claim proof",
     );
   }
 
@@ -304,8 +275,14 @@ export const getClaimsForPostService = async (
   userId: string,
   userRole?: string,
 ) => {
-  const post = await findLostFoundPostSummaryInDb(postId);
-  if (!post) {
+  const [post, viewer] = await Promise.all([
+    findLostFoundPostSummaryInDb(postId),
+    getLostFoundViewerContextInDb(userId, userRole),
+  ]);
+  if (
+    !post ||
+    !isLostFoundPostVisibleToViewer(post, viewer, { includeOwnHidden: true })
+  ) {
     throw new AppError("Lost & Found post not found", 404);
   }
 
@@ -372,7 +349,7 @@ export const rejectClaimService = async (
   claimId: string,
   userId: string,
 ) => {
-  const { updatedClaim, postTitle } = await rejectClaimAtomicInDb(
+  const { updatedClaim, claimantEmail, postTitle } = await rejectClaimAtomicInDb(
     postId,
     claimId,
     userId,
@@ -386,13 +363,13 @@ export const rejectClaimService = async (
     dedupeKey: `lost-found-rejection:${claimId}:v${updatedClaim.attemptCount}`,
   });
 
-  if (updatedClaim.claimant.email) {
+  if (claimantEmail) {
     const email = buildClaimRejectedEmail({
       claimantName: updatedClaim.claimant.name,
       postTitle,
     });
     dispatchEmailSafe(
-      { to: updatedClaim.claimant.email, ...email },
+      { to: claimantEmail, ...email },
       `reject-claim:${claimId}`,
     );
   }
@@ -415,11 +392,9 @@ export const withdrawClaimService = async (
   );
 
   if (proofImage) {
-    deleteMultipleImagesFromCloudinary([proofImage]).catch((err) =>
-      console.warn(
-        "[Cloudinary] Failed to clean up withdrawn claim proof image:",
-        err,
-      ),
+    void deleteUnreferencedLostFoundImages(
+      [proofImage],
+      "withdrawn claim proof image",
     );
   }
 
@@ -431,41 +406,10 @@ export const reportLostFoundPostService = async (
   reporterId: string,
   data: CreateLostFoundReportPayload,
 ) => {
-  const post = await findLostFoundPostSummaryInDb(postId);
-  if (!post || post.isHiddenByModeration) {
-    throw new AppError("Lost & Found post not found", 404);
-  }
-  if (post.authorId === reporterId) {
-    throw new AppError("You cannot report your own listing.", 400);
-  }
-
-  const existing = await findExistingLostFoundReportInDb(reporterId, postId);
-  let reopenReportId: string | undefined;
-
-  if (existing) {
-    if (existing.status !== "DISMISSED") {
-      throw new AppError("You have already reported this listing.", 409);
-    }
-    const reviewedBoundary = existing.reviewedAt ?? existing.createdAt;
-    if (post.updatedAt <= reviewedBoundary) {
-      throw new AppError("A moderator has already reviewed this listing.", 409);
-    }
-    reopenReportId = existing.id;
-  }
-
   return createLostFoundReportAndEvaluateAutoHideInDb({
     reporterId,
     postId,
-    targetAuthorId: post.authorId,
     reason: data.reason,
     details: data.details,
-    targetSnapshot: {
-      postId: post.id,
-      type: post.type,
-      category: post.category,
-      title: post.title,
-      contentPreview: (post.description || post.location || "").slice(0, 400),
-    },
-    reopenReportId,
   });
 };

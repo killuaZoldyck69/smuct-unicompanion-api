@@ -11,6 +11,7 @@ import {
   MAX_CLAIM_ATTEMPTS_PER_POST,
   MAX_PENDING_CLAIMS_PER_USER,
 } from "./lost-found.domain";
+import { assertNoForeignLostFoundMediaReferencesInTx } from "./lost-found.media";
 import {
   privateContactSelection,
   publicAuthorSelection,
@@ -32,6 +33,7 @@ interface LockedPostRow {
   type: LostFoundType;
   status: LostFoundStatus;
   images: string[];
+  verificationQuestion: string | null;
   resolvedClaimId: string | null;
   isHiddenByModeration: boolean;
 }
@@ -49,7 +51,7 @@ async function lockLostFoundPostForUpdate(
   postId: string,
 ): Promise<LockedPostRow> {
   const rows = await tx.$queryRaw<LockedPostRow[]>`
-    SELECT id, "authorId", title, type::text, status::text, images, "resolvedClaimId", "isHiddenByModeration"
+    SELECT id, "authorId", title, type::text, status::text, images, "verificationQuestion", "resolvedClaimId", "isHiddenByModeration"
     FROM "lost_found_post"
     WHERE id = ${postId}
     FOR UPDATE
@@ -84,27 +86,85 @@ export const createLostFoundPostInDb = async (
   payload: CreateLostFoundPayload,
 ) => {
   const isFound = payload.type === LostFoundType.FOUND;
-  return prisma.lostFoundPost.create({
-    data: {
-      authorId,
-      type: payload.type,
-      title: payload.title.trim(),
-      description: payload.description?.trim() || null,
-      category: payload.category,
-      location: payload.location?.trim() || null,
-      images: payload.images || [],
-      verificationQuestion: isFound
-        ? payload.verificationQuestion?.trim() || null
-        : null,
-      verificationAnswer: isFound
-        ? payload.verificationAnswer?.trim() || null
-        : null,
-    },
-    select: {
-      ...safePostResponseSelect,
-      verificationAnswer: true,
-    },
-  });
+  const idempotencyKey = payload.idempotencyKey?.trim() || null;
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      if (idempotencyKey) {
+        const existing = await tx.lostFoundPost.findUnique({
+          where: {
+            authorId_idempotencyKey: { authorId, idempotencyKey },
+          },
+          select: {
+            ...safePostResponseSelect,
+            verificationAnswer: true,
+          },
+        });
+        if (existing) {
+          return existing;
+        }
+      }
+
+      const recentPostsCount = await tx.lostFoundPost.count({
+        where: {
+          authorId,
+          createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+        },
+      });
+      if (recentPostsCount >= 10) {
+        throw new AppError(
+          "Too many listings created. Please try again in a few minutes.",
+          429,
+        );
+      }
+
+      const images = payload.images || [];
+      await assertNoForeignLostFoundMediaReferencesInTx(tx, [authorId], images);
+
+      return tx.lostFoundPost.create({
+        data: {
+          authorId,
+          type: payload.type,
+          title: payload.title.trim(),
+          description: payload.description?.trim() || null,
+          category: payload.category,
+          location: payload.location?.trim() || null,
+          images,
+          idempotencyKey,
+          verificationQuestion: isFound
+            ? payload.verificationQuestion?.trim() || null
+            : null,
+          verificationAnswer: isFound
+            ? payload.verificationAnswer?.trim() || null
+            : null,
+        },
+        select: {
+          ...safePostResponseSelect,
+          verificationAnswer: true,
+        },
+      });
+    });
+  } catch (err) {
+    if (
+      idempotencyKey &&
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2002"
+    ) {
+      const existing = await prisma.lostFoundPost.findUnique({
+        where: {
+          authorId_idempotencyKey: { authorId, idempotencyKey },
+        },
+        select: {
+          ...safePostResponseSelect,
+          verificationAnswer: true,
+        },
+      });
+      if (existing) {
+        return existing;
+      }
+    }
+    throw err;
+  }
 };
 
 export const updateLostFoundPostAtomicInDb = async (
@@ -133,11 +193,21 @@ export const updateLostFoundPostAtomicInDb = async (
     }
 
     if (
-      current.status === LostFoundStatus.RESOLVED &&
-      payload.type &&
-      payload.type !== current.type
+      current.status === LostFoundStatus.RESOLVED ||
+      current.status === LostFoundStatus.CLOSED
     ) {
-      throw new AppError("Cannot change item type on a resolved listing", 400);
+      throw new AppError(
+        "Resolved or closed listings cannot be edited",
+        400,
+      );
+    }
+
+    if (payload.images !== undefined) {
+      await assertNoForeignLostFoundMediaReferencesInTx(
+        tx,
+        [actorId, current.authorId],
+        payload.images,
+      );
     }
 
     const updateData = buildLostFoundUpdateData(payload, current.type, isAuthor);
@@ -173,6 +243,13 @@ export const updateLostFoundStatusAtomicInDb = async (
     if (!isAuthor && !isAdmin) {
       throw new AppError(
         "Unauthorized: You do not have permission to modify this post",
+        403,
+      );
+    }
+
+    if (status === LostFoundStatus.RESOLVED && !isAuthor) {
+      throw new AppError(
+        "Unauthorized: Only the post author can mark a listing as resolved",
         403,
       );
     }
@@ -260,9 +337,51 @@ export const updateLostFoundStatusAtomicInDb = async (
   });
 };
 
-export const deleteLostFoundPostFromDb = async (id: string) => {
-  return prisma.lostFoundPost.delete({
-    where: { id },
+export const deleteLostFoundPostAtomicInDb = async (
+  id: string,
+  userId: string,
+  userRole: string | undefined,
+) => {
+  return prisma.$transaction(async (tx) => {
+    const current = await lockLostFoundPostForUpdate(tx, id);
+    const isAuthor = current.authorId === userId;
+    const isAdmin = userRole === "ADMIN";
+
+    if (!isAuthor && !isAdmin) {
+      throw new AppError(
+        "Unauthorized: You do not have permission to delete this post",
+        403,
+      );
+    }
+
+    const claimsWithProof = await tx.lostFoundClaim.findMany({
+      where: {
+        postId: id,
+        proofImage: { not: null },
+      },
+      select: { proofImage: true },
+      take: 500,
+    });
+
+    const claimProofImages = claimsWithProof
+      .map((claim) => claim.proofImage)
+      .filter((image): image is string => Boolean(image));
+
+    await tx.contentReport.deleteMany({
+      where: {
+        targetType: "LOST_FOUND_POST",
+        targetId: id,
+      },
+    });
+
+    const deleted = await tx.lostFoundPost.delete({
+      where: { id },
+    });
+
+    return {
+      deleted,
+      imagesToDelete: [...current.images, ...claimProofImages],
+    };
   });
 };
 
@@ -283,6 +402,22 @@ export const createOrResubmitClaimInDb = async (
 
     if (postRow.status !== LostFoundStatus.ACTIVE) {
       throw new AppError("This post is no longer accepting claims", 400);
+    }
+
+    const cleanMessage = payload.message.trim();
+    const cleanAnswer = payload.answer?.trim() || null;
+    const cleanProof = payload.proofImage?.trim() || null;
+
+    if (postRow.verificationQuestion && !cleanAnswer) {
+      throw new AppError("Please answer the finder's verification question.", 400);
+    }
+
+    if (cleanProof) {
+      await assertNoForeignLostFoundMediaReferencesInTx(
+        tx,
+        [claimantId],
+        [cleanProof],
+      );
     }
 
     // Lock claimant row so concurrent cross-post submissions cannot bypass MAX_PENDING_CLAIMS_PER_USER
@@ -315,10 +450,6 @@ export const createOrResubmitClaimInDb = async (
         proofImage: true,
       },
     });
-
-    const cleanMessage = payload.message.trim();
-    const cleanAnswer = payload.answer?.trim() || null;
-    const cleanProof = payload.proofImage?.trim() || null;
 
     let claim;
     let replacedProofImage: string | null = null;
@@ -503,7 +634,16 @@ export const rejectClaimAtomicInDb = async (
       },
     });
 
-    return { updatedClaim, postTitle: postRow.title };
+    const { email: claimantEmail, ...safeClaimant } = updatedClaim.claimant;
+
+    return {
+      updatedClaim: {
+        ...updatedClaim,
+        claimant: safeClaimant,
+      },
+      claimantEmail,
+      postTitle: postRow.title,
+    };
   });
 };
 

@@ -1,7 +1,7 @@
 import { prisma } from "../../lib/prisma";
 import { appCache } from "../../lib/cache";
 import { AppError } from "../../utils/AppError";
-import { deleteMultipleImagesFromCloudinary } from "../../lib/cloudinary";
+import { deleteUnreferencedLostFoundImages } from "../lost-found/lost-found.media";
 import { publicUserSelect } from "../forum/forum.repository";
 import { extractPlainText } from "../forum/forum.sanitizer";
 import {
@@ -444,7 +444,11 @@ export const resolveForumReportService = async (
           where: { id: report.targetId },
           select: {
             images: true,
-            claims: { select: { proofImage: true } },
+            claims: {
+              where: { proofImage: { not: null } },
+              select: { proofImage: true },
+              take: 500,
+            },
           },
         });
         if (lfPost) {
@@ -461,11 +465,9 @@ export const resolveForumReportService = async (
   });
 
   if (lostFoundImagesToDelete.length > 0) {
-    deleteMultipleImagesFromCloudinary(lostFoundImagesToDelete).catch((err) =>
-      console.warn(
-        "[Moderation] Failed to purge deleted Lost & Found Cloudinary images:",
-        err,
-      ),
+    void deleteUnreferencedLostFoundImages(
+      lostFoundImagesToDelete,
+      "deleted Lost & Found moderation images",
     );
   }
 

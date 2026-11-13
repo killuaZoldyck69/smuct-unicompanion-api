@@ -366,3 +366,101 @@ test("Feed query validation: coerces string pagination, remains idempotent after
     false,
   );
 });
+
+test("Security & reliability audit regression guards: URL length/traversal, empty PATCH, email subject sanitization, ownership & atomic deletion", async () => {
+  const { updateLostFoundSchema } =
+    await import("../src/modules/lost-found/lost-found.schema");
+  const { buildNewClaimEmail } =
+    await import("../src/modules/lost-found/lost-found.email-templates");
+  const { lostFoundFeedSelect } =
+    await import("../src/modules/lost-found/lost-found.projections");
+
+  const cloud = process.env.CLOUDINARY_CLOUD_NAME || "demo";
+
+  // Reject %2e%2e traversal in Cloudinary URL
+  assert.equal(
+    isAllowedAppCloudinaryImageUrl(
+      `https://res.cloudinary.com/${cloud}/image/upload/smuct-unicompanion/campus-hub/lost-found/%2e%2e/notices/secret.jpg`,
+      ["smuct-unicompanion/campus-hub/lost-found"],
+    ),
+    false,
+  );
+
+  // Reject over-long image URLs (> 1000 chars) on post creation
+  assert.equal(
+    createLostFoundSchema.safeParse({
+      body: {
+        type: "LOST",
+        title: "Backpack",
+        category: "BAGS",
+        images: [
+          `https://res.cloudinary.com/${cloud}/image/upload/smuct-unicompanion/campus-hub/lost-found/${"a".repeat(1000)}.jpg`,
+        ],
+      },
+    }).success,
+    false,
+  );
+
+  // Accept valid optional idempotencyKey and reject empty PATCH updates
+  assert.equal(
+    createLostFoundSchema.safeParse({
+      body: {
+        type: "LOST",
+        title: "Backpack",
+        category: "BAGS",
+        idempotencyKey: "lf-12345678-abcd",
+      },
+    }).success,
+    true,
+  );
+  assert.equal(
+    updateLostFoundSchema.safeParse({
+      params: { id: "11111111-1111-4111-8111-111111111111" },
+      body: {},
+    }).success,
+    false,
+  );
+
+  // Strip CR/LF control chars from email subject lines
+  const email = buildNewClaimEmail({
+    authorName: "Alice",
+    postTitle: "Wallet\r\nBcc: evil@example.com",
+    claimantName: "Bob",
+    message: "Found near library",
+  });
+  assert.equal(/[\r\n]/.test(email.subject), false);
+
+  // Feed select avoids full profile joins and private verification questions
+  assert.equal("author" in lostFoundFeedSelect, false);
+  assert.equal("verificationQuestion" in lostFoundFeedSelect, false);
+
+  const repoSrc = fs.readFileSync(
+    path.join(process.cwd(), "src/modules/lost-found/lost-found.repository.ts"),
+    "utf8",
+  );
+  const serviceSrc = fs.readFileSync(
+    path.join(process.cwd(), "src/modules/lost-found/lost-found.service.ts"),
+    "utf8",
+  );
+  const uploadSvcSrc = fs.readFileSync(
+    path.join(process.cwd(), "src/modules/upload/upload.service.ts"),
+    "utf8",
+  );
+  const modRepoSrc = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      "src/modules/lost-found/lost-found.moderation.repository.ts",
+    ),
+    "utf8",
+  );
+
+  assert.match(repoSrc, /assertNoForeignLostFoundMediaReferencesInTx/);
+  assert.match(repoSrc, /deleteLostFoundPostAtomicInDb/);
+  assert.match(repoSrc, /Resolved or closed listings cannot be edited/);
+  assert.match(repoSrc, /Please answer the finder's verification question/);
+  assert.match(repoSrc, /claimantEmail/);
+  assert.match(serviceSrc, /deleteUnreferencedLostFoundImages/);
+  assert.match(serviceSrc, /isLostFoundPostVisibleToViewer/);
+  assert.match(uploadSvcSrc, /Promise\.allSettled/);
+  assert.match(modRepoSrc, /tx\.lostFoundPost\.findUnique/);
+});

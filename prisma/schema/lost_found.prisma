@@ -54,6 +54,7 @@ model LostFoundPost {
   verificationQuestion String?
   verificationAnswer   String?
   resolvedClaimId      String?
+  idempotencyKey       String?
   isHiddenByModeration Boolean           @default(false)
   hiddenAt             DateTime?
   createdAt            DateTime          @default(now())
@@ -62,6 +63,7 @@ model LostFoundPost {
   author User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
   claims LostFoundClaim[]
 
+  @@unique([authorId, idempotencyKey])
   @@index([authorId])
   @@index([authorId, createdAt(sort: Desc)])
   @@index([authorId, status, createdAt(sort: Desc)])
@@ -70,6 +72,8 @@ model LostFoundPost {
   @@index([category, status, createdAt(sort: Desc)])
   @@index([isHiddenByModeration, createdAt(sort: Desc)])
   @@index([isHiddenByModeration, status, createdAt(sort: Desc)])
+  @@index([isHiddenByModeration, type, createdAt(sort: Desc)])
+  @@index([isHiddenByModeration, type, status, createdAt(sort: Desc)])
   @@map("lost_found_post")
 }
 
@@ -92,5 +96,6 @@ model LostFoundClaim {
   @@index([postId, status])
   @@index([claimantId])
   @@index([claimantId, status])
+  @@index([proofImage])
   @@map("lost_found_claim")
 }

@@ -1,5 +1,9 @@
 import { escapeHtml } from "../../utils/html";
 
+function sanitizeEmailSubjectPart(value: string): string {
+  return value.replace(/[\r\n\u0000-\u001F\u007F]+/g, " ").trim();
+}
+
 export function buildNewClaimEmail(params: {
   authorName: string;
   postTitle: string;
@@ -10,9 +14,10 @@ export function buildNewClaimEmail(params: {
   const safeTitle = escapeHtml(params.postTitle);
   const safeClaimantName = escapeHtml(params.claimantName);
   const safeMessage = escapeHtml(params.message);
+  const safeSubjectTitle = sanitizeEmailSubjectPart(params.postTitle);
 
   return {
-    subject: `New Claim Received: ${params.postTitle}`,
+    subject: `New Claim Received: ${safeSubjectTitle}`,
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 12px;">
         <h2 style="color: #0284c7;">New Claim Received</h2>
@@ -41,8 +46,10 @@ export function buildHandoverClaimantEmail(params: {
     ? escapeHtml(params.authorPhone)
     : null;
 
+  const safeSubjectTitle = sanitizeEmailSubjectPart(params.postTitle);
+
   return {
-    subject: `Claim Accepted! Handover Details for: ${params.postTitle}`,
+    subject: `Claim Accepted! Handover Details for: ${safeSubjectTitle}`,
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #10b981; border-radius: 12px;">
         <h2 style="color: #10b981;">Your Claim Was Accepted!</h2>
@@ -72,8 +79,10 @@ export function buildHandoverAuthorEmail(params: {
     ? escapeHtml(params.claimantPhone)
     : null;
 
+  const safeSubjectTitle = sanitizeEmailSubjectPart(params.postTitle);
+
   return {
-    subject: `Claim Finalized: Handover Details for ${params.postTitle}`,
+    subject: `Claim Finalized: Handover Details for ${safeSubjectTitle}`,
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #0284c7; border-radius: 12px;">
         <h2 style="color: #0284c7;">Claim Accepted & Post Resolved</h2>
@@ -97,8 +106,10 @@ export function buildClaimRejectedEmail(params: {
   const safeClaimantName = escapeHtml(params.claimantName);
   const safeTitle = escapeHtml(params.postTitle);
 
+  const safeSubjectTitle = sanitizeEmailSubjectPart(params.postTitle);
+
   return {
-    subject: `Claim Update: ${params.postTitle}`,
+    subject: `Claim Update: ${safeSubjectTitle}`,
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ef4444; border-radius: 12px;">
         <h2 style="color: #ef4444;">Claim Status Update</h2>

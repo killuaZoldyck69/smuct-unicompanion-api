@@ -11,9 +11,9 @@ import {
   LostFoundViewerContext,
 } from "./lost-found.domain";
 import {
+  lostFoundFeedSelect,
   privateContactSelection,
   publicAuthorSelection,
-  safePostResponseSelect,
 } from "./lost-found.projections";
 
 export interface LostFoundFeedFilters {
@@ -78,7 +78,13 @@ export const findLostFoundFeedInDb = async (
   if (filters.status) {
     where.status = filters.status;
   } else if (!isMyPosts) {
-    where.status = { not: LostFoundStatus.CLOSED };
+    where.status = {
+      in: [
+        LostFoundStatus.ACTIVE,
+        LostFoundStatus.CLAIMED,
+        LostFoundStatus.RESOLVED,
+      ],
+    };
   }
 
   if (filters.category) {
@@ -106,14 +112,20 @@ export const findLostFoundFeedInDb = async (
         }
       : { isHiddenByModeration: false };
 
-  const shouldFetchGlobalCounts = page === 1;
+  const shouldFetchGlobalCounts =
+    page === 1 &&
+    !filters.type &&
+    !filters.status &&
+    !filters.category &&
+    !filters.myPosts &&
+    !term;
 
   const [posts, total, groupedCounts] = await Promise.all([
     prisma.lostFoundPost.findMany({
       where,
       skip,
       take: limit,
-      select: safePostResponseSelect,
+      select: lostFoundFeedSelect,
       orderBy: { createdAt: "desc" },
     }),
     prisma.lostFoundPost.count({ where }),
@@ -303,6 +315,7 @@ export const findClaimProofImagesByPostIdInDb = async (postId: string) => {
       proofImage: { not: null },
     },
     select: { proofImage: true },
+    take: 500,
   });
 
   return claims

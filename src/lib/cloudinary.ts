@@ -440,6 +440,10 @@ export function isAllowedAppCloudinaryImageUrl(
 
   const configuredCloudName =
     envConfig.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME;
+  if (!configuredCloudName && process.env.NODE_ENV === "production") {
+    return false;
+  }
+
   const expectedPathPrefix = configuredCloudName
     ? `/${configuredCloudName}/image/upload/`
     : null;
@@ -452,8 +456,19 @@ export function isAllowedAppCloudinaryImageUrl(
     return false;
   }
 
-  const publicId = extractPublicIdFromUrl(trimmed);
-  if (!publicId || publicId.includes("..")) {
+  const lowerTrimmed = trimmed.toLowerCase();
+  const lowerPathname = parsed.pathname.toLowerCase();
+  if (
+    lowerTrimmed.includes("%2e%2e") ||
+    lowerTrimmed.includes("..") ||
+    lowerPathname.includes("%2e%2e") ||
+    lowerPathname.includes("..")
+  ) {
+    return false;
+  }
+
+  const publicId = extractPublicIdFromUrl(parsed.href);
+  if (!publicId || publicId.includes("..") || publicId.toLowerCase().includes("%2e%2e")) {
     return false;
   }
 

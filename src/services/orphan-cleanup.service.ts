@@ -133,43 +133,54 @@ export async function cleanupLostFoundOrphanImages(
   const cutoffDate = new Date(Date.now() - olderThanHours * 60 * 60 * 1000);
   const prefix = "smuct-unicompanion/campus-hub/lost-found";
 
-  // 1. Fetch all lost & found post images and claim proof images from database
-  const [posts, claims] = await Promise.all([
-    prisma.lostFoundPost.findMany({
-      select: { images: true },
-    }),
-    prisma.lostFoundClaim.findMany({
-      where: { proofImage: { not: null } },
-      select: { proofImage: true },
-    }),
-  ]);
-
   const referencedIdentifiers = new Set<string>();
+  const DB_BATCH_SIZE = 500;
 
-  // Add post images
-  for (const post of posts) {
-    if (Array.isArray(post.images)) {
-      for (const imgUrl of post.images) {
-        if (typeof imgUrl === "string" && imgUrl.trim()) {
-          referencedIdentifiers.add(imgUrl.trim());
-          const publicId = extractPublicIdFromUrl(imgUrl);
-          if (publicId) {
-            referencedIdentifiers.add(publicId);
+  let postCursor: string | undefined;
+  while (true) {
+    const posts = await prisma.lostFoundPost.findMany({
+      ...(postCursor ? { cursor: { id: postCursor }, skip: 1 } : {}),
+      take: DB_BATCH_SIZE,
+      orderBy: { id: "asc" },
+      select: { id: true, images: true },
+    });
+    for (const post of posts) {
+      if (Array.isArray(post.images)) {
+        for (const imgUrl of post.images) {
+          if (typeof imgUrl === "string" && imgUrl.trim()) {
+            referencedIdentifiers.add(imgUrl.trim());
+            const publicId = extractPublicIdFromUrl(imgUrl);
+            if (publicId) {
+              referencedIdentifiers.add(publicId);
+            }
           }
         }
       }
     }
+    if (posts.length < DB_BATCH_SIZE) break;
+    postCursor = posts[posts.length - 1].id;
   }
 
-  // Add claim proof images
-  for (const claim of claims) {
-    if (typeof claim.proofImage === "string" && claim.proofImage.trim()) {
-      referencedIdentifiers.add(claim.proofImage.trim());
-      const publicId = extractPublicIdFromUrl(claim.proofImage);
-      if (publicId) {
-        referencedIdentifiers.add(publicId);
+  let claimCursor: string | undefined;
+  while (true) {
+    const claims = await prisma.lostFoundClaim.findMany({
+      where: { proofImage: { not: null } },
+      ...(claimCursor ? { cursor: { id: claimCursor }, skip: 1 } : {}),
+      take: DB_BATCH_SIZE,
+      orderBy: { id: "asc" },
+      select: { id: true, proofImage: true },
+    });
+    for (const claim of claims) {
+      if (typeof claim.proofImage === "string" && claim.proofImage.trim()) {
+        referencedIdentifiers.add(claim.proofImage.trim());
+        const publicId = extractPublicIdFromUrl(claim.proofImage);
+        if (publicId) {
+          referencedIdentifiers.add(publicId);
+        }
       }
     }
+    if (claims.length < DB_BATCH_SIZE) break;
+    claimCursor = claims[claims.length - 1].id;
   }
 
   let scannedCount = 0;

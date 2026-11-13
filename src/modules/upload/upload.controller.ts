@@ -149,6 +149,8 @@ export const deleteUploadedFile = catchAsync(
       }
 
       const viewerId = user?.id ?? "";
+      const isHttpsUrl =
+        url.startsWith("https://") || url.startsWith("http://");
       const likePattern = `%${publicId.replace(/[\\%_]/g, "\\$&")}%`;
 
       const [
@@ -166,7 +168,9 @@ export const deleteUploadedFile = catchAsync(
         prisma.lostFoundClaim.findFirst({
           where: {
             claimantId: { not: viewerId },
-            proofImage: { contains: publicId },
+            ...(isHttpsUrl
+              ? { proofImage: url }
+              : { proofImage: { contains: publicId } }),
           },
           select: { id: true },
         }),
@@ -184,34 +188,64 @@ export const deleteUploadedFile = catchAsync(
           },
           select: { id: true },
         }),
-        prisma.$queryRaw<Array<{ owned_by_other: boolean }>>`
-            SELECT (
-              EXISTS (
-                SELECT 1 FROM "lost_found_post"
-                WHERE "authorId" <> ${viewerId}
-                  AND array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
-              )
-              OR EXISTS (
-                SELECT 1 FROM "marketplace_post"
-                WHERE "authorId" <> ${viewerId}
-                  AND array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
-              )
-            ) AS owned_by_other
-          `,
-        prisma.$queryRaw<Array<{ actively_referenced: boolean }>>`
-            SELECT (
-              EXISTS (
-                SELECT 1 FROM "lost_found_post"
-                WHERE "authorId" = ${viewerId}
-                  AND array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
-              )
-              OR EXISTS (
-                SELECT 1 FROM "lost_found_claim"
-                WHERE "claimantId" = ${viewerId}
-                  AND "proofImage" LIKE ${likePattern} ESCAPE '\\'
-              )
-            ) AS actively_referenced
-          `,
+        isHttpsUrl
+          ? prisma.$queryRaw<Array<{ owned_by_other: boolean }>>`
+              SELECT (
+                EXISTS (
+                  SELECT 1 FROM "lost_found_post"
+                  WHERE "authorId" <> ${viewerId}
+                    AND "images" @> ARRAY[${url}]::text[]
+                )
+                OR EXISTS (
+                  SELECT 1 FROM "marketplace_post"
+                  WHERE "authorId" <> ${viewerId}
+                    AND "images" @> ARRAY[${url}]::text[]
+                )
+              ) AS owned_by_other
+            `
+          : prisma.$queryRaw<Array<{ owned_by_other: boolean }>>`
+              SELECT (
+                EXISTS (
+                  SELECT 1 FROM "lost_found_post"
+                  WHERE "authorId" <> ${viewerId}
+                    AND array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
+                )
+                OR EXISTS (
+                  SELECT 1 FROM "marketplace_post"
+                  WHERE "authorId" <> ${viewerId}
+                    AND array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
+                )
+              ) AS owned_by_other
+            `,
+        isHttpsUrl
+          ? prisma.$queryRaw<Array<{ actively_referenced: boolean }>>`
+              SELECT (
+                EXISTS (
+                  SELECT 1 FROM "lost_found_post"
+                  WHERE "authorId" = ${viewerId}
+                    AND "images" @> ARRAY[${url}]::text[]
+                )
+                OR EXISTS (
+                  SELECT 1 FROM "lost_found_claim"
+                  WHERE "claimantId" = ${viewerId}
+                    AND "proofImage" = ${url}
+                )
+              ) AS actively_referenced
+            `
+          : prisma.$queryRaw<Array<{ actively_referenced: boolean }>>`
+              SELECT (
+                EXISTS (
+                  SELECT 1 FROM "lost_found_post"
+                  WHERE "authorId" = ${viewerId}
+                    AND array_to_string("images", ' ') LIKE ${likePattern} ESCAPE '\\'
+                )
+                OR EXISTS (
+                  SELECT 1 FROM "lost_found_claim"
+                  WHERE "claimantId" = ${viewerId}
+                    AND "proofImage" LIKE ${likePattern} ESCAPE '\\'
+                )
+              ) AS actively_referenced
+            `,
       ]);
 
       if (

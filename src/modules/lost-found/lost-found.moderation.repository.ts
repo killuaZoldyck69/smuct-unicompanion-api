@@ -25,21 +25,79 @@ export const findExistingLostFoundReportInDb = async (
 export const createLostFoundReportAndEvaluateAutoHideInDb = async (params: {
   reporterId: string;
   postId: string;
-  targetAuthorId: string | null;
   reason: CreateLostFoundReportPayload["reason"];
   details?: string;
-  targetSnapshot: Prisma.InputJsonObject;
-  reopenReportId?: string;
 }) => {
   try {
     return await prisma.$transaction(async (tx) => {
-      const report = params.reopenReportId
+      const post = await tx.lostFoundPost.findUnique({
+        where: { id: params.postId },
+        select: {
+          id: true,
+          authorId: true,
+          type: true,
+          category: true,
+          title: true,
+          description: true,
+          location: true,
+          isHiddenByModeration: true,
+          updatedAt: true,
+        },
+      });
+
+      if (!post || post.isHiddenByModeration) {
+        throw new AppError("Lost & Found post not found", 404);
+      }
+      if (post.authorId === params.reporterId) {
+        throw new AppError("You cannot report your own listing.", 400);
+      }
+
+      const existing = await tx.contentReport.findUnique({
+        where: {
+          reporterId_targetType_targetId: {
+            reporterId: params.reporterId,
+            targetType: "LOST_FOUND_POST",
+            targetId: params.postId,
+          },
+        },
+        select: {
+          id: true,
+          status: true,
+          reviewedAt: true,
+          createdAt: true,
+        },
+      });
+
+      let reopenReportId: string | undefined;
+      if (existing) {
+        if (existing.status !== "DISMISSED") {
+          throw new AppError("You have already reported this listing.", 409);
+        }
+        const reviewedBoundary = existing.reviewedAt ?? existing.createdAt;
+        if (post.updatedAt <= reviewedBoundary) {
+          throw new AppError(
+            "A moderator has already reviewed this listing.",
+            409,
+          );
+        }
+        reopenReportId = existing.id;
+      }
+
+      const targetSnapshot: Prisma.InputJsonObject = {
+        postId: post.id,
+        type: post.type,
+        category: post.category,
+        title: post.title,
+        contentPreview: (post.description || post.location || "").slice(0, 400),
+      };
+
+      const report = reopenReportId
         ? await tx.contentReport.update({
-            where: { id: params.reopenReportId },
+            where: { id: reopenReportId },
             data: {
               reason: params.reason,
               details: params.details ?? null,
-              targetSnapshot: params.targetSnapshot,
+              targetSnapshot,
               status: "PENDING",
               reviewedById: null,
               reviewedAt: null,
@@ -52,10 +110,10 @@ export const createLostFoundReportAndEvaluateAutoHideInDb = async (params: {
               reporterId: params.reporterId,
               targetType: "LOST_FOUND_POST",
               targetId: params.postId,
-              targetAuthorId: params.targetAuthorId,
+              targetAuthorId: post.authorId,
               reason: params.reason,
               details: params.details ?? null,
-              targetSnapshot: params.targetSnapshot,
+              targetSnapshot,
             },
           });
 

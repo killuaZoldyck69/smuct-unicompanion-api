@@ -29,6 +29,28 @@ export const privateContactSelection = {
   },
 } as const;
 
+export const lostFoundFeedSelect = {
+  id: true,
+  authorId: true,
+  type: true,
+  title: true,
+  description: true,
+  category: true,
+  location: true,
+  status: true,
+  images: true,
+  isHiddenByModeration: true,
+  createdAt: true,
+  updatedAt: true,
+  _count: {
+    select: {
+      claims: {
+        where: { status: LostFoundClaimStatus.PENDING },
+      },
+    },
+  },
+} as const;
+
 export const safePostResponseSelect = {
   id: true,
   authorId: true,

@@ -194,7 +194,32 @@ export async function uploadMultipleImagesService(
     throw new AppError("No image files provided for upload", 400);
   }
 
-  return await Promise.all(uploadPromises);
+  const settled = await Promise.allSettled(uploadPromises);
+  const succeeded = settled
+    .filter(
+      (result): result is PromiseFulfilledResult<UploadResult> =>
+        result.status === "fulfilled",
+    )
+    .map((result) => result.value);
+  const firstRejected = settled.find(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+
+  if (firstRejected) {
+    const rollbackIds = succeeded
+      .map((item) => item.publicId || item.secureUrl)
+      .filter(Boolean);
+    if (rollbackIds.length > 0) {
+      const { deleteMultipleImagesFromCloudinary } =
+        await import("../../lib/cloudinary");
+      await deleteMultipleImagesFromCloudinary(rollbackIds).catch((err) =>
+        console.warn("[Upload] Failed to roll back partial batch upload:", err),
+      );
+    }
+    throw firstRejected.reason;
+  }
+
+  return succeeded;
 }
 
 const ALLOWED_FILE_MIME_TYPES = new Set([

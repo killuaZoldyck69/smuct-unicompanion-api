@@ -11,6 +11,7 @@ const LOST_FOUND_CLOUDINARY_PREFIX = "smuct-unicompanion/campus-hub/lost-found";
 const verifiedLostFoundImageUrl = z
   .string()
   .trim()
+  .max(1000, "Image URL exceeds maximum allowed length")
   .url("Invalid image URL")
   .refine(
     (url) =>
@@ -64,6 +65,7 @@ export const createLostFoundSchema = z.object({
   body: z.object({
     ...lostFoundBodyFields,
     images: imagesArraySchema.default([]),
+    idempotencyKey: z.string().trim().min(8).max(128).optional(),
   }),
 });
 
@@ -74,7 +76,13 @@ export const updateLostFoundSchema = z.object({
       ...lostFoundBodyFields,
       images: imagesArraySchema,
     })
-    .partial(),
+    .partial()
+    .refine(
+      (body) => Object.values(body).some((val) => val !== undefined),
+      {
+        message: "At least one field must be provided for update",
+      },
+    ),
 });
 
 export const getFeedQuerySchema = z.object({
