@@ -32,7 +32,9 @@ export const getCurrentCalendar = catchAsync(
 
     res.status(200).json({
       success: true,
-      message: "Current published academic calendar retrieved successfully.",
+      message: calendar
+        ? "Current published academic calendar retrieved successfully."
+        : "No published academic calendar found for your program or batch.",
       data: calendar,
     });
   },
@@ -41,7 +43,12 @@ export const getCurrentCalendar = catchAsync(
 export const getUpcomingEvents = catchAsync(
   async (req: Request, res: Response) => {
     const userId = req.user.id;
-    const events = await calendarService.getUpcomingEventsService(userId);
+    const limit =
+      req.query.limit !== undefined ? Number(req.query.limit) : undefined;
+    const events = await calendarService.getUpcomingEventsService(
+      userId,
+      limit,
+    );
 
     res.status(200).json({
       success: true,

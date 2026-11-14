@@ -7,7 +7,20 @@ import {
   generateCsvFromEvents,
   generateCsvTemplate,
 } from "../calendar.csv";
-import { normalizePagination, isCalendarVisibleToUser } from "../calendar.service";
+import {
+  normalizePagination,
+  isCalendarVisibleToUser,
+  expandProgramAliases,
+  expandFacultyAliases,
+} from "../calendar.service";
+import {
+  calendarIdParamSchema,
+  calendarEventParamSchema,
+  calendarEventInputSchema,
+  updateEventInputSchema,
+  validateCsvSchema,
+  upcomingEventsQuerySchema,
+} from "../calendar.schema";
 
 // Simple test assertion helper
 function assert(condition: boolean, message: string) {
@@ -188,7 +201,189 @@ Mid-term Examination,Offline Mode,EXAM,2026-09-30,2026-10-15,8,false,true,Offlin
   assertEquals(clonedData.status, "DRAFT", "Cloned calendar must be in DRAFT status");
   assertEquals(clonedData.events.length, 1, "Cloned calendar must replicate events");
 
-  console.log("\n✅ All 11 Calendar & CSV Unit Tests Passed Successfully!\n");
+  // 12. Test Canonical SMUCT Program & Faculty Alias Matching
+  console.log("  [12/15] Testing Canonical SMUCT Program & Faculty Alias Matching...");
+  const cseTerms = expandProgramAliases("B.Sc (Hons) in Computer Science and Engineering", false);
+  assert(cseTerms.includes("CSE"), "Program alias expansion should include CSE department code");
+  assert(cseTerms.includes("cse"), "Program alias expansion should include lowercase cse");
+
+  const facTerms = expandFacultyAliases("FACULTY OF ENGINEERING & TECHNOLOGY");
+  assert(
+    facTerms.includes("Faculty of Engineering & Technology (E&T)"),
+    "Faculty alias expansion should include mobile display label",
+  );
+
+  const cseStudentProfile = {
+    role: "STUDENT",
+    studentProfile: {
+      faculty: "FACULTY OF ENGINEERING & TECHNOLOGY",
+      department: "CSE",
+      program: "B.Sc (Hons) in Computer Science and Engineering",
+      batch: "64",
+    },
+  };
+
+  assert(
+    isCalendarVisibleToUser(
+      {
+        status: "PUBLISHED",
+        isActive: true,
+        targetFaculties: [],
+        targetPrograms: ["CSE"],
+        targetBatch: "Batch 64",
+      },
+      cseStudentProfile,
+    ),
+    "Canonical CSE student must see batch calendar targeted by CSE department code",
+  );
+
+  assert(
+    isCalendarVisibleToUser(
+      {
+        status: "PUBLISHED",
+        isActive: true,
+        targetFaculties: ["Faculty of Engineering & Technology (E&T)"],
+        targetPrograms: [],
+        targetBatch: null,
+      },
+      cseStudentProfile,
+    ),
+    "Canonical Engineering student must see non-batch calendar targeted by UI faculty label",
+  );
+
+  const fdtUgStudent = {
+    role: "STUDENT",
+    studentProfile: {
+      faculty: "FACULTY OF DESIGN & TECHNOLOGY",
+      department: "FDT",
+      program: "BA (Hons) in Fashion Design and Technology",
+      batch: "55",
+    },
+  };
+  assert(
+    !isCalendarVisibleToUser(
+      {
+        status: "PUBLISHED",
+        isActive: true,
+        targetFaculties: [],
+        targetPrograms: ["M.A. in Fashion Design"],
+        targetBatch: null,
+      },
+      fdtUgStudent,
+    ),
+    "UG FDT student must NOT see PG M.A. in Fashion Design calendar",
+  );
+
+  const cseTeacher = {
+    role: "TEACHER",
+    teacherProfile: {
+      faculty: "FACULTY OF ENGINEERING & TECHNOLOGY",
+      department: "CSE",
+      advisoryBatch: 64,
+    },
+  };
+  assert(
+    isCalendarVisibleToUser(
+      {
+        status: "PUBLISHED",
+        isActive: true,
+        targetFaculties: [],
+        targetPrograms: ["B.Sc (Hons) in Computer Science and Engineering"],
+        targetBatch: "Batch 64",
+      },
+      cseTeacher,
+    ),
+    "Advisory teacher of CSE batch 64 must see CSE program batch calendar",
+  );
+
+  // 13. Test UUID Param Validation Schemas
+  console.log("  [13/15] Testing UUID Route Param Schemas...");
+  const sampleUuid = "550e8400-e29b-41d4-a716-446655440000";
+  assert(
+    calendarIdParamSchema.safeParse({ params: { id: sampleUuid } }).success,
+    "Valid UUID param should pass calendarIdParamSchema",
+  );
+  assert(
+    !calendarIdParamSchema.safeParse({ params: { id: "not-a-uuid" } }).success,
+    "Invalid UUID param must fail calendarIdParamSchema",
+  );
+  assert(
+    calendarEventParamSchema.safeParse({
+      params: { id: sampleUuid, eventId: sampleUuid },
+    }).success,
+    "Valid event params should pass calendarEventParamSchema",
+  );
+  assert(
+    !calendarEventParamSchema.safeParse({
+      params: { id: sampleUuid, eventId: "bad-id" },
+    }).success,
+    "Invalid eventId must fail calendarEventParamSchema",
+  );
+
+  // 14. Test Event Input Schema Refinements
+  console.log("  [14/15] Testing Event Input Bounds & Date Ordering...");
+  assert(
+    calendarEventInputSchema.safeParse({
+      title: "Midterm Exam",
+      category: "EXAM",
+      startDate: "2026-09-10",
+      endDate: "2026-09-15",
+      weekNumber: 6,
+    }).success,
+    "Valid event payload should pass",
+  );
+  assert(
+    !calendarEventInputSchema.safeParse({
+      title: "Backwards Dates",
+      category: "EXAM",
+      startDate: "2026-09-15",
+      endDate: "2026-09-10",
+    }).success,
+    "endDate earlier than startDate must fail",
+  );
+  assert(
+    !calendarEventInputSchema.safeParse({
+      title: "Leap/Calendar Invalid",
+      category: "OTHER",
+      startDate: "2026-02-31",
+    }).success,
+    "Non-existent calendar date must fail",
+  );
+  assert(
+    !calendarEventInputSchema.safeParse({
+      title: "Week Too High",
+      category: "ACADEMIC",
+      startDate: "2026-09-10",
+      weekNumber: 53,
+    }).success,
+    "weekNumber > 52 must fail",
+  );
+  assert(
+    !updateEventInputSchema.safeParse({
+      startDate: "2026-10-10",
+      endDate: "2026-10-05",
+    }).success,
+    "Partial update with endDate < startDate must fail",
+  );
+
+  // 15. Test CSV & Upcoming Query Bounds
+  console.log("  [15/15] Testing CSV Payload & Upcoming Query Bounds...");
+  assert(
+    !validateCsvSchema.safeParse({
+      body: { csvContent: "a".repeat(500_001) },
+    }).success,
+    "Oversized CSV payload (> 500KB) must fail",
+  );
+  assert(
+    upcomingEventsQuerySchema.safeParse({ query: { limit: "25" } }).success,
+    "Valid upcoming limit should pass",
+  );
+  assert(
+    !upcomingEventsQuerySchema.safeParse({ query: { limit: "999" } }).success,
+    "Upcoming limit > 50 must fail",
+  );
+
+  console.log("\n✅ All 15 Calendar & CSV Unit Tests Passed Successfully!\n");
 }
 
 if (process.argv[1]?.includes("calendar.test.ts")) {

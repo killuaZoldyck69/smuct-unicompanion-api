@@ -14,57 +14,152 @@ export const eventCategoryEnum = z.enum([
 
 export const calendarStatusEnum = z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]);
 
-// Date string validator: accepts YYYY-MM-DD or ISO string and outputs Date or YYYY-MM-DD string
+// Date string validator: accepts valid YYYY-MM-DD or ISO string
 const dateStringSchema = z.string().refine(
   (val) => {
     const trimmed = val.trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return true;
+    const ymd = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (ymd) {
+      const year = parseInt(ymd[1], 10);
+      const month = parseInt(ymd[2], 10);
+      const day = parseInt(ymd[3], 10);
+      const dt = new Date(Date.UTC(year, month - 1, day));
+      return (
+        dt.getUTCFullYear() === year &&
+        dt.getUTCMonth() === month - 1 &&
+        dt.getUTCDate() === day
+      );
+    }
     const d = new Date(trimmed);
     return !isNaN(d.getTime());
   },
-  { message: "Date must be in YYYY-MM-DD format (e.g. 2026-08-22)" },
+  { message: "Date must be a valid date in YYYY-MM-DD format (e.g. 2026-08-22)" },
 );
 
-export const calendarEventInputSchema = z.object({
-  title: z.string().min(1, "Event title is required"),
-  description: z.string().nullable().optional(),
+function parseComparableDateMs(value: string): number {
+  const trimmed = value.trim();
+  const ymd = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (ymd) {
+    return Date.UTC(
+      parseInt(ymd[1], 10),
+      parseInt(ymd[2], 10) - 1,
+      parseInt(ymd[3], 10),
+    );
+  }
+  return new Date(trimmed).getTime();
+}
+
+const MAX_CSV_CONTENT_LENGTH = 500_000;
+
+export const calendarIdParamsObject = z.object({
+  id: z.string().uuid("Invalid calendar ID format"),
+});
+
+export const calendarEventParamsObject = z.object({
+  id: z.string().uuid("Invalid calendar ID format"),
+  eventId: z.string().uuid("Invalid event ID format"),
+});
+
+export const calendarIdParamSchema = z.object({
+  params: calendarIdParamsObject,
+});
+
+export const calendarEventParamSchema = z.object({
+  params: calendarEventParamsObject,
+});
+
+const calendarEventBaseSchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(1, "Event title is required")
+    .max(200, "Event title cannot exceed 200 characters"),
+  description: z
+    .string()
+    .trim()
+    .max(2000, "Description cannot exceed 2000 characters")
+    .nullable()
+    .optional(),
   category: eventCategoryEnum.default("ACADEMIC"),
   startDate: dateStringSchema,
   endDate: dateStringSchema.nullable().optional(),
-  weekNumber: z.number().int().positive().nullable().optional(),
+  weekNumber: z
+    .number()
+    .int()
+    .min(1, "Week number must be at least 1")
+    .max(52, "Week number cannot exceed 52")
+    .nullable()
+    .optional(),
   isHoliday: z.boolean().default(false),
   isAllDay: z.boolean().default(true),
-  remarks: z.string().nullable().optional(),
+  remarks: z
+    .string()
+    .trim()
+    .max(500, "Remarks cannot exceed 500 characters")
+    .nullable()
+    .optional(),
 });
 
-export const updateEventInputSchema = z.object({
-  title: z.string().min(1, "Event title is required").optional(),
-  description: z.string().nullable().optional(),
-  category: eventCategoryEnum.optional(),
-  startDate: dateStringSchema.optional(),
-  endDate: dateStringSchema.nullable().optional(),
-  weekNumber: z.number().int().positive().nullable().optional(),
-  isHoliday: z.boolean().optional(),
-  isAllDay: z.boolean().optional(),
-  remarks: z.string().nullable().optional(),
-});
+export const calendarEventInputSchema = calendarEventBaseSchema.refine(
+  (data) => {
+    if (!data.endDate) return true;
+    return (
+      parseComparableDateMs(data.endDate) >=
+      parseComparableDateMs(data.startDate)
+    );
+  },
+  {
+    message: "End date cannot be earlier than start date",
+    path: ["endDate"],
+  },
+);
+
+export const updateEventInputSchema = calendarEventBaseSchema
+  .partial()
+  .refine(
+    (data) => {
+      if (!data.startDate || !data.endDate) return true;
+      return (
+        parseComparableDateMs(data.endDate) >=
+        parseComparableDateMs(data.startDate)
+      );
+    },
+    {
+      message: "End date cannot be earlier than start date",
+      path: ["endDate"],
+    },
+  );
 
 export const SMUCT_SEMESTERS = ["Summer", "Winter", "Spring", "Fall"] as const;
 export type SmuctSemester = (typeof SMUCT_SEMESTERS)[number];
 
 export const createCalendarBodySchema = z
   .object({
-    title: z.string().min(1, "Calendar title is required"),
+    title: z
+      .string()
+      .trim()
+      .min(1, "Calendar title is required")
+      .max(200, "Calendar title cannot exceed 200 characters"),
     semester: z.enum(SMUCT_SEMESTERS, {
       message: "Semester must be one of: Summer, Winter, Spring, Fall",
     }),
     academicYear: z.coerce.number().int().min(2000).max(2100).default(2026),
-    targetFaculties: z.array(z.string()).default([]),
-    targetPrograms: z.array(z.string()).default([]),
-    semesterDuration: z.string().nullable().optional(),
-    targetBatch: z.string().nullable().optional(),
+    targetFaculties: z
+      .array(z.string().trim().max(150))
+      .max(20, "Too many target faculties")
+      .default([]),
+    targetPrograms: z
+      .array(z.string().trim().max(150))
+      .max(50, "Too many target programs")
+      .default([]),
+    semesterDuration: z.string().trim().max(50).nullable().optional(),
+    targetBatch: z.string().trim().max(50).nullable().optional(),
     status: calendarStatusEnum.default("DRAFT").optional(),
-    events: z.array(calendarEventInputSchema).optional().default([]),
+    events: z
+      .array(calendarEventInputSchema)
+      .max(500, "Cannot create more than 500 events at once")
+      .optional()
+      .default([]),
   })
   .refine(
     (data) => {
@@ -87,13 +182,24 @@ export const createCalendarSchema = z.object({
 
 export const updateCalendarBodySchema = z
   .object({
-    title: z.string().min(1, "Calendar title is required").optional(),
+    title: z
+      .string()
+      .trim()
+      .min(1, "Calendar title is required")
+      .max(200, "Calendar title cannot exceed 200 characters")
+      .optional(),
     semester: z.enum(SMUCT_SEMESTERS).optional(),
     academicYear: z.coerce.number().int().min(2000).max(2100).optional(),
-    targetFaculties: z.array(z.string()).optional(),
-    targetPrograms: z.array(z.string()).optional(),
-    semesterDuration: z.string().nullable().optional(),
-    targetBatch: z.string().nullable().optional(),
+    targetFaculties: z
+      .array(z.string().trim().max(150))
+      .max(20, "Too many target faculties")
+      .optional(),
+    targetPrograms: z
+      .array(z.string().trim().max(150))
+      .max(50, "Too many target programs")
+      .optional(),
+    semesterDuration: z.string().trim().max(50).nullable().optional(),
+    targetBatch: z.string().trim().max(50).nullable().optional(),
     isActive: z.boolean().optional(),
   })
   .refine(
@@ -112,27 +218,38 @@ export const updateCalendarBodySchema = z
   );
 
 export const updateCalendarSchema = z.object({
+  params: calendarIdParamsObject,
   body: updateCalendarBodySchema,
 });
 
 export const updateCalendarStatusSchema = z.object({
+  params: calendarIdParamsObject,
   body: z.object({
     status: calendarStatusEnum,
   }),
 });
 
+export const duplicateCalendarSchema = z.object({
+  params: calendarIdParamsObject,
+});
+
 export const createSingleEventSchema = z.object({
+  params: calendarIdParamsObject,
   body: calendarEventInputSchema,
 });
 
 export const updateSingleEventSchema = z.object({
+  params: calendarEventParamsObject,
   body: updateEventInputSchema,
 });
 
 export const validateCsvSchema = z.object({
   body: z.object({
-    csvContent: z.string().min(1, "CSV content is required"),
-    calendarId: z.string().uuid().optional(),
+    csvContent: z
+      .string()
+      .min(1, "CSV content is required")
+      .max(MAX_CSV_CONTENT_LENGTH, "CSV content cannot exceed 500KB"),
+    calendarId: z.string().uuid("Invalid calendar ID format").optional(),
   }),
 });
 
@@ -144,9 +261,19 @@ export const calendarListQuerySchema = z.object({
   }),
 });
 
+export const upcomingEventsQuerySchema = z.object({
+  query: z.object({
+    limit: z.coerce.number().int().min(1).max(50).default(20).optional(),
+  }),
+});
+
 export const importCsvSchema = z.object({
+  params: calendarIdParamsObject,
   body: z.object({
-    csvContent: z.string().min(1, "CSV content is required"),
+    csvContent: z
+      .string()
+      .min(1, "CSV content is required")
+      .max(MAX_CSV_CONTENT_LENGTH, "CSV content cannot exceed 500KB"),
   }),
 });
 

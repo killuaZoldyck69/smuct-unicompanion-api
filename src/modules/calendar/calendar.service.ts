@@ -32,6 +32,362 @@ export const normalizePagination = (
 const normalizeAudienceValue = (value?: string | null): string =>
   value?.trim().toLowerCase() ?? "";
 
+interface SmuctDepartmentCatalogEntry {
+  deptCode: string;
+  deptFull: string;
+  deptAliases?: string[];
+  programs: Array<{ name: string; shortName: string }>;
+}
+
+const SMUCT_FACULTY_ALIASES: Record<string, string[]> = {
+  ET: [
+    "FACULTY OF ENGINEERING & TECHNOLOGY",
+    "Faculty of Engineering & Technology (E&T)",
+    "Faculty of Engineering & Technology",
+    "Engineering & Technology",
+    "Engineering & Tech",
+    "E&T",
+    "ET",
+    "FET",
+  ],
+  DT: [
+    "FACULTY OF DESIGN & TECHNOLOGY",
+    "Faculty of Design & Technology (D&T)",
+    "Faculty of Design & Technology",
+    "Design & Technology",
+    "Design & Tech",
+    "D&T",
+    "DT",
+    "FDT",
+  ],
+  FOB: [
+    "FACULTY OF BUSINESS",
+    "Faculty of Business (FOB)",
+    "Faculty of Business",
+    "Business & Management",
+    "Business",
+    "FOB",
+  ],
+  HSS: [
+    "FACULTY OF HUMANITIES & SOCIAL SCIENCES",
+    "Faculty of Humanities & Social Sciences (H&SS)",
+    "Faculty of Humanities & Social Sciences",
+    "Humanities & Social Sciences",
+    "H&SS",
+    "HSS",
+    "FHSS",
+  ],
+  FPA: [
+    "FACULTY OF FINE & PERFORMING ARTS",
+    "Faculty of Fine & Performing Arts (F&PA)",
+    "Faculty of Fine & Performing Arts",
+    "Fine & Performing Arts",
+    "F&PA",
+    "FPA",
+    "FFPA",
+  ],
+};
+
+const SMUCT_PROGRAM_CATALOG: SmuctDepartmentCatalogEntry[] = [
+  {
+    deptCode: "CSE",
+    deptFull: "Computer Science and Engineering",
+    deptAliases: ["computer science"],
+    programs: [
+      { name: "B.Sc (Hons) in Computer Science and Engineering", shortName: "B.Sc CSE" },
+    ],
+  },
+  {
+    deptCode: "CSIT",
+    deptFull: "Computer Science and Information Technology",
+    deptAliases: ["information technology"],
+    programs: [
+      { name: "B.Sc (Hons) in Computer Science and Information Technology", shortName: "B.Sc CSIT" },
+    ],
+  },
+  {
+    deptCode: "FDT",
+    deptFull: "Fashion Design and Technology",
+    deptAliases: ["fashion design"],
+    programs: [
+      { name: "BA (Hons) in Fashion Design and Technology", shortName: "B.A. FDT" },
+      { name: "M.A. in Fashion Design", shortName: "M.A. FD" },
+    ],
+  },
+  {
+    deptCode: "AMMT",
+    deptFull: "Apparel Manufacturing Management and Technology",
+    deptAliases: ["apparel"],
+    programs: [
+      { name: "BA (Hons) in Apparel Manufacturing Management and Technology", shortName: "B.A. AMMT" },
+      { name: "MBA in Product & Fashion Merchandizing", shortName: "MBA (PFM)" },
+    ],
+  },
+  {
+    deptCode: "IA",
+    deptFull: "Interior Architecture",
+    deptAliases: ["interior design"],
+    programs: [
+      { name: "BA (Hons) in Interior Architecture", shortName: "B.A. IA" },
+      { name: "M.A. in Interior Design", shortName: "M.A. ID" },
+    ],
+  },
+  {
+    deptCode: "GDM",
+    deptFull: "Graphic Design and Multimedia",
+    deptAliases: ["graphic design"],
+    programs: [
+      { name: "BA (Hons) in Graphic Design and Multimedia", shortName: "B.A. GDM" },
+      { name: "M.A. in Graphic Design and Multimedia", shortName: "M.A. GDM" },
+    ],
+  },
+  {
+    deptCode: "ARCH",
+    deptFull: "Architecture",
+    programs: [
+      { name: "Bachelor of Architecture", shortName: "B.Arch" },
+    ],
+  },
+  {
+    deptCode: "BBA",
+    deptFull: "Business Administration",
+    deptAliases: ["business"],
+    programs: [
+      { name: "Bachelor of Business Administration (BBA)", shortName: "BBA" },
+      { name: "Masters of Business Administration (MBA)", shortName: "MBA" },
+      { name: "Executive Master of Business Administration (EMBA)", shortName: "EMBA" },
+    ],
+  },
+  {
+    deptCode: "ENG",
+    deptFull: "English",
+    programs: [
+      { name: "BA (Hons) in English (Language & Literature)", shortName: "B.A. ENG" },
+      { name: "MA in English", shortName: "M.A. ENG" },
+    ],
+  },
+  {
+    deptCode: "LAW",
+    deptFull: "Law",
+    deptAliases: ["llb", "llm"],
+    programs: [
+      { name: "Bachelor of Laws (LLB)", shortName: "LL.B" },
+      { name: "Master of Laws (LLM)", shortName: "LL.M" },
+    ],
+  },
+  {
+    deptCode: "SOC",
+    deptFull: "Sociology & Anthropology",
+    deptAliases: ["sociology", "anthropology"],
+    programs: [
+      { name: "BSS (Hons) in Sociology & Anthropology", shortName: "BSS SOC" },
+      { name: "MSS in Sociology & Anthropology", shortName: "MSS SOC" },
+    ],
+  },
+  {
+    deptCode: "BAN",
+    deptFull: "Bangla",
+    programs: [
+      { name: "BA (Hons) in Bangla", shortName: "B.A. BAN" },
+      { name: "MA in Bangla", shortName: "M.A. BAN" },
+    ],
+  },
+  {
+    deptCode: "G&P",
+    deptFull: "Government & Politics",
+    deptAliases: ["government and politics", "gp"],
+    programs: [
+      { name: "BSS (Hons) in Government & Politics", shortName: "BSS G&P" },
+      { name: "MSS in Government & Politics", shortName: "MSS G&P" },
+    ],
+  },
+  {
+    deptCode: "IS",
+    deptFull: "Islamic Studies",
+    programs: [
+      { name: "BA (Hons) in Islamic Studies", shortName: "B.A. IS" },
+      { name: "MA in Islamic Studies", shortName: "M.A. IS" },
+    ],
+  },
+  {
+    deptCode: "FA",
+    deptFull: "Fine Arts",
+    deptAliases: ["fine art"],
+    programs: [
+      { name: "Bachelor of Fine Arts (Hons) Drawing & Painting", shortName: "BFA" },
+      { name: "Master of Fine Arts", shortName: "MFA" },
+    ],
+  },
+  {
+    deptCode: "MUS",
+    deptFull: "Music",
+    programs: [
+      { name: "Bachelor of Music (Hons) Rabindra, Nazrul, Classical", shortName: "B.Mus" },
+      { name: "Master of Music in Rabindra, Nazrul, Classical", shortName: "M.Mus" },
+    ],
+  },
+  {
+    deptCode: "DAN",
+    deptFull: "Dance",
+    programs: [
+      { name: "Bachelor of Music (Hons) in Dance", shortName: "B.Dance" },
+      { name: "Master of Music in Dance", shortName: "M.Dance" },
+    ],
+  },
+];
+
+const addCaseVariants = (set: Set<string>, value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return;
+  set.add(trimmed);
+  set.add(trimmed.toLowerCase());
+};
+
+export const expandFacultyAliases = (raw?: string | null): string[] => {
+  const trimmed = raw?.trim();
+  if (!trimmed) return [];
+
+  const lower = trimmed.toLowerCase();
+  const terms = new Set<string>([trimmed, lower, trimmed.toUpperCase()]);
+
+  for (const aliases of Object.values(SMUCT_FACULTY_ALIASES)) {
+    const matches = aliases.some((alias) => alias.toLowerCase() === lower);
+    if (matches) {
+      for (const alias of aliases) {
+        addCaseVariants(terms, alias);
+      }
+    }
+  }
+
+  return Array.from(terms);
+};
+
+export const expandProgramAliases = (
+  raw?: string | null,
+  expandDepartmentPrograms = false,
+): string[] => {
+  const trimmed = raw?.trim();
+  if (!trimmed) return [];
+
+  const lower = trimmed.toLowerCase();
+  const terms = new Set<string>([trimmed, lower, trimmed.toUpperCase()]);
+
+  for (const dept of SMUCT_PROGRAM_CATALOG) {
+    const matchedProg = dept.programs.find(
+      (prog) =>
+        prog.name.toLowerCase() === lower || prog.shortName.toLowerCase() === lower,
+    );
+
+    const matchedDept =
+      dept.deptCode.toLowerCase() === lower ||
+      dept.deptFull.toLowerCase() === lower ||
+      (dept.deptAliases?.some((alias) => alias.toLowerCase() === lower) ?? false);
+
+    if (matchedProg) {
+      addCaseVariants(terms, matchedProg.name);
+      addCaseVariants(terms, matchedProg.shortName);
+      addCaseVariants(terms, dept.deptCode);
+      addCaseVariants(terms, dept.deptFull);
+      dept.deptAliases?.forEach((alias) => addCaseVariants(terms, alias));
+    }
+
+    if (matchedDept) {
+      addCaseVariants(terms, dept.deptCode);
+      addCaseVariants(terms, dept.deptFull);
+      dept.deptAliases?.forEach((alias) => addCaseVariants(terms, alias));
+      if (expandDepartmentPrograms) {
+        for (const prog of dept.programs) {
+          addCaseVariants(terms, prog.name);
+          addCaseVariants(terms, prog.shortName);
+        }
+      }
+    }
+  }
+
+  return Array.from(terms);
+};
+
+const expandCalendarTargetProgram = (raw?: string | null): string[] => {
+  const trimmed = raw?.trim();
+  if (!trimmed) return [];
+
+  const lower = trimmed.toLowerCase();
+  const terms = new Set<string>([trimmed, lower, trimmed.toUpperCase()]);
+
+  for (const dept of SMUCT_PROGRAM_CATALOG) {
+    const matchedProg = dept.programs.find(
+      (prog) =>
+        prog.name.toLowerCase() === lower || prog.shortName.toLowerCase() === lower,
+    );
+
+    if (matchedProg) {
+      addCaseVariants(terms, matchedProg.name);
+      addCaseVariants(terms, matchedProg.shortName);
+      continue;
+    }
+
+    const matchedDept =
+      dept.deptCode.toLowerCase() === lower ||
+      dept.deptFull.toLowerCase() === lower ||
+      (dept.deptAliases?.some((alias) => alias.toLowerCase() === lower) ?? false);
+
+    if (matchedDept) {
+      addCaseVariants(terms, dept.deptCode);
+      addCaseVariants(terms, dept.deptFull);
+      dept.deptAliases?.forEach((alias) => addCaseVariants(terms, alias));
+      for (const prog of dept.programs) {
+        addCaseVariants(terms, prog.name);
+        addCaseVariants(terms, prog.shortName);
+      }
+    }
+  }
+
+  return Array.from(terms);
+};
+
+export const resolveUserAudienceTokens = (user: {
+  studentProfile?: {
+    faculty?: string | null;
+    department?: string | null;
+    program?: string | null;
+  } | null;
+  teacherProfile?: {
+    faculty?: string | null;
+    department?: string | null;
+  } | null;
+}) => {
+  const programTokens = new Set<string>();
+  const facultyTokens = new Set<string>();
+
+  if (user.studentProfile) {
+    const hasSpecificProgram = Boolean(user.studentProfile.program?.trim());
+    for (const t of expandProgramAliases(user.studentProfile.program, true)) {
+      programTokens.add(t);
+    }
+    for (const t of expandProgramAliases(
+      user.studentProfile.department,
+      !hasSpecificProgram,
+    )) {
+      programTokens.add(t);
+    }
+    for (const t of expandFacultyAliases(user.studentProfile.faculty)) {
+      facultyTokens.add(t);
+    }
+  } else if (user.teacherProfile) {
+    for (const t of expandProgramAliases(user.teacherProfile.department, true)) {
+      programTokens.add(t);
+    }
+    for (const t of expandFacultyAliases(user.teacherProfile.faculty)) {
+      facultyTokens.add(t);
+    }
+  }
+
+  return {
+    programTokens: Array.from(programTokens),
+    facultyTokens: Array.from(facultyTokens),
+  };
+};
+
 /**
  * Admin: List all calendars with optional status filter
  */
@@ -203,14 +559,33 @@ export const updateEventService = async (
   eventId: string,
   eventData: UpdateCalendarEventInput,
 ) => {
-  const calendar = await calendarRepository.findCalendarById(calendarId);
-  if (!calendar) {
-    throw new AppError("Academic calendar not found.", 404);
-  }
-  const event = calendar.events.find((e) => e.id === eventId);
+  const event = await calendarRepository.findEventByIdAndCalendar(
+    eventId,
+    calendarId,
+  );
   if (!event) {
+    const calendar = await calendarRepository.findCalendarById(calendarId);
+    if (!calendar) {
+      throw new AppError("Academic calendar not found.", 404);
+    }
     throw new AppError("Event not found in this calendar.", 404);
   }
+
+  const effectiveStart =
+    eventData.startDate !== undefined
+      ? calendarRepository.toUtcDate(eventData.startDate)
+      : event.startDate;
+  const effectiveEnd =
+    eventData.endDate !== undefined
+      ? eventData.endDate
+        ? calendarRepository.toUtcDate(eventData.endDate)
+        : null
+      : event.endDate;
+
+  if (effectiveEnd && effectiveEnd.getTime() < effectiveStart.getTime()) {
+    throw new AppError("Event endDate cannot be earlier than startDate.", 400);
+  }
+
   return await calendarRepository.updateCalendarEvent(eventId, eventData);
 };
 
@@ -221,12 +596,15 @@ export const deleteEventService = async (
   calendarId: string,
   eventId: string,
 ) => {
-  const calendar = await calendarRepository.findCalendarById(calendarId);
-  if (!calendar) {
-    throw new AppError("Academic calendar not found.", 404);
-  }
-  const event = calendar.events.find((e) => e.id === eventId);
+  const event = await calendarRepository.findEventByIdAndCalendar(
+    eventId,
+    calendarId,
+  );
   if (!event) {
+    const calendar = await calendarRepository.findCalendarById(calendarId);
+    if (!calendar) {
+      throw new AppError("Academic calendar not found.", 404);
+    }
     throw new AppError("Event not found in this calendar.", 404);
   }
   return await calendarRepository.deleteCalendarEvent(eventId);
@@ -383,21 +761,27 @@ export const isCalendarVisibleToUser = (
     .filter(Boolean);
   const isGlobal = targetPrograms.length === 0 && targetFaculties.length === 0;
 
+  const { programTokens, facultyTokens } = resolveUserAudienceTokens(user);
+  const userProgramSet = new Set(programTokens.map(normalizeAudienceValue));
+  const userFacultySet = new Set(facultyTokens.map(normalizeAudienceValue));
+
+  const matchesProgram = targetPrograms.some((tp) =>
+    userProgramSet.has(tp) ||
+    expandCalendarTargetProgram(tp).some((alias) =>
+      userProgramSet.has(normalizeAudienceValue(alias)),
+    ),
+  );
+  const matchesFaculty = targetFaculties.some((tf) =>
+    userFacultySet.has(tf) ||
+    expandFacultyAliases(tf).some((alias) =>
+      userFacultySet.has(normalizeAudienceValue(alias)),
+    ),
+  );
+
   // 3. Student resolution
   if (user.studentProfile) {
-    const student = user.studentProfile;
-    const studentProgram = normalizeAudienceValue(student.program);
-    const studentDepartment = normalizeAudienceValue(student.department);
-    const studentFaculty = normalizeAudienceValue(student.faculty);
-    const rawStudentBatch = student.batch?.trim() || "";
+    const rawStudentBatch = user.studentProfile.batch?.trim() || "";
     const normStudentBatch = normalizeBatch(rawStudentBatch);
-
-    const matchesProgram =
-      (Boolean(studentProgram) && targetPrograms.includes(studentProgram)) ||
-      (Boolean(studentDepartment) && targetPrograms.includes(studentDepartment));
-
-    const matchesFaculty =
-      Boolean(studentFaculty) && targetFaculties.includes(studentFaculty);
 
     // CONSTRAINT 1: If calendar has a targetBatch
     // Must match targeted program AND match targeted batch
@@ -420,24 +804,17 @@ export const isCalendarVisibleToUser = (
 
   // 4. Teacher resolution
   if (user.teacherProfile) {
-    const teacher = user.teacherProfile;
-    const teacherDept = normalizeAudienceValue(teacher.department);
-    const teacherFaculty = normalizeAudienceValue(teacher.faculty);
-
-    const matchesDept = Boolean(teacherDept) && targetPrograms.includes(teacherDept);
-    const matchesFaculty = Boolean(teacherFaculty) && targetFaculties.includes(teacherFaculty);
-
     if (hasTargetBatch) {
-      if (teacher.advisoryBatch) {
-        const normAdvisory = normalizeBatch(String(teacher.advisoryBatch));
+      if (user.teacherProfile.advisoryBatch) {
+        const normAdvisory = normalizeBatch(String(user.teacherProfile.advisoryBatch));
         if (normAdvisory && normAdvisory === normCalendarBatch) {
-          return Boolean(matchesDept || matchesFaculty || isGlobal);
+          return Boolean(matchesProgram || matchesFaculty || isGlobal);
         }
       }
       return false;
     }
 
-    return Boolean(matchesDept || matchesFaculty || isGlobal);
+    return Boolean(matchesProgram || matchesFaculty || isGlobal);
   }
 
   return false;
@@ -456,31 +833,13 @@ export const buildUserAudienceConditions = async (userId: string) => {
     return { user, orConditions: [] };
   }
 
-  let userFaculty: string | null = null;
-  let userDepartment: string | null = null;
-  let userProgram: string | null = null;
-  let userBatch: string | null = null;
-
-  if (user.studentProfile) {
-    userFaculty = user.studentProfile.faculty || null;
-    userDepartment = user.studentProfile.department;
-    userProgram = user.studentProfile.program || null;
-    userBatch = user.studentProfile.batch || null;
-  } else if (user.teacherProfile) {
-    userFaculty = user.teacherProfile.faculty || null;
-    userDepartment = user.teacherProfile.department;
-  }
-
-  const candidatePrograms = Array.from(
-    new Set(
-      [userProgram, userDepartment].map(normalizeAudienceValue).filter(Boolean),
-    ),
-  ) as string[];
+  const userBatch = user.studentProfile?.batch || null;
+  const { programTokens, facultyTokens } = resolveUserAudienceTokens(user);
 
   const orConditions: any[] = [];
 
   // 1. Batch-specific calendars (ONLY for students with a batch and candidate program)
-  if (user.studentProfile && userBatch && candidatePrograms.length > 0) {
+  if (user.studentProfile && userBatch && programTokens.length > 0) {
     const rawBatch = userBatch.trim();
     const normBatch = normalizeBatch(rawBatch);
     const batchValues = Array.from(
@@ -504,11 +863,7 @@ export const buildUserAudienceConditions = async (userId: string) => {
             targetBatch: { equals: b, mode: "insensitive" as const },
           })),
         },
-        {
-          OR: candidatePrograms.map((p) => ({
-            targetPrograms: { has: p },
-          })),
-        },
+        { targetPrograms: { hasSome: programTokens } },
       ],
     });
   }
@@ -518,8 +873,30 @@ export const buildUserAudienceConditions = async (userId: string) => {
     const advisory = String(user.teacherProfile.advisoryBatch);
     const normAdvisory = normalizeBatch(advisory);
     const batchValues = Array.from(
-      new Set([advisory, normAdvisory, `Batch ${normAdvisory}`].filter(Boolean)),
+      new Set(
+        [
+          advisory,
+          normAdvisory,
+          `Batch ${normAdvisory}`,
+          `Batch-${normAdvisory}`,
+        ].filter(Boolean),
+      ),
     );
+
+    const advisoryAudienceOr: any[] = [
+      {
+        AND: [
+          { targetFaculties: { equals: [] } },
+          { targetPrograms: { equals: [] } },
+        ],
+      },
+    ];
+    if (programTokens.length > 0) {
+      advisoryAudienceOr.push({ targetPrograms: { hasSome: programTokens } });
+    }
+    if (facultyTokens.length > 0) {
+      advisoryAudienceOr.push({ targetFaculties: { hasSome: facultyTokens } });
+    }
 
     orConditions.push({
       AND: [
@@ -530,7 +907,7 @@ export const buildUserAudienceConditions = async (userId: string) => {
             targetBatch: { equals: b, mode: "insensitive" as const },
           })),
         },
-        ...(userDepartment ? [{ targetPrograms: { has: userDepartment } }] : []),
+        { OR: advisoryAudienceOr },
       ],
     });
   }
@@ -547,15 +924,12 @@ export const buildUserAudienceConditions = async (userId: string) => {
     },
   ];
 
-  if (candidatePrograms.length > 0) {
-    candidatePrograms.forEach((prog) => {
-      nonBatchAudience.push({ targetPrograms: { has: prog } });
-    });
+  if (programTokens.length > 0) {
+    nonBatchAudience.push({ targetPrograms: { hasSome: programTokens } });
   }
 
-  if (userFaculty) {
-    nonBatchAudience.push({ targetFaculties: { has: userFaculty } });
-    nonBatchAudience.push({ targetFaculties: { has: userFaculty.toUpperCase() } });
+  if (facultyTokens.length > 0) {
+    nonBatchAudience.push({ targetFaculties: { hasSome: facultyTokens } });
   }
 
   orConditions.push({
@@ -600,10 +974,11 @@ const getUserVisibleCalendars = async (userId: string) => {
   const { user, orConditions } = await buildUserAudienceConditions(userId);
 
   if (user.role === "ADMIN") {
-    const adminCalendars = await calendarRepository.findAllCalendarsAdmin();
+    const adminCalendars =
+      await calendarRepository.findAllPublishedCalendarsForAdmin();
     return {
       user,
-      calendars: Array.isArray(adminCalendars) ? adminCalendars : adminCalendars.items,
+      calendars: adminCalendars,
     };
   }
 
@@ -640,10 +1015,7 @@ export const getCurrentPublishedCalendarService = async (userId: string) => {
   const { calendars } = await getUserVisibleCalendars(userId);
 
   if (calendars.length === 0) {
-    throw new AppError(
-      "No published academic calendar found for your program or batch.",
-      404,
-    );
+    return null;
   }
 
   return [...calendars].sort((a, b) => {
@@ -658,26 +1030,28 @@ export const getCurrentPublishedCalendarService = async (userId: string) => {
 /**
  * Student: Get upcoming published events
  */
-export const getUpcomingEventsService = async (userId: string) => {
+export const getUpcomingEventsService = async (
+  userId: string,
+  limit = 20,
+) => {
   const { calendars } = await getUserVisibleCalendars(userId);
-  const activeCalendar = [...calendars].sort((a, b) => {
-    const aHasBatch = Boolean(a.targetBatch && a.targetBatch.trim().length > 0);
-    const bHasBatch = Boolean(b.targetBatch && b.targetBatch.trim().length > 0);
-    if (aHasBatch && !bHasBatch) return -1;
-    if (!aHasBatch && bHasBatch) return 1;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  })[0] ?? null;
-
-  if (!activeCalendar) {
+  if (calendars.length === 0) {
     return [];
   }
 
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  const calendarIds = calendars.map((calendar) => calendar.id);
+  const parsedLimit = Number(limit);
+  const safeLimit =
+    Number.isFinite(parsedLimit) && parsedLimit > 0
+      ? Math.min(100, Math.floor(parsedLimit))
+      : 20;
 
-  return (activeCalendar.events ?? []).filter((event) => {
-    const targetDate = event.endDate ? new Date(event.endDate) : new Date(event.startDate);
-    targetDate.setUTCHours(23, 59, 59, 999);
-    return targetDate >= today;
-  });
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+
+  return await calendarRepository.findUpcomingEventsForCalendars(
+    calendarIds,
+    todayStart,
+    safeLimit,
+  );
 };

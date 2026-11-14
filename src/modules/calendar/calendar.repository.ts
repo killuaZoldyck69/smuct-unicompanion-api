@@ -44,8 +44,11 @@ export const findAllCalendarsAdmin = async (
   const limit = Math.min(50, Math.max(1, Number(pagination?.limit ?? 25)));
   const skip = (page - 1) * limit;
   const where = statusFilter ? { status: statusFilter } : undefined;
+  const isPaginated =
+    Boolean(pagination) &&
+    (pagination?.page !== undefined || pagination?.limit !== undefined);
 
-  const [items, total] = await Promise.all([
+  const [items, total, statusGroups] = await Promise.all([
     prisma.academicCalendar.findMany({
       where,
       include: {
@@ -61,9 +64,29 @@ export const findAllCalendarsAdmin = async (
       take: limit,
     }),
     prisma.academicCalendar.count({ where }),
+    isPaginated
+      ? prisma.academicCalendar.groupBy({
+          by: ["status"],
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
   ]);
 
-  if (pagination && (pagination.page !== undefined || pagination.limit !== undefined)) {
+  if (isPaginated) {
+    const counts = {
+      all: 0,
+      published: 0,
+      draft: 0,
+      archived: 0,
+    };
+    for (const group of statusGroups) {
+      const count = group._count._all;
+      if (group.status === CalendarStatus.PUBLISHED) counts.published = count;
+      else if (group.status === CalendarStatus.DRAFT) counts.draft = count;
+      else if (group.status === CalendarStatus.ARCHIVED) counts.archived = count;
+    }
+    counts.all = counts.published + counts.draft + counts.archived;
+
     return {
       items,
       pagination: {
@@ -71,6 +94,7 @@ export const findAllCalendarsAdmin = async (
         limit,
         total,
         totalPages: Math.ceil(total / limit),
+        counts,
       },
     };
   }
@@ -238,6 +262,52 @@ export const updateCalendarEvent = async (
 export const deleteCalendarEvent = async (eventId: string) => {
   return await prisma.calendarEvent.delete({
     where: { id: eventId },
+  });
+};
+
+export const findEventByIdAndCalendar = async (
+  eventId: string,
+  calendarId: string,
+) => {
+  return await prisma.calendarEvent.findFirst({
+    where: {
+      id: eventId,
+      calendarId,
+    },
+  });
+};
+
+export const findAllPublishedCalendarsForAdmin = async () => {
+  return await prisma.academicCalendar.findMany({
+    where: {
+      status: CalendarStatus.PUBLISHED,
+      isActive: true,
+    },
+    include: {
+      events: {
+        orderBy: { startDate: "asc" },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+};
+
+export const findUpcomingEventsForCalendars = async (
+  calendarIds: string[],
+  todayStart: Date,
+  limit = 20,
+) => {
+  if (calendarIds.length === 0) return [];
+  return await prisma.calendarEvent.findMany({
+    where: {
+      calendarId: { in: calendarIds },
+      OR: [
+        { endDate: { gte: todayStart } },
+        { endDate: null, startDate: { gte: todayStart } },
+      ],
+    },
+    orderBy: [{ startDate: "asc" }, { createdAt: "asc" }],
+    take: limit,
   });
 };
 
