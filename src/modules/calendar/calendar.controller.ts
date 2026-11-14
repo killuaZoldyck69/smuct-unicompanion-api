@@ -9,13 +9,18 @@ import { CalendarStatus } from "../../../generated/prisma/client";
 
 export const getCalendars = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user.id;
-  const relevantCalendars =
-    await calendarService.getRelevantCalendarsService(userId);
+  const page = Number(req.query.page ?? 1);
+  const limit = Number(req.query.limit ?? 25);
+  const result = await calendarService.getRelevantCalendarsService(userId, {
+    page,
+    limit,
+  });
 
   res.status(200).json({
     success: true,
     message: "Relevant academic calendars retrieved successfully.",
-    data: relevantCalendars,
+    data: result.items ?? [],
+    ...(result.pagination ? { pagination: result.pagination } : {}),
   });
 });
 
@@ -71,12 +76,18 @@ export const getCalendarById = catchAsync(
 export const getAdminCalendars = catchAsync(
   async (req: Request, res: Response) => {
     const status = req.query.status as CalendarStatus | undefined;
-    const calendars = await calendarService.getAdminCalendarsService(status);
+    const page = Number(req.query.page ?? 1);
+    const limit = Number(req.query.limit ?? 25);
+    const result = await calendarService.getAdminCalendarsService(status, {
+      page,
+      limit,
+    });
 
     res.status(200).json({
       success: true,
       message: "All academic calendars retrieved successfully.",
-      data: calendars,
+      data: result.items ?? [],
+      ...(result.pagination ? { pagination: result.pagination } : {}),
     });
   },
 );

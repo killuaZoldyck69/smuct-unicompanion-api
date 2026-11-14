@@ -136,6 +136,14 @@ export const validateCsvSchema = z.object({
   }),
 });
 
+export const calendarListQuerySchema = z.object({
+  query: z.object({
+    page: z.coerce.number().int().min(1).default(1).optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(25).optional(),
+    status: calendarStatusEnum.optional(),
+  }),
+});
+
 export const importCsvSchema = z.object({
   body: z.object({
     csvContent: z.string().min(1, "CSV content is required"),

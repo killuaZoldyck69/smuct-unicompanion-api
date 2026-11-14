@@ -7,6 +7,7 @@ import {
   generateCsvFromEvents,
   generateCsvTemplate,
 } from "../calendar.csv";
+import { normalizePagination, isCalendarVisibleToUser } from "../calendar.service";
 
 // Simple test assertion helper
 function assert(condition: boolean, message: string) {
@@ -126,8 +127,38 @@ Mid-term Examination,Offline Mode,EXAM,2026-09-30,2026-10-15,8,false,true,Offlin
   const parsedTemplate = validateAndParseCsv(template);
   assert(parsedTemplate.isValid, "Template must be 100% valid CSV");
 
-  // 9. Test Calendar Cloner Payload Transformation
-  console.log("  [9/9] Testing Calendar Clone & Duplicate Data Transformation...");
+  // 9. Test Pagination Normalization
+  console.log("  [9/10] Testing Calendar Pagination Normalization...");
+  assertEquals(normalizePagination(undefined, undefined), { page: 1, limit: 25 }, "Defaults must be page 1 / limit 25");
+  assertEquals(normalizePagination("3", "12"), { page: 3, limit: 12 }, "Positive numeric params should be preserved");
+  assertEquals(normalizePagination("0", "200"), { page: 1, limit: 50 }, "Invalid values should clamp to safe defaults");
+
+  // 10. Test Audience Visibility Normalization
+  console.log("  [10/10] Testing Case-Normalized Calendar Visibility...");
+  const mixedCaseCalendar = {
+    status: "PUBLISHED",
+    isActive: true,
+    targetFaculties: ["Engineering"],
+    targetPrograms: ["CSE"],
+    targetBatch: "Batch 24",
+  };
+  const student = {
+    role: "STUDENT",
+    studentProfile: {
+      faculty: "engineering",
+      department: "Computer Science",
+      program: "cse",
+      batch: "batch 24",
+    },
+  };
+
+  assert(
+    isCalendarVisibleToUser(mixedCaseCalendar, student),
+    "User should match target faculty, program, and batch regardless of case",
+  );
+
+  // 11. Test Calendar Cloner Payload Transformation
+  console.log("  [11/11] Testing Calendar Clone & Duplicate Data Transformation...");
   const sampleOriginal = {
     title: "Summer 2026",
     semester: "Summer",
@@ -157,7 +188,7 @@ Mid-term Examination,Offline Mode,EXAM,2026-09-30,2026-10-15,8,false,true,Offlin
   assertEquals(clonedData.status, "DRAFT", "Cloned calendar must be in DRAFT status");
   assertEquals(clonedData.events.length, 1, "Cloned calendar must replicate events");
 
-  console.log("\n✅ All 9 Calendar & CSV Unit Tests Passed Successfully!\n");
+  console.log("\n✅ All 11 Calendar & CSV Unit Tests Passed Successfully!\n");
 }
 
 if (process.argv[1]?.includes("calendar.test.ts")) {

@@ -14,11 +14,47 @@ import {
 } from "./calendar.csv";
 import { CalendarStatus } from "../../../generated/prisma/client";
 
+export const normalizePagination = (
+  page?: number | string,
+  limit?: number | string,
+) => {
+  const pageNumber = Number(page ?? 1);
+  const limitNumber = Number(limit ?? 25);
+
+  return {
+    page: Number.isFinite(pageNumber) && pageNumber > 0 ? Math.floor(pageNumber) : 1,
+    limit: Number.isFinite(limitNumber) && limitNumber > 0
+      ? Math.min(50, Math.floor(limitNumber))
+      : 25,
+  };
+};
+
+const normalizeAudienceValue = (value?: string | null): string =>
+  value?.trim().toLowerCase() ?? "";
+
 /**
  * Admin: List all calendars with optional status filter
  */
-export const getAdminCalendarsService = async (status?: CalendarStatus) => {
-  return await calendarRepository.findAllCalendarsAdmin(status);
+export const getAdminCalendarsService = async (
+  status?: CalendarStatus,
+  pagination?: { page?: number | string; limit?: number | string },
+) => {
+  const options = pagination ? normalizePagination(pagination.page, pagination.limit) : undefined;
+  const result = await calendarRepository.findAllCalendarsAdmin(status, options);
+
+  if (Array.isArray(result)) {
+    return {
+      items: result,
+      pagination: {
+        page: options?.page ?? 1,
+        limit: options?.limit ?? (result.length || 25),
+        total: result.length,
+        totalPages: Math.max(1, Math.ceil(result.length / (options?.limit ?? Math.max(1, result.length || 1)))),
+      },
+    };
+  }
+
+  return result;
 };
 
 /**
@@ -339,30 +375,29 @@ export const isCalendarVisibleToUser = (
   const hasTargetBatch = rawCalendarBatch.length > 0;
   const normCalendarBatch = normalizeBatch(rawCalendarBatch);
 
-  const targetProgramsLower = (calendar.targetPrograms || []).map((p) =>
-    p.trim().toLowerCase(),
-  );
-  const targetFacultiesLower = (calendar.targetFaculties || []).map((f) =>
-    f.trim().toLowerCase(),
-  );
-  const isGlobal =
-    targetProgramsLower.length === 0 && targetFacultiesLower.length === 0;
+  const targetPrograms = (calendar.targetPrograms || [])
+    .map(normalizeAudienceValue)
+    .filter(Boolean);
+  const targetFaculties = (calendar.targetFaculties || [])
+    .map(normalizeAudienceValue)
+    .filter(Boolean);
+  const isGlobal = targetPrograms.length === 0 && targetFaculties.length === 0;
 
   // 3. Student resolution
   if (user.studentProfile) {
     const student = user.studentProfile;
-    const studentProgram = student.program?.trim().toLowerCase();
-    const studentDepartment = student.department?.trim().toLowerCase();
-    const studentFaculty = student.faculty?.trim().toLowerCase();
+    const studentProgram = normalizeAudienceValue(student.program);
+    const studentDepartment = normalizeAudienceValue(student.department);
+    const studentFaculty = normalizeAudienceValue(student.faculty);
     const rawStudentBatch = student.batch?.trim() || "";
     const normStudentBatch = normalizeBatch(rawStudentBatch);
 
     const matchesProgram =
-      (Boolean(studentProgram) && targetProgramsLower.includes(studentProgram!)) ||
-      (Boolean(studentDepartment) && targetProgramsLower.includes(studentDepartment!));
+      (Boolean(studentProgram) && targetPrograms.includes(studentProgram)) ||
+      (Boolean(studentDepartment) && targetPrograms.includes(studentDepartment));
 
     const matchesFaculty =
-      Boolean(studentFaculty) && targetFacultiesLower.includes(studentFaculty!);
+      Boolean(studentFaculty) && targetFaculties.includes(studentFaculty);
 
     // CONSTRAINT 1: If calendar has a targetBatch
     // Must match targeted program AND match targeted batch
@@ -373,7 +408,7 @@ export const isCalendarVisibleToUser = (
 
       const matchesBatch =
         Boolean(normStudentBatch && normCalendarBatch && normStudentBatch === normCalendarBatch) ||
-        rawStudentBatch.toLowerCase() === rawCalendarBatch.toLowerCase();
+        normalizeAudienceValue(rawStudentBatch) === normalizeAudienceValue(rawCalendarBatch);
 
       return matchesBatch;
     }
@@ -386,13 +421,11 @@ export const isCalendarVisibleToUser = (
   // 4. Teacher resolution
   if (user.teacherProfile) {
     const teacher = user.teacherProfile;
-    const teacherDept = teacher.department?.trim().toLowerCase();
-    const teacherFaculty = teacher.faculty?.trim().toLowerCase();
+    const teacherDept = normalizeAudienceValue(teacher.department);
+    const teacherFaculty = normalizeAudienceValue(teacher.faculty);
 
-    const matchesDept =
-      Boolean(teacherDept) && targetProgramsLower.includes(teacherDept!);
-    const matchesFaculty =
-      Boolean(teacherFaculty) && targetFacultiesLower.includes(teacherFaculty!);
+    const matchesDept = Boolean(teacherDept) && targetPrograms.includes(teacherDept);
+    const matchesFaculty = Boolean(teacherFaculty) && targetFaculties.includes(teacherFaculty);
 
     if (hasTargetBatch) {
       if (teacher.advisoryBatch) {
@@ -439,7 +472,9 @@ export const buildUserAudienceConditions = async (userId: string) => {
   }
 
   const candidatePrograms = Array.from(
-    new Set([userProgram, userDepartment].filter(Boolean)),
+    new Set(
+      [userProgram, userDepartment].map(normalizeAudienceValue).filter(Boolean),
+    ),
   ) as string[];
 
   const orConditions: any[] = [];
@@ -540,79 +575,98 @@ export const buildUserAudienceConditions = async (userId: string) => {
 /**
  * Student / Teacher: Get relevant active published calendars
  */
-export const getRelevantCalendarsService = async (userId: string) => {
+const paginateItems = <T>(items: T[], page?: number, limit?: number) => {
+  if (!page || !limit) {
+    return { items, pagination: null };
+  }
+
+  const safePage = Math.max(1, Number(page));
+  const safeLimit = Math.max(1, Number(limit));
+  const start = (safePage - 1) * safeLimit;
+  const pagedItems = items.slice(start, start + safeLimit);
+
+  return {
+    items: pagedItems,
+    pagination: {
+      page: safePage,
+      limit: safeLimit,
+      total: items.length,
+      totalPages: Math.max(1, Math.ceil(items.length / safeLimit)),
+    },
+  };
+};
+
+const getUserVisibleCalendars = async (userId: string) => {
   const { user, orConditions } = await buildUserAudienceConditions(userId);
 
   if (user.role === "ADMIN") {
-    return await calendarRepository.findAllCalendarsAdmin();
+    const adminCalendars = await calendarRepository.findAllCalendarsAdmin();
+    return {
+      user,
+      calendars: Array.isArray(adminCalendars) ? adminCalendars : adminCalendars.items,
+    };
   }
 
-  const raw = await calendarRepository.findActiveCalendarsFiltered(orConditions);
-  return raw.filter((c) => isCalendarVisibleToUser(c, user));
+  const rawCalendars = await calendarRepository.findActiveCalendarsFiltered(orConditions);
+  const calendars = (Array.isArray(rawCalendars) ? rawCalendars : rawCalendars.items).filter((calendar) =>
+    isCalendarVisibleToUser(calendar, user),
+  );
+
+  return { user, calendars };
+};
+
+export const getRelevantCalendarsService = async (
+  userId: string,
+  pagination?: { page?: number | string; limit?: number | string },
+) => {
+  const { user, calendars } = await getUserVisibleCalendars(userId);
+  const pageOptions = pagination ? normalizePagination(pagination.page, pagination.limit) : undefined;
+
+  if (user.role === "ADMIN" && pageOptions) {
+    return paginateItems(calendars, pageOptions.page, pageOptions.limit);
+  }
+
+  if (!pageOptions) {
+    return { items: calendars, pagination: null };
+  }
+
+  return paginateItems(calendars, pageOptions.page, pageOptions.limit);
 };
 
 /**
  * Student: Get the current primary published calendar
  */
 export const getCurrentPublishedCalendarService = async (userId: string) => {
-  const { user, orConditions } = await buildUserAudienceConditions(userId);
+  const { calendars } = await getUserVisibleCalendars(userId);
 
-  if (user.role === "ADMIN") {
-    const adminCalendars = await calendarRepository.findAllCalendarsAdmin();
-    return (
-      adminCalendars.find((c) => c.status === "PUBLISHED") ||
-      adminCalendars[0] ||
-      null
-    );
-  }
-
-  const raw = await calendarRepository.findActiveCalendarsFiltered(orConditions);
-  const visible = raw.filter((c) => isCalendarVisibleToUser(c, user));
-
-  if (visible.length === 0) {
+  if (calendars.length === 0) {
     throw new AppError(
       "No published academic calendar found for your program or batch.",
       404,
     );
   }
 
-  // Prioritize batch-specific calendar if one matches, else latest published
-  const sorted = [...visible].sort((a, b) => {
+  return [...calendars].sort((a, b) => {
     const aHasBatch = Boolean(a.targetBatch && a.targetBatch.trim().length > 0);
     const bHasBatch = Boolean(b.targetBatch && b.targetBatch.trim().length > 0);
     if (aHasBatch && !bHasBatch) return -1;
     if (!aHasBatch && bHasBatch) return 1;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  });
-
-  return sorted[0];
+  })[0];
 };
 
 /**
  * Student: Get upcoming published events
  */
 export const getUpcomingEventsService = async (userId: string) => {
-  const { user, orConditions } = await buildUserAudienceConditions(userId);
-
-  let activeCalendar: any = null;
-  if (user.role === "ADMIN") {
-    const adminCalendars = await calendarRepository.findAllCalendarsAdmin();
-    activeCalendar =
-      adminCalendars.find((c) => c.status === "PUBLISHED") ||
-      adminCalendars[0] ||
-      null;
-  } else {
-    const raw = await calendarRepository.findActiveCalendarsFiltered(orConditions);
-    const visible = raw.filter((c) => isCalendarVisibleToUser(c, user));
-    const sorted = [...visible].sort((a, b) => {
-      const aHasBatch = Boolean(a.targetBatch && a.targetBatch.trim().length > 0);
-      const bHasBatch = Boolean(b.targetBatch && b.targetBatch.trim().length > 0);
-      if (aHasBatch && !bHasBatch) return -1;
-      if (!aHasBatch && bHasBatch) return 1;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-    activeCalendar = sorted[0] || null;
-  }
+  const { calendars } = await getUserVisibleCalendars(userId);
+  const activeCalendar = [...calendars].sort((a, b) => {
+    const aHasBatch = Boolean(a.targetBatch && a.targetBatch.trim().length > 0);
+    const bHasBatch = Boolean(b.targetBatch && b.targetBatch.trim().length > 0);
+    if (aHasBatch && !bHasBatch) return -1;
+    if (!aHasBatch && bHasBatch) return 1;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  })[0] ?? null;
 
   if (!activeCalendar) {
     return [];
@@ -621,8 +675,8 @@ export const getUpcomingEventsService = async (userId: string) => {
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
 
-  return activeCalendar.events.filter((ev: any) => {
-    const targetDate = ev.endDate ? new Date(ev.endDate) : new Date(ev.startDate);
+  return (activeCalendar.events ?? []).filter((event) => {
+    const targetDate = event.endDate ? new Date(event.endDate) : new Date(event.startDate);
     targetDate.setUTCHours(23, 59, 59, 999);
     return targetDate >= today;
   });

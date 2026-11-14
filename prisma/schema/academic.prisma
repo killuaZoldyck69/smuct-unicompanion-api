@@ -41,6 +41,8 @@ model AcademicCalendar {
   events            CalendarEvent[]
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @default(now()) @updatedAt
+
+  @@index([status, isActive, createdAt])
 }
 
 model CalendarEvent {

@@ -9,6 +9,7 @@ import {
   createSingleEventSchema,
   updateSingleEventSchema,
   validateCsvSchema,
+  calendarListQuerySchema,
   importCsvSchema,
 } from "./calendar.schema";
 import {
@@ -50,7 +51,13 @@ router.post(
 );
 
 // GET /api/calendars/admin/all - Fetch all calendars for Admin Management
-router.get("/admin/all", requireAuth, requireAdmin, getAdminCalendars);
+router.get(
+  "/admin/all",
+  requireAuth,
+  requireAdmin,
+  validateRequest(calendarListQuerySchema),
+  getAdminCalendars,
+);
 
 // ==========================================
 // STUDENT / TEACHER ACCESSIBLE ENDPOINTS
@@ -63,7 +70,7 @@ router.get("/current", requireAuth, getCurrentCalendar);
 router.get("/events/upcoming", requireAuth, getUpcomingEvents);
 
 // GET /api/calendars - Fetch relevant published calendars for logged-in user
-router.get("/", requireAuth, getCalendars);
+router.get("/", requireAuth, validateRequest(calendarListQuerySchema), getCalendars);
 
 // GET /api/calendars/:id - Fetch single calendar details (Published for students, any for Admin)
 router.get("/:id", requireAuth, getCalendarById);
