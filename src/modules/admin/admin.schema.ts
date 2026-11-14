@@ -23,6 +23,7 @@ export const adminForumReportsQuerySchema = z.object({
         "LOST_FOUND_POST",
         "MARKETPLACE_POST",
         "MARKETPLACE_COMMENT",
+        "MEME_POST",
       ])
       .default("ALL"),
     page: z.coerce.number().int().min(1).default(1),

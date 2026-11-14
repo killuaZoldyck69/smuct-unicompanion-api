@@ -12,18 +12,26 @@ enum MemeReactionType {
 // ==============================
 
 model Meme {
-  id        String          @id @default(uuid())
-  authorId  String
-  caption   String?
-  imageUrl  String
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  id                   String         @id @default(uuid())
+  authorId             String
+  caption              String?
+  imageUrl             String
+  idempotencyKey       String?
+  likesCount           Int            @default(0)
+  dislikesCount        Int            @default(0)
+  popularityScore      Int            @default(0)
+  isHiddenByModeration Boolean        @default(false)
+  hiddenAt             DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
-  author    User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author    User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
   reactions MemeReaction[]
 
-  @@index([authorId])
-  @@index([createdAt(sort: Desc)])
+  @@unique([authorId, idempotencyKey])
+  @@index([authorId, createdAt(sort: Desc)])
+  @@index([isHiddenByModeration, createdAt(sort: Desc)])
+  @@index([isHiddenByModeration, popularityScore(sort: Desc), createdAt(sort: Desc)])
   @@map("meme")
 }
 

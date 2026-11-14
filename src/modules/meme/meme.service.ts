@@ -1,36 +1,98 @@
-import { AppError } from "../../utils/AppError";
-import { createNotifications } from "../notification/notification.service";
 import { MemeReactionType } from "../../constants/enums";
-import { deleteImageFromCloudinary } from "../../lib/cloudinary";
-import { CreateMemePayload, QueryMemesQuery, UpdateMemePayload } from "./meme.schema";
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+import { findUserUgcTermsStatus } from "../forum/forum.repository";
+import { createNotifications } from "../notification/notification.service";
+import {
+  MAX_MEME_FEED_LIMIT,
+  shouldDispatchMemeMilestoneNotification,
+} from "./meme.domain";
+import { deleteUnreferencedMemeImages } from "./meme.media";
+import { createMemeReportAndEvaluateAutoHideInDb } from "./meme.moderation.repository";
 import {
   createMemeInDb,
-  deleteMemeFromDb,
+  deleteMemeAtomicInDb,
   findMemeByIdInDb,
   findMemesFeedInDb,
+  getMemeViewerContextInDb,
   toggleMemeReactionInDb,
   updateMemeInDb,
 } from "./meme.repository";
+import {
+  CreateMemePayload,
+  CreateMemeReportByIdPayload,
+  QueryMemesQuery,
+  UpdateMemePayload,
+} from "./meme.schema";
+
+async function assertUserAcceptedUgcTerms(
+  userId: string,
+  actionLabel: string,
+): Promise<void> {
+  const user = await findUserUgcTermsStatus(userId);
+  if (!user) {
+    throw new AppError("User account not found.", 404);
+  }
+  if (!user.ugcTermsAcceptedAt) {
+    throw new AppError(
+      `Please accept the Community Guidelines before ${actionLabel}.`,
+      403,
+      "UGC_TERMS_REQUIRED",
+    );
+  }
+}
+
+async function dispatchMemeMilestoneNotification(params: {
+  authorId: string;
+  memeId: string;
+  caption: string | null;
+  count: number;
+  kind: "likes" | "dislikes";
+}): Promise<void> {
+  const dedupeKey = `meme:${params.memeId}:${params.kind}:${params.count}`;
+  try {
+    const existing = await prisma.notification.findUnique({
+      where: {
+        userId_dedupeKey: {
+          userId: params.authorId,
+          dedupeKey,
+        },
+      },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    await createNotifications([params.authorId], {
+      type: "MEME_REACTION_MILESTONE",
+      title: `Your meme reached ${params.count} ${params.kind}`,
+      body: `“${params.caption?.trim() || "Your meme"}” reached ${params.count} ${params.kind}.`,
+      route: "/(tabs)/forum?section=MEMES",
+      dedupeKey,
+    });
+  } catch (err) {
+    console.warn("[Memes] Failed to dispatch reaction milestone notification:", err);
+  }
+}
 
 export const createMemeService = async (
   userId: string,
-  payload: CreateMemePayload
+  payload: CreateMemePayload,
 ) => {
-  if (!payload.imageUrl) {
-    throw new AppError("Meme image is required", 400);
-  }
-
+  await assertUserAcceptedUgcTerms(userId, "posting a meme");
   return createMemeInDb(userId, payload);
 };
 
 export const getMemesFeedService = async (
   currentUserId: string,
-  query: QueryMemesQuery
+  query: QueryMemesQuery,
+  viewerRole?: string,
 ) => {
-  const { page, limit, filter } = query;
+  const page = Math.max(1, query.page || 1);
+  const limit = Math.max(1, Math.min(MAX_MEME_FEED_LIMIT, query.limit || 20));
   const skip = (page - 1) * limit;
 
-  const result = await findMemesFeedInDb(currentUserId, filter, skip, limit);
+  const viewer = await getMemeViewerContextInDb(currentUserId, viewerRole);
+  const result = await findMemesFeedInDb(viewer, query.filter, skip, limit);
 
   return {
     memes: result.memes,
@@ -46,9 +108,11 @@ export const getMemesFeedService = async (
 
 export const getMemeByIdService = async (
   id: string,
-  currentUserId?: string
+  currentUserId?: string,
+  viewerRole?: string,
 ) => {
-  const meme = await findMemeByIdInDb(id, currentUserId);
+  const viewer = await getMemeViewerContextInDb(currentUserId, viewerRole);
+  const meme = await findMemeByIdInDb(id, viewer);
   if (!meme) {
     throw new AppError("Meme not found", 404);
   }
@@ -58,71 +122,78 @@ export const getMemeByIdService = async (
 export const reactMemeService = async (
   memeId: string,
   userId: string,
-  type: MemeReactionType
+  type: MemeReactionType,
+  viewerRole?: string,
 ) => {
-  const meme = await findMemeByIdInDb(memeId);
-  if (!meme) {
-    throw new AppError("Meme not found", 404);
+  const viewer = await getMemeViewerContextInDb(userId, viewerRole);
+  const result = await toggleMemeReactionInDb(memeId, userId, type, viewer);
+
+  if (result.authorId !== userId) {
+    const likesMilestone =
+      result.userReaction === "LIKE" &&
+      shouldDispatchMemeMilestoneNotification(
+        result.previousLikesCount,
+        result.likesCount,
+      );
+    const dislikesMilestone =
+      result.userReaction === "DISLIKE" &&
+      shouldDispatchMemeMilestoneNotification(
+        result.previousDislikesCount,
+        result.dislikesCount,
+      );
+
+    if (likesMilestone || dislikesMilestone) {
+      void dispatchMemeMilestoneNotification({
+        authorId: result.authorId,
+        memeId,
+        caption: result.caption,
+        count: likesMilestone ? result.likesCount : result.dislikesCount,
+        kind: likesMilestone ? "likes" : "dislikes",
+      });
+    }
   }
 
-  const result = await toggleMemeReactionInDb(memeId, userId, type);
-  const likesMilestone = result.userReaction === "LIKE" && result.likesCount > 0 && result.likesCount % 5 === 0;
-  const dislikesMilestone = result.userReaction === "DISLIKE" && result.dislikesCount > 0 && result.dislikesCount % 5 === 0;
-  if (meme.authorId !== userId && (likesMilestone || dislikesMilestone)) {
-    const count = likesMilestone ? result.likesCount : result.dislikesCount;
-    await createNotifications([meme.authorId], {
-      type: "MEME_REACTION_MILESTONE",
-      title: `Your meme reached ${count} ${likesMilestone ? "likes" : "dislikes"}`,
-      body: `“${meme.caption?.trim() || "Your meme"}” reached ${count} ${likesMilestone ? "likes" : "dislikes"}.`,
-      route: "/(tabs)/forum?section=MEMES",
-      dedupeKey: `meme:${memeId}:${likesMilestone ? "likes" : "dislikes"}:${count}`,
-    });
-  }
-  return result;
+  return {
+    memeId: result.memeId,
+    action: result.action,
+    type: result.type,
+    userReaction: result.userReaction,
+    likesCount: result.likesCount,
+    dislikesCount: result.dislikesCount,
+  };
+};
+
+export const updateMemeService = async (
+  memeId: string,
+  userId: string,
+  payload: UpdateMemePayload,
+) => {
+  await assertUserAcceptedUgcTerms(userId, "editing a meme caption");
+  return updateMemeInDb(memeId, userId, payload);
 };
 
 export const deleteMemeService = async (
   memeId: string,
   userId: string,
-  userRole?: string
+  userRole?: string,
 ) => {
-  const meme = await findMemeByIdInDb(memeId);
-  if (!meme) {
-    throw new AppError("Meme not found", 404);
-  }
+  const deleted = await deleteMemeAtomicInDb(memeId, userId, userRole);
 
-  const isAuthor = meme.authorId === userId;
-  const isAdmin = userRole === "ADMIN";
-
-  if (!isAuthor && !isAdmin) {
-    throw new AppError("You do not have permission to delete this meme", 403);
-  }
-
-  const deleted = await deleteMemeFromDb(memeId);
-
-  // Storage cleanup optimization: delete meme image from Cloudinary
-  if (meme.imageUrl) {
-    deleteImageFromCloudinary(meme.imageUrl).catch((err) =>
-      console.warn("[Cloudinary] Failed to clean up meme image:", err)
+  if (deleted.imageUrl) {
+    void deleteUnreferencedMemeImages(
+      [deleted.imageUrl],
+      "deleted meme image",
     );
   }
 
   return deleted;
 };
 
-export const updateMemeService = async (
-  memeId: string,
-  userId: string,
-  payload: UpdateMemePayload
-) => {
-  const meme = await findMemeByIdInDb(memeId);
-  if (!meme) {
-    throw new AppError("Meme not found", 404);
-  }
-
-  if (meme.authorId !== userId) {
-    throw new AppError("You do not have permission to edit this meme", 403);
-  }
-
-  return updateMemeInDb(memeId, payload);
+export const reportMemeService = async (params: {
+  reporterId: string;
+  memeId: string;
+  reason: CreateMemeReportByIdPayload["reason"];
+  details?: string;
+}) => {
+  return createMemeReportAndEvaluateAutoHideInDb(params);
 };

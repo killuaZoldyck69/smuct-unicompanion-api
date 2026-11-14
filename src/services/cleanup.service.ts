@@ -3,6 +3,7 @@ import { deleteImageFromCloudinary } from "../lib/cloudinary";
 import {
   cleanupMarketplaceOrphanImages,
   cleanupLostFoundOrphanImages,
+  cleanupMemeOrphanImages,
 } from "./orphan-cleanup.service";
 
 export interface CleanupResult {
@@ -126,6 +127,15 @@ export function startCleanupScheduler(intervalMs: number = 60 * 60 * 1000): void
       );
     } catch (err) {
       console.warn("[LostFound-Cleanup] Cleanup encountered an issue:", err);
+    }
+
+    try {
+      const memeReport = await cleanupMemeOrphanImages(24);
+      console.log(
+        `🧹 [Memes-Cleanup] Scanned ${memeReport.scannedCount} images, purged ${memeReport.deletedCount} orphans (${(memeReport.freedBytes / (1024 * 1024)).toFixed(2)} MB freed).`
+      );
+    } catch (err) {
+      console.warn("[Memes-Cleanup] Cleanup encountered an issue:", err);
     }
   };
 

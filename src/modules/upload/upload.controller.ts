@@ -224,6 +224,11 @@ export const deleteUploadedFile = catchAsync(
               WHERE "authorId" = ${viewerId}
                 AND "images" && ${marketplaceCandidateUrls}::text[]
             )
+            OR EXISTS (
+              SELECT 1 FROM "meme"
+              WHERE "authorId" = ${viewerId}
+                AND ("imageUrl" = ${url} OR "imageUrl" LIKE ${rawLikePattern} ESCAPE '\\')
+            )
           ) AS actively_referenced
         `,
       ]);

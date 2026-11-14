@@ -3,6 +3,7 @@ import { appCache } from "../../lib/cache";
 import { AppError } from "../../utils/AppError";
 import { deleteUnreferencedLostFoundImages } from "../lost-found/lost-found.media";
 import { deleteUnreferencedMarketplaceImages } from "../marketplace/marketplace.media";
+import { deleteUnreferencedMemeImages } from "../meme/meme.media";
 import { publicUserSelect } from "../forum/forum.repository";
 import { extractPlainText } from "../forum/forum.sanitizer";
 import {
@@ -16,6 +17,7 @@ const FORUM_TARGET_TYPES = [
   "LOST_FOUND_POST",
   "MARKETPLACE_POST",
   "MARKETPLACE_COMMENT",
+  "MEME_POST",
 ] as const;
 
 const safeModerationActorSelect = {
@@ -109,6 +111,13 @@ export const getForumReportsQueueService = async (
         .map((r) => r.targetId),
     ),
   ];
+  const uniqueMemeIds = [
+    ...new Set(
+      reports
+        .filter((r) => r.targetType === "MEME_POST")
+        .map((r) => r.targetId),
+    ),
+  ];
   const uniqueTargetIds = [...new Set(targetPairs.map((p) => p.targetId))];
 
   const groupedTargetTypeFilter =
@@ -123,6 +132,7 @@ export const getForumReportsQueueService = async (
     liveLostFoundPosts,
     liveMarketplacePosts,
     liveMarketplaceComments,
+    liveMemes,
   ] = await Promise.all([
     uniqueTargetIds.length
       ? prisma.contentReport.groupBy({
@@ -213,6 +223,18 @@ export const getForumReportsQueueService = async (
           },
         })
       : Promise.resolve([]),
+    uniqueMemeIds.length
+      ? prisma.meme.findMany({
+          where: { id: { in: uniqueMemeIds } },
+          select: {
+            id: true,
+            caption: true,
+            imageUrl: true,
+            isHiddenByModeration: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve([]),
   ]);
 
   const pendingByTarget = new Map<string, number>();
@@ -229,6 +251,7 @@ export const getForumReportsQueueService = async (
   const marketplaceCommentById = new Map(
     liveMarketplaceComments.map((mc) => [mc.id, mc]),
   );
+  const memeById = new Map(liveMemes.map((m) => [m.id, m]));
 
   const enriched = reports.map((report) => {
     const snapshot =
@@ -350,6 +373,36 @@ export const getForumReportsQueueService = async (
       };
     }
 
+    if (report.targetType === "MEME_POST") {
+      const liveMeme = memeById.get(report.targetId);
+      const resolvedMemeId =
+        liveMeme?.id ??
+        (typeof snapshot?.postId === "string" ? snapshot.postId : report.targetId);
+      const memeTitle = liveMeme?.caption
+        ? liveMeme.caption.slice(0, 80)
+        : "Campus Meme";
+      return {
+        ...report,
+        postId: resolvedMemeId,
+        responseId: null,
+        targetExists: Boolean(liveMeme),
+        targetLive: liveMeme
+          ? {
+              id: liveMeme.id,
+              postId: liveMeme.id,
+              title: memeTitle,
+              postTitle: memeTitle,
+              contentPreview: (liveMeme.caption ?? "").slice(0, 800),
+              imageUrl: liveMeme.imageUrl,
+              isResolved: null,
+              isHiddenByModeration: liveMeme.isHiddenByModeration,
+              createdAt: liveMeme.createdAt,
+            }
+          : null,
+        uniquePendingReportCount,
+      };
+    }
+
     const liveResponse = responseById.get(report.targetId);
     const resolvedPostId =
       liveResponse?.postId ??
@@ -415,6 +468,9 @@ async function setTargetModerationVisibilityInTx(
     case "MARKETPLACE_COMMENT":
       await tx.marketplaceComment.updateMany({ where: { id: targetId }, data });
       break;
+    case "MEME_POST":
+      await tx.meme.updateMany({ where: { id: targetId }, data });
+      break;
     default:
       await tx.helpResponse.updateMany({ where: { id: targetId }, data });
       break;
@@ -432,6 +488,7 @@ export const resolveForumReportService = async (
   let shouldInvalidateUserCaches = false;
   const lostFoundImagesToDelete: string[] = [];
   const marketplaceImagesToDelete: string[] = [];
+  const memeImagesToDelete: string[] = [];
 
   await prisma.$transaction(async (tx) => {
     // Lock report row so concurrent moderation actions serialize and cannot double-resolve or flip state
@@ -455,7 +512,7 @@ export const resolveForumReportService = async (
       throw new AppError("This content report has already been reviewed.", 409);
     }
 
-    // Lock Marketplace target row so admin moderation and concurrent report auto-hide serialize cleanly.
+    // Lock Marketplace / Meme target row so admin moderation and concurrent report auto-hide serialize cleanly.
     if (report.targetType === "MARKETPLACE_POST") {
       await tx.$queryRaw`
         SELECT id FROM "marketplace_post" WHERE id = ${report.targetId} FOR UPDATE
@@ -463,6 +520,10 @@ export const resolveForumReportService = async (
     } else if (report.targetType === "MARKETPLACE_COMMENT") {
       await tx.$queryRaw`
         SELECT id FROM "marketplace_comment" WHERE id = ${report.targetId} FOR UPDATE
+      `;
+    } else if (report.targetType === "MEME_POST") {
+      await tx.$queryRaw`
+        SELECT id FROM "meme" WHERE id = ${report.targetId} FOR UPDATE
       `;
     }
 
@@ -625,6 +686,19 @@ export const resolveForumReportService = async (
         await tx.marketplaceComment.deleteMany({
           where: { id: report.targetId },
         });
+      } else if (report.targetType === "MEME_POST") {
+        const memeRow = await tx.meme.findUnique({
+          where: { id: report.targetId },
+          select: { imageUrl: true },
+        });
+        if (memeRow) {
+          if (memeRow.imageUrl) {
+            memeImagesToDelete.push(memeRow.imageUrl);
+          }
+          await tx.meme.deleteMany({
+            where: { id: report.targetId },
+          });
+        }
       } else {
         await tx.helpResponse.deleteMany({ where: { id: report.targetId } });
       }
@@ -642,6 +716,13 @@ export const resolveForumReportService = async (
     void deleteUnreferencedMarketplaceImages(
       marketplaceImagesToDelete,
       "deleted Marketplace moderation images",
+    );
+  }
+
+  if (memeImagesToDelete.length > 0) {
+    void deleteUnreferencedMemeImages(
+      memeImagesToDelete,
+      "deleted Meme moderation images",
     );
   }
 

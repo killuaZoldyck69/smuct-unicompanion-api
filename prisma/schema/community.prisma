@@ -13,6 +13,7 @@ enum UgcReportTargetType {
   LOST_FOUND_POST
   MARKETPLACE_POST
   MARKETPLACE_COMMENT
+  MEME_POST
 }
 
 enum UgcReportReason {

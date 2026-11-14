@@ -1,6 +1,7 @@
 import {
   cleanupMarketplaceOrphanImages,
   cleanupLostFoundOrphanImages,
+  cleanupMemeOrphanImages,
 } from "../services/orphan-cleanup.service";
 import { prisma } from "../lib/prisma";
 
@@ -30,10 +31,21 @@ async function run() {
     console.log(` - Deleted: ${lostReport.deletedCount}`);
     console.log(` - Freed:   ${(lostReport.freedBytes / (1024 * 1024)).toFixed(2)} MB\n`);
 
-    const totalScanned = marketReport.scannedCount + lostReport.scannedCount;
-    const totalOrphans = marketReport.orphanCount + lostReport.orphanCount;
-    const totalDeleted = marketReport.deletedCount + lostReport.deletedCount;
-    const totalFreed = marketReport.freedBytes + lostReport.freedBytes;
+    console.log("--- 3. MEMES SCAN ---");
+    const memeReport = await cleanupMemeOrphanImages(olderThanHours, isDryRun);
+    console.log(` - Scanned: ${memeReport.scannedCount}`);
+    console.log(` - Orphans: ${memeReport.orphanCount}`);
+    console.log(` - Deleted: ${memeReport.deletedCount}`);
+    console.log(` - Freed:   ${(memeReport.freedBytes / (1024 * 1024)).toFixed(2)} MB\n`);
+
+    const totalScanned =
+      marketReport.scannedCount + lostReport.scannedCount + memeReport.scannedCount;
+    const totalOrphans =
+      marketReport.orphanCount + lostReport.orphanCount + memeReport.orphanCount;
+    const totalDeleted =
+      marketReport.deletedCount + lostReport.deletedCount + memeReport.deletedCount;
+    const totalFreed =
+      marketReport.freedBytes + lostReport.freedBytes + memeReport.freedBytes;
 
     console.log("==========================================================");
     console.log(" 📊 TOTAL SUMMARY");

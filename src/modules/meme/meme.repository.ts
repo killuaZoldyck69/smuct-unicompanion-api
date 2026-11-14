@@ -1,285 +1,377 @@
-import { prisma } from "../../lib/prisma";
+import { Prisma } from "../../../generated/prisma/client";
 import { MemeReactionType } from "../../constants/enums";
-import { CreateMemePayload } from "./meme.schema";
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+import { publicUserSelect } from "../forum/forum.domain";
+import {
+  computeMemePopularityScore,
+  isMemeVisibleToViewer,
+  MemeFilter,
+  MemeViewerContext,
+} from "./meme.domain";
+import { assertNoForeignMemeMediaReferencesInTx } from "./meme.media";
+import { CreateMemePayload, UpdateMemePayload } from "./meme.schema";
 
-const authorSelection = {
-  id: true,
-  name: true,
-  email: true,
-  image: true,
-  role: true,
-  phoneNumber: true,
-  bloodGroup: true,
-  studentProfile: {
-    select: {
-      studentId: true,
-      department: true,
-      batch: true,
-      currentSemester: true,
-      section: true,
+function buildMemeSelect(viewerId?: string) {
+  return {
+    id: true,
+    authorId: true,
+    caption: true,
+    imageUrl: true,
+    likesCount: true,
+    dislikesCount: true,
+    isHiddenByModeration: true,
+    createdAt: true,
+    updatedAt: true,
+    author: { select: publicUserSelect },
+    reactions: viewerId
+      ? {
+          where: { userId: viewerId },
+          select: { type: true },
+          take: 1,
+        }
+      : false,
+  } satisfies Prisma.MemeSelect;
+}
+
+type MemeRowWithViewerReaction = Prisma.MemeGetPayload<{
+  select: ReturnType<typeof buildMemeSelect>;
+}>;
+
+function formatMemeRow(row: MemeRowWithViewerReaction) {
+  const { reactions, ...rest } = row;
+  const userReaction = Array.isArray(reactions) && reactions.length > 0
+    ? (reactions[0].type as MemeReactionType)
+    : null;
+
+  return {
+    ...rest,
+    userReaction,
+  };
+}
+
+export const getMemeViewerContextInDb = async (
+  userId?: string,
+  role?: string,
+): Promise<MemeViewerContext> => {
+  if (!userId) {
+    return {
+      userId: "",
+      role,
+      reportedMemeIds: new Set<string>(),
+    };
+  }
+
+  const reports = await prisma.contentReport.findMany({
+    where: {
+      reporterId: userId,
+      targetType: "MEME_POST",
+      status: { in: ["PENDING", "ACTIONED"] },
     },
-  },
-  teacherProfile: {
-    select: {
-      department: true,
-      designation: true,
-      officeRoom: true,
-      consultationSlots: true,
-    },
-  },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    select: { targetId: true },
+  });
+
+  return {
+    userId,
+    role,
+    reportedMemeIds: new Set(reports.map((r) => r.targetId)),
+  };
 };
 
 export const createMemeInDb = async (
   authorId: string,
-  payload: CreateMemePayload
+  payload: CreateMemePayload,
 ) => {
-  const meme = await prisma.meme.create({
-    data: {
-      authorId,
-      imageUrl: payload.imageUrl,
-      caption: payload.caption || null,
-    },
-    include: {
-      author: { select: authorSelection },
-    },
-  });
+  const idempotencyKey = payload.idempotencyKey?.trim() || null;
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      if (idempotencyKey) {
+        const existing = await tx.meme.findUnique({
+          where: {
+            authorId_idempotencyKey: { authorId, idempotencyKey },
+          },
+          select: buildMemeSelect(authorId),
+        });
+        if (existing) {
+          return formatMemeRow(existing);
+        }
+      }
+
+      await assertNoForeignMemeMediaReferencesInTx(
+        tx,
+        [authorId],
+        payload.imageUrl,
+      );
+
+      const created = await tx.meme.create({
+        data: {
+          authorId,
+          imageUrl: payload.imageUrl,
+          caption: payload.caption ?? null,
+          idempotencyKey,
+        },
+        select: buildMemeSelect(authorId),
+      });
+
+      return formatMemeRow(created);
+    });
+  } catch (err) {
+    if (
+      idempotencyKey &&
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2002"
+    ) {
+      const existing = await prisma.meme.findUnique({
+        where: {
+          authorId_idempotencyKey: { authorId, idempotencyKey },
+        },
+        select: buildMemeSelect(authorId),
+      });
+      if (existing) {
+        return formatMemeRow(existing);
+      }
+    }
+    throw err;
+  }
+};
+
+export const findMemesFeedInDb = async (
+  viewer: MemeViewerContext,
+  filter: MemeFilter,
+  skip: number,
+  take: number,
+) => {
+  const isAdmin = viewer.role === "ADMIN";
+  const where: Prisma.MemeWhereInput = {};
+
+  if (filter === "mine") {
+    where.authorId = viewer.userId;
+    where.isHiddenByModeration = false;
+  } else if (!isAdmin) {
+    where.isHiddenByModeration = false;
+  }
+
+  if (!isAdmin && viewer.reportedMemeIds.size > 0) {
+    where.id = { notIn: [...viewer.reportedMemeIds] };
+  }
+
+  const orderBy: Prisma.MemeOrderByWithRelationInput[] =
+    filter === "popular"
+      ? [
+          { popularityScore: "desc" },
+          { createdAt: "desc" },
+          { id: "desc" },
+        ]
+      : [{ createdAt: "desc" }, { id: "desc" }];
+
+  const [total, rawMemes] = await Promise.all([
+    prisma.meme.count({ where }),
+    prisma.meme.findMany({
+      where,
+      skip,
+      take,
+      orderBy,
+      select: buildMemeSelect(viewer.userId),
+    }),
+  ]);
 
   return {
-    ...meme,
-    likesCount: 0,
-    dislikesCount: 0,
-    userReaction: null,
+    total,
+    memes: rawMemes.map(formatMemeRow),
   };
+};
+
+export const findMemeByIdInDb = async (
+  id: string,
+  viewer: MemeViewerContext,
+) => {
+  const meme = await prisma.meme.findUnique({
+    where: { id },
+    select: buildMemeSelect(viewer.userId),
+  });
+
+  if (!meme || !isMemeVisibleToViewer(meme, viewer)) {
+    return null;
+  }
+
+  return formatMemeRow(meme);
 };
 
 export const updateMemeInDb = async (
   id: string,
-  payload: { caption?: string | null; imageUrl?: string }
+  userId: string,
+  payload: UpdateMemePayload,
 ) => {
-  const meme = await prisma.meme.update({
-    where: { id },
-    data: {
-      ...(payload.caption !== undefined ? { caption: payload.caption } : {}),
-      ...(payload.imageUrl ? { imageUrl: payload.imageUrl } : {}),
-    },
-    include: {
-      author: { select: authorSelection },
-      reactions: {
-        select: {
-          type: true,
-          userId: true,
-        },
-      },
-    },
-  });
-
-  let likesCount = 0;
-  let dislikesCount = 0;
-  for (const r of meme.reactions) {
-    if (r.type === "LIKE") likesCount++;
-    else if (r.type === "DISLIKE") dislikesCount++;
-  }
-
-  const { reactions, ...rest } = meme;
-  return {
-    ...rest,
-    likesCount,
-    dislikesCount,
-  };
-};
-
-export const findMemesFeedInDb = async (
-  currentUserId: string,
-  filter: "latest" | "popular" | "mine",
-  skip: number,
-  take: number
-) => {
-  const where: any = {};
-  if (filter === "mine") {
-    where.authorId = currentUserId;
-  }
-
-  const [totalCount, rawMemes] = await Promise.all([
-    prisma.meme.count({ where }),
-    prisma.meme.findMany({
-      where,
-      skip: filter === "popular" ? undefined : skip,
-      take: filter === "popular" ? undefined : take,
-      orderBy: { createdAt: "desc" },
-      include: {
-        author: { select: authorSelection },
-        reactions: {
-          select: {
-            type: true,
-            userId: true,
-          },
-        },
-      },
-    }),
-  ]);
-
-  const formattedMemes = rawMemes.map((meme) => {
-    let likesCount = 0;
-    let dislikesCount = 0;
-    let userReaction: MemeReactionType | null = null;
-
-    for (const r of meme.reactions) {
-      if (r.type === "LIKE") {
-        likesCount++;
-      } else if (r.type === "DISLIKE") {
-        dislikesCount++;
-      }
-      if (r.userId === currentUserId) {
-        userReaction = r.type;
-      }
+  return prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "meme" WHERE id = ${id} FOR UPDATE
+    `;
+    if (locked.length === 0) {
+      throw new AppError("Meme not found", 404);
     }
 
-    const { reactions, ...rest } = meme;
-    return {
-      ...rest,
-      likesCount,
-      dislikesCount,
-      userReaction,
-    };
-  });
-
-  if (filter === "popular") {
-    // Sort by net likes (likes - dislikes) or total likes, then slice pagination
-    formattedMemes.sort((a, b) => {
-      const scoreB = b.likesCount * 2 - b.dislikesCount;
-      const scoreA = a.likesCount * 2 - a.dislikesCount;
-      if (scoreB !== scoreA) {
-        return scoreB - scoreA;
-      }
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    const existing = await tx.meme.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        authorId: true,
+        isHiddenByModeration: true,
+      },
     });
 
-    const paginated = formattedMemes.slice(skip, skip + take);
-    return {
-      total: totalCount,
-      memes: paginated,
-    };
-  }
+    if (!existing || existing.isHiddenByModeration) {
+      throw new AppError("Meme not found", 404);
+    }
 
-  return {
-    total: totalCount,
-    memes: formattedMemes,
-  };
-};
+    if (existing.authorId !== userId) {
+      throw new AppError("You do not have permission to edit this meme", 403);
+    }
 
-export const findMemeByIdInDb = async (id: string, currentUserId?: string) => {
-  const meme = await prisma.meme.findUnique({
-    where: { id },
-    include: {
-      author: { select: authorSelection },
-      reactions: {
-        select: {
-          type: true,
-          userId: true,
-        },
+    const updated = await tx.meme.update({
+      where: { id },
+      data: {
+        caption: payload.caption ?? null,
       },
-    },
+      select: buildMemeSelect(userId),
+    });
+
+    return formatMemeRow(updated);
   });
-
-  if (!meme) return null;
-
-  let likesCount = 0;
-  let dislikesCount = 0;
-  let userReaction: MemeReactionType | null = null;
-
-  for (const r of meme.reactions) {
-    if (r.type === "LIKE") {
-      likesCount++;
-    } else if (r.type === "DISLIKE") {
-      dislikesCount++;
-    }
-    if (currentUserId && r.userId === currentUserId) {
-      userReaction = r.type;
-    }
-  }
-
-  const { reactions, ...rest } = meme;
-  return {
-    ...rest,
-    likesCount,
-    dislikesCount,
-    userReaction,
-  };
 };
 
 export const toggleMemeReactionInDb = async (
   memeId: string,
   userId: string,
-  type: MemeReactionType
+  type: MemeReactionType,
+  viewer: MemeViewerContext,
 ) => {
   return prisma.$transaction(async (tx) => {
-    const existing = await tx.memeReaction.findUnique({
-      where: {
-        memeId_userId: {
-          memeId,
-          userId,
-        },
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "meme" WHERE id = ${memeId} FOR UPDATE
+    `;
+    if (locked.length === 0) {
+      throw new AppError("Meme not found", 404);
+    }
+
+    const meme = await tx.meme.findUnique({
+      where: { id: memeId },
+      select: {
+        id: true,
+        authorId: true,
+        caption: true,
+        likesCount: true,
+        dislikesCount: true,
+        isHiddenByModeration: true,
       },
     });
 
+    if (!meme || !isMemeVisibleToViewer(meme, viewer)) {
+      throw new AppError("Meme not found", 404);
+    }
+
+    const existing = await tx.memeReaction.findUnique({
+      where: {
+        memeId_userId: { memeId, userId },
+      },
+      select: { type: true },
+    });
+
+    let action: "ADDED" | "REMOVED" | "SWITCHED";
     let finalReaction: MemeReactionType | null = type;
 
     if (existing) {
       if (existing.type === type) {
-        // Toggle off (unreact)
         await tx.memeReaction.deleteMany({
           where: { memeId, userId },
         });
+        action = "REMOVED";
         finalReaction = null;
       } else {
-        // Switch reaction (e.g. from LIKE to DISLIKE or vice-versa)
         await tx.memeReaction.updateMany({
           where: { memeId, userId },
           data: { type },
         });
+        action = "SWITCHED";
         finalReaction = type;
       }
     } else {
-      // New reaction: safe upsert handles any concurrent creation race condition cleanly
-      const upserted = await tx.memeReaction.upsert({
-        where: {
-          memeId_userId: {
-            memeId,
-            userId,
-          },
-        },
-        create: {
-          memeId,
-          userId,
-          type,
-        },
-        update: {
-          type,
-        },
+      await tx.memeReaction.create({
+        data: { memeId, userId, type },
       });
-      finalReaction = upserted.type;
+      action = "ADDED";
+      finalReaction = type;
     }
 
     const [likesCount, dislikesCount] = await Promise.all([
-      tx.memeReaction.count({
-        where: { memeId, type: "LIKE" },
-      }),
-      tx.memeReaction.count({
-        where: { memeId, type: "DISLIKE" },
-      }),
+      tx.memeReaction.count({ where: { memeId, type: "LIKE" } }),
+      tx.memeReaction.count({ where: { memeId, type: "DISLIKE" } }),
     ]);
+
+    await tx.meme.update({
+      where: { id: memeId },
+      data: {
+        likesCount,
+        dislikesCount,
+        popularityScore: computeMemePopularityScore(likesCount, dislikesCount),
+      },
+    });
 
     return {
       memeId,
+      authorId: meme.authorId,
+      caption: meme.caption,
+      action,
+      type,
       userReaction: finalReaction,
       likesCount,
       dislikesCount,
+      previousLikesCount: meme.likesCount,
+      previousDislikesCount: meme.dislikesCount,
     };
   });
 };
 
-export const deleteMemeFromDb = async (id: string) => {
-  return prisma.meme.delete({
-    where: { id },
+export const deleteMemeAtomicInDb = async (
+  memeId: string,
+  userId: string,
+  userRole?: string,
+) => {
+  return prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "meme" WHERE id = ${memeId} FOR UPDATE
+    `;
+    if (locked.length === 0) {
+      throw new AppError("Meme not found", 404);
+    }
+
+    const meme = await tx.meme.findUnique({
+      where: { id: memeId },
+      select: {
+        id: true,
+        authorId: true,
+        imageUrl: true,
+        isHiddenByModeration: true,
+      },
+    });
+
+    const isAdmin = userRole === "ADMIN";
+    if (!meme || (meme.isHiddenByModeration && !isAdmin)) {
+      throw new AppError("Meme not found", 404);
+    }
+
+    const isAuthor = meme.authorId === userId;
+    if (!isAuthor && !isAdmin) {
+      throw new AppError("You do not have permission to delete this meme", 403);
+    }
+
+    await tx.meme.delete({ where: { id: memeId } });
+
+    return {
+      id: meme.id,
+      imageUrl: meme.imageUrl,
+    };
   });
 };

@@ -197,3 +197,33 @@ export function cleanupLostFoundOrphanImages(
     },
   });
 }
+
+export function cleanupMemeOrphanImages(
+  olderThanHours = 24,
+  dryRun = false,
+): Promise<OrphanCleanupReport> {
+  return cleanupOrphanImages({
+    prefix: "smuct-unicompanion/campus-hub/memes",
+    logTag: "Cloudinary-Memes-Cleanup",
+    olderThanHours,
+    dryRun,
+    collectReferencedIdentifiers: async () => {
+      const identifiers = new Set<string>();
+      let cursor: string | undefined;
+      while (true) {
+        const memes = await prisma.meme.findMany({
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+          take: DB_BATCH_SIZE,
+          orderBy: { id: "asc" },
+          select: { id: true, imageUrl: true },
+        });
+        for (const meme of memes) {
+          addReferencedUrl(identifiers, meme.imageUrl);
+        }
+        if (memes.length < DB_BATCH_SIZE) break;
+        cursor = memes[memes.length - 1].id;
+      }
+      return identifiers;
+    },
+  });
+}
