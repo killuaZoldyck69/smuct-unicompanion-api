@@ -53,12 +53,35 @@ function formatMemeRow(row: MemeRowWithViewerReaction) {
 export const getMemeViewerContextInDb = async (
   userId?: string,
   role?: string,
+  options?: { targetMemeId?: string; skipReports?: boolean },
 ): Promise<MemeViewerContext> => {
-  if (!userId) {
+  if (!userId || role === "ADMIN" || options?.skipReports) {
     return {
-      userId: "",
+      userId: userId ?? "",
       role,
       reportedMemeIds: new Set<string>(),
+    };
+  }
+
+  if (options?.targetMemeId) {
+    const report = await prisma.contentReport.findUnique({
+      where: {
+        reporterId_targetType_targetId: {
+          reporterId: userId,
+          targetType: "MEME_POST",
+          targetId: options.targetMemeId,
+        },
+      },
+      select: { status: true },
+    });
+    const isHiddenForReporter =
+      report?.status === "PENDING" || report?.status === "ACTIONED";
+    return {
+      userId,
+      role,
+      reportedMemeIds: isHiddenForReporter
+        ? new Set([options.targetMemeId])
+        : new Set<string>(),
     };
   }
 
@@ -68,8 +91,6 @@ export const getMemeViewerContextInDb = async (
       targetType: "MEME_POST",
       status: { in: ["PENDING", "ACTIONED"] },
     },
-    orderBy: { createdAt: "desc" },
-    take: 200,
     select: { targetId: true },
   });
 
@@ -102,7 +123,7 @@ export const createMemeInDb = async (
 
       await assertNoForeignMemeMediaReferencesInTx(
         tx,
-        [authorId],
+        authorId,
         payload.imageUrl,
       );
 
@@ -205,22 +226,23 @@ export const updateMemeInDb = async (
   userId: string,
   payload: UpdateMemePayload,
 ) => {
-  return prisma.$transaction(async (tx) => {
-    const locked = await tx.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM "meme" WHERE id = ${id} FOR UPDATE
-    `;
-    if (locked.length === 0) {
-      throw new AppError("Meme not found", 404);
-    }
+  const nextCaption = payload.caption ?? null;
 
-    const existing = await tx.meme.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        authorId: true,
-        isHiddenByModeration: true,
-      },
-    });
+  return prisma.$transaction(async (tx) => {
+    const lockedRows = await tx.$queryRaw<
+      Array<{
+        id: string;
+        authorId: string;
+        caption: string | null;
+        isHiddenByModeration: boolean;
+      }>
+    >`
+      SELECT id, "authorId", caption, "isHiddenByModeration"
+      FROM "meme"
+      WHERE id = ${id}
+      FOR UPDATE
+    `;
+    const existing = lockedRows[0];
 
     if (!existing || existing.isHiddenByModeration) {
       throw new AppError("Meme not found", 404);
@@ -230,10 +252,18 @@ export const updateMemeInDb = async (
       throw new AppError("You do not have permission to edit this meme", 403);
     }
 
+    if (existing.caption === nextCaption) {
+      const current = await tx.meme.findUniqueOrThrow({
+        where: { id },
+        select: buildMemeSelect(userId),
+      });
+      return formatMemeRow(current);
+    }
+
     const updated = await tx.meme.update({
       where: { id },
       data: {
-        caption: payload.caption ?? null,
+        caption: nextCaption,
       },
       select: buildMemeSelect(userId),
     });
@@ -249,24 +279,22 @@ export const toggleMemeReactionInDb = async (
   viewer: MemeViewerContext,
 ) => {
   return prisma.$transaction(async (tx) => {
-    const locked = await tx.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM "meme" WHERE id = ${memeId} FOR UPDATE
+    const lockedRows = await tx.$queryRaw<
+      Array<{
+        id: string;
+        authorId: string;
+        caption: string | null;
+        likesCount: number;
+        dislikesCount: number;
+        isHiddenByModeration: boolean;
+      }>
+    >`
+      SELECT id, "authorId", caption, "likesCount", "dislikesCount", "isHiddenByModeration"
+      FROM "meme"
+      WHERE id = ${memeId}
+      FOR UPDATE
     `;
-    if (locked.length === 0) {
-      throw new AppError("Meme not found", 404);
-    }
-
-    const meme = await tx.meme.findUnique({
-      where: { id: memeId },
-      select: {
-        id: true,
-        authorId: true,
-        caption: true,
-        likesCount: true,
-        dislikesCount: true,
-        isHiddenByModeration: true,
-      },
-    });
+    const meme = lockedRows[0];
 
     if (!meme || !isMemeVisibleToViewer(meme, viewer)) {
       throw new AppError("Meme not found", 404);
@@ -305,10 +333,15 @@ export const toggleMemeReactionInDb = async (
       finalReaction = type;
     }
 
-    const [likesCount, dislikesCount] = await Promise.all([
-      tx.memeReaction.count({ where: { memeId, type: "LIKE" } }),
-      tx.memeReaction.count({ where: { memeId, type: "DISLIKE" } }),
-    ]);
+    const groupedCounts = await tx.memeReaction.groupBy({
+      by: ["type"],
+      where: { memeId },
+      _count: { _all: true },
+    });
+    const likesCount =
+      groupedCounts.find((row) => row.type === "LIKE")?._count._all ?? 0;
+    const dislikesCount =
+      groupedCounts.find((row) => row.type === "DISLIKE")?._count._all ?? 0;
 
     await tx.meme.update({
       where: { id: memeId },
@@ -340,22 +373,20 @@ export const deleteMemeAtomicInDb = async (
   userRole?: string,
 ) => {
   return prisma.$transaction(async (tx) => {
-    const locked = await tx.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM "meme" WHERE id = ${memeId} FOR UPDATE
+    const lockedRows = await tx.$queryRaw<
+      Array<{
+        id: string;
+        authorId: string;
+        imageUrl: string;
+        isHiddenByModeration: boolean;
+      }>
+    >`
+      SELECT id, "authorId", "imageUrl", "isHiddenByModeration"
+      FROM "meme"
+      WHERE id = ${memeId}
+      FOR UPDATE
     `;
-    if (locked.length === 0) {
-      throw new AppError("Meme not found", 404);
-    }
-
-    const meme = await tx.meme.findUnique({
-      where: { id: memeId },
-      select: {
-        id: true,
-        authorId: true,
-        imageUrl: true,
-        isHiddenByModeration: true,
-      },
-    });
+    const meme = lockedRows[0];
 
     const isAdmin = userRole === "ADMIN";
     if (!meme || (meme.isHiddenByModeration && !isAdmin)) {
@@ -366,6 +397,22 @@ export const deleteMemeAtomicInDb = async (
     if (!isAuthor && !isAdmin) {
       throw new AppError("You do not have permission to delete this meme", 403);
     }
+
+    await tx.contentReport.updateMany({
+      where: {
+        targetType: "MEME_POST",
+        targetId: memeId,
+        status: "PENDING",
+      },
+      data: {
+        status: "ACTIONED",
+        reviewedById: isAdmin ? userId : null,
+        reviewedAt: new Date(),
+        adminNote: isAdmin
+          ? "Target meme deleted directly by administrator."
+          : "Target meme deleted by author.",
+      },
+    });
 
     await tx.meme.delete({ where: { id: memeId } });
 

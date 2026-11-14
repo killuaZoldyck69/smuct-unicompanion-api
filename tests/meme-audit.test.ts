@@ -346,3 +346,29 @@ test("SHARED_CONTRACT §9.2 & Moderation: meme repository uses publicUserSelect 
   });
   assert.equal(adminQuery.success, true);
 });
+
+test("Security & DB audit remediation: indexed imageUrl, grouped reaction counts, report cleanup on delete, and targeted viewer context", () => {
+  const memePrisma = fs.readFileSync(
+    path.resolve(process.cwd(), "prisma/schema/meme.prisma"),
+    "utf8",
+  );
+  assert.equal(memePrisma.includes("@@index([imageUrl])"), true);
+
+  const memeMediaSrc = fs.readFileSync(
+    path.resolve(process.cwd(), "src/modules/meme/meme.media.ts"),
+    "utf8",
+  );
+  assert.equal(memeMediaSrc.includes("imageUrl: { in: candidateUrls }"), true);
+  assert.equal(memeMediaSrc.includes("imageUrl: { in: lookupUrls }"), true);
+  assert.equal(memeMediaSrc.includes("contains:"), false);
+
+  const repoSrc = fs.readFileSync(
+    path.resolve(process.cwd(), "src/modules/meme/meme.repository.ts"),
+    "utf8",
+  );
+  assert.equal(repoSrc.includes("targetMemeId"), true);
+  assert.equal(repoSrc.includes("skipReports"), true);
+  assert.equal(repoSrc.includes("tx.memeReaction.groupBy"), true);
+  assert.equal(repoSrc.includes("existing.caption === nextCaption"), true);
+  assert.equal(repoSrc.includes("tx.contentReport.updateMany"), true);
+});

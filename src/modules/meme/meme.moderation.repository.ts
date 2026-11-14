@@ -7,33 +7,34 @@ import {
 } from "../forum/forum.domain";
 import { CreateMemeReportByIdPayload } from "./meme.schema";
 
-export const createMemeReportAndEvaluateAutoHideInDb = async (params: {
+export interface CreateMemeReportParams {
   reporterId: string;
   memeId: string;
   reason: CreateMemeReportByIdPayload["reason"];
   details?: string;
-}) => {
+}
+
+export const createMemeReportAndEvaluateAutoHideInDb = async (
+  params: CreateMemeReportParams,
+) => {
   try {
     return await prisma.$transaction(async (tx) => {
-      // Lock the meme row so concurrent reports and moderator actions serialize cleanly.
-      const locked = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM "meme" WHERE id = ${params.memeId} FOR UPDATE
+      const lockedRows = await tx.$queryRaw<
+        Array<{
+          id: string;
+          authorId: string;
+          caption: string | null;
+          imageUrl: string;
+          isHiddenByModeration: boolean;
+          updatedAt: Date;
+        }>
+      >`
+        SELECT id, "authorId", caption, "imageUrl", "isHiddenByModeration", "updatedAt"
+        FROM "meme"
+        WHERE id = ${params.memeId}
+        FOR UPDATE
       `;
-      if (locked.length === 0) {
-        throw new AppError("Meme not found", 404);
-      }
-
-      const meme = await tx.meme.findUnique({
-        where: { id: params.memeId },
-        select: {
-          id: true,
-          authorId: true,
-          caption: true,
-          imageUrl: true,
-          isHiddenByModeration: true,
-          updatedAt: true,
-        },
-      });
+      const meme = lockedRows[0];
 
       if (!meme || meme.isHiddenByModeration) {
         throw new AppError("Meme not found", 404);

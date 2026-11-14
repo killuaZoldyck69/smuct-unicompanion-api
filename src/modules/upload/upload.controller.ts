@@ -177,7 +177,7 @@ export const deleteUploadedFile = catchAsync(
         prisma.meme.findFirst({
           where: {
             authorId: { not: viewerId },
-            imageUrl: { contains: publicId },
+            imageUrl: { in: marketplaceCandidateUrls },
           },
           select: { id: true },
         }),
@@ -227,7 +227,7 @@ export const deleteUploadedFile = catchAsync(
             OR EXISTS (
               SELECT 1 FROM "meme"
               WHERE "authorId" = ${viewerId}
-                AND ("imageUrl" = ${url} OR "imageUrl" LIKE ${rawLikePattern} ESCAPE '\\')
+                AND "imageUrl" = ANY(${marketplaceCandidateUrls}::text[])
             )
           ) AS actively_referenced
         `,

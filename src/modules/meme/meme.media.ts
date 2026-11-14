@@ -15,25 +15,18 @@ import { MEME_CLOUDINARY_PREFIX } from "./meme.domain";
  */
 export async function assertNoForeignMemeMediaReferencesInTx(
   tx: Prisma.TransactionClient,
-  allowedOwnerIds: readonly string[],
+  authorId: string,
   imageUrl: string,
 ): Promise<void> {
   const trimmed = imageUrl.trim();
   if (!trimmed) return;
 
-  const ownerList = [...new Set(allowedOwnerIds.filter(Boolean))];
-  if (ownerList.length === 0) return;
-
   const candidateUrls = expandCloudinaryUrlVariants([trimmed]);
-  const publicId = extractPublicIdFromUrl(trimmed);
 
   const foreignMeme = await tx.meme.findFirst({
     where: {
-      authorId: { notIn: ownerList },
-      OR: [
-        { imageUrl: { in: candidateUrls } },
-        ...(publicId ? [{ imageUrl: { contains: publicId } }] : []),
-      ],
+      authorId: { not: authorId },
+      imageUrl: { in: candidateUrls },
     },
     select: { id: true },
   });
@@ -69,16 +62,10 @@ export async function deleteUnreferencedMemeImages(
     if (uniqueUrls.length === 0) return;
 
     const lookupUrls = expandCloudinaryUrlVariants(uniqueUrls);
-    const lookupPublicIds = uniqueUrls
-      .map((url) => extractPublicIdFromUrl(url))
-      .filter((id): id is string => Boolean(id));
 
     const referencedMemes = await prisma.meme.findMany({
       where: {
-        OR: [
-          { imageUrl: { in: lookupUrls } },
-          ...lookupPublicIds.map((pid) => ({ imageUrl: { contains: pid } })),
-        ],
+        imageUrl: { in: lookupUrls },
       },
       select: { imageUrl: true },
       take: 100,

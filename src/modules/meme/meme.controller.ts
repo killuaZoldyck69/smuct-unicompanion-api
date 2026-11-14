@@ -2,7 +2,6 @@ import { Request, Response } from "express";
 import { MemeReactionType } from "../../constants/enums";
 import { AppError } from "../../utils/AppError";
 import { catchAsync } from "../../utils/catchAsync";
-import { MAX_MEME_FEED_LIMIT } from "./meme.domain";
 import {
   CreateMemeReportBodyPayload,
   CreateMemeReportByIdPayload,
@@ -39,22 +38,8 @@ export const createMeme = catchAsync(async (req: Request, res: Response) => {
 
 export const getFeed = catchAsync(async (req: Request, res: Response) => {
   const viewer = requireViewer(req);
-  const rawQuery = req.query as unknown as Partial<QueryMemesQuery>;
-  const page = Math.max(1, Number(rawQuery.page) || 1);
-  const limit = Math.max(
-    1,
-    Math.min(MAX_MEME_FEED_LIMIT, Number(rawQuery.limit) || 20),
-  );
-  const filter =
-    rawQuery.filter === "popular" || rawQuery.filter === "mine"
-      ? rawQuery.filter
-      : "latest";
-
-  const result = await getMemesFeedService(
-    viewer.id,
-    { page, limit, filter },
-    viewer.role,
-  );
+  const query = req.query as unknown as QueryMemesQuery;
+  const result = await getMemesFeedService(viewer.id, query, viewer.role);
 
   res.setHeader(
     "Cache-Control",
@@ -124,14 +109,12 @@ export const updateMeme = catchAsync(async (req: Request, res: Response) => {
 
 export const reportMeme = catchAsync(async (req: Request, res: Response) => {
   const viewer = requireViewer(req);
-  const paramId = req.params.id ? String(req.params.id) : undefined;
   const body = req.body as Partial<CreateMemeReportBodyPayload> &
     CreateMemeReportByIdPayload;
-  const memeId = paramId ?? body.targetId ?? body.memeId;
-
-  if (!memeId) {
-    throw new AppError("Meme ID is required", 400);
-  }
+  const memeId =
+    (req.params.id ? String(req.params.id) : undefined) ??
+    body.targetId ??
+    body.memeId!;
 
   const result = await reportMemeService({
     reporterId: viewer.id,

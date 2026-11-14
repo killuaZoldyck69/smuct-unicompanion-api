@@ -8,7 +8,6 @@ import {
   shouldDispatchMemeMilestoneNotification,
 } from "./meme.domain";
 import { deleteUnreferencedMemeImages } from "./meme.media";
-import { createMemeReportAndEvaluateAutoHideInDb } from "./meme.moderation.repository";
 import {
   createMemeInDb,
   deleteMemeAtomicInDb,
@@ -20,7 +19,6 @@ import {
 } from "./meme.repository";
 import {
   CreateMemePayload,
-  CreateMemeReportByIdPayload,
   QueryMemesQuery,
   UpdateMemePayload,
 } from "./meme.schema";
@@ -91,7 +89,9 @@ export const getMemesFeedService = async (
   const limit = Math.max(1, Math.min(MAX_MEME_FEED_LIMIT, query.limit || 20));
   const skip = (page - 1) * limit;
 
-  const viewer = await getMemeViewerContextInDb(currentUserId, viewerRole);
+  const viewer = await getMemeViewerContextInDb(currentUserId, viewerRole, {
+    skipReports: query.filter === "mine",
+  });
   const result = await findMemesFeedInDb(viewer, query.filter, skip, limit);
 
   return {
@@ -111,7 +111,9 @@ export const getMemeByIdService = async (
   currentUserId?: string,
   viewerRole?: string,
 ) => {
-  const viewer = await getMemeViewerContextInDb(currentUserId, viewerRole);
+  const viewer = await getMemeViewerContextInDb(currentUserId, viewerRole, {
+    targetMemeId: id,
+  });
   const meme = await findMemeByIdInDb(id, viewer);
   if (!meme) {
     throw new AppError("Meme not found", 404);
@@ -125,7 +127,9 @@ export const reactMemeService = async (
   type: MemeReactionType,
   viewerRole?: string,
 ) => {
-  const viewer = await getMemeViewerContextInDb(userId, viewerRole);
+  const viewer = await getMemeViewerContextInDb(userId, viewerRole, {
+    targetMemeId: memeId,
+  });
   const result = await toggleMemeReactionInDb(memeId, userId, type, viewer);
 
   if (result.authorId !== userId) {
@@ -189,11 +193,4 @@ export const deleteMemeService = async (
   return deleted;
 };
 
-export const reportMemeService = async (params: {
-  reporterId: string;
-  memeId: string;
-  reason: CreateMemeReportByIdPayload["reason"];
-  details?: string;
-}) => {
-  return createMemeReportAndEvaluateAutoHideInDb(params);
-};
+export { createMemeReportAndEvaluateAutoHideInDb as reportMemeService } from "./meme.moderation.repository";

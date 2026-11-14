@@ -29,6 +29,7 @@ model Meme {
   reactions MemeReaction[]
 
   @@unique([authorId, idempotencyKey])
+  @@index([imageUrl])
   @@index([authorId, createdAt(sort: Desc)])
   @@index([isHiddenByModeration, createdAt(sort: Desc)])
   @@index([isHiddenByModeration, popularityScore(sort: Desc), createdAt(sort: Desc)])
