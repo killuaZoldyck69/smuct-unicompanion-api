@@ -133,6 +133,21 @@ export const updateEventInputSchema = calendarEventBaseSchema
 export const SMUCT_SEMESTERS = ["Summer", "Winter", "Spring", "Fall"] as const;
 export type SmuctSemester = (typeof SMUCT_SEMESTERS)[number];
 
+const nonEmptyAudienceItemSchema = z
+  .string()
+  .trim()
+  .min(1, "Audience target entry cannot be empty")
+  .max(150, "Audience target entry cannot exceed 150 characters");
+
+const normalizedOptionalString = (maxLen: number) =>
+  z
+    .string()
+    .trim()
+    .max(maxLen)
+    .transform((val) => (val.length === 0 ? null : val))
+    .nullable()
+    .optional();
+
 export const createCalendarBodySchema = z
   .object({
     title: z
@@ -145,15 +160,15 @@ export const createCalendarBodySchema = z
     }),
     academicYear: z.coerce.number().int().min(2000).max(2100).default(2026),
     targetFaculties: z
-      .array(z.string().trim().max(150))
+      .array(nonEmptyAudienceItemSchema)
       .max(20, "Too many target faculties")
       .default([]),
     targetPrograms: z
-      .array(z.string().trim().max(150))
+      .array(nonEmptyAudienceItemSchema)
       .max(50, "Too many target programs")
       .default([]),
-    semesterDuration: z.string().trim().max(50).nullable().optional(),
-    targetBatch: z.string().trim().max(50).nullable().optional(),
+    semesterDuration: normalizedOptionalString(50),
+    targetBatch: normalizedOptionalString(50),
     status: calendarStatusEnum.default("DRAFT").optional(),
     events: z
       .array(calendarEventInputSchema)
@@ -191,15 +206,15 @@ export const updateCalendarBodySchema = z
     semester: z.enum(SMUCT_SEMESTERS).optional(),
     academicYear: z.coerce.number().int().min(2000).max(2100).optional(),
     targetFaculties: z
-      .array(z.string().trim().max(150))
+      .array(nonEmptyAudienceItemSchema)
       .max(20, "Too many target faculties")
       .optional(),
     targetPrograms: z
-      .array(z.string().trim().max(150))
+      .array(nonEmptyAudienceItemSchema)
       .max(50, "Too many target programs")
       .optional(),
-    semesterDuration: z.string().trim().max(50).nullable().optional(),
-    targetBatch: z.string().trim().max(50).nullable().optional(),
+    semesterDuration: normalizedOptionalString(50),
+    targetBatch: normalizedOptionalString(50),
     isActive: z.boolean().optional(),
   })
   .refine(

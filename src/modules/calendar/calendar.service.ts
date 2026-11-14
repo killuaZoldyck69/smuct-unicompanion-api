@@ -1034,16 +1034,23 @@ export const getUpcomingEventsService = async (
   userId: string,
   limit = 20,
 ) => {
-  const { calendars } = await getUserVisibleCalendars(userId);
-  if (calendars.length === 0) {
+  const { user, orConditions } = await buildUserAudienceConditions(userId);
+  const summaries = await calendarRepository.findVisibleCalendarSummaries(
+    orConditions,
+    user.role === "ADMIN",
+  );
+  const calendarIds = summaries
+    .filter((cal) => isCalendarVisibleToUser(cal, user))
+    .map((cal) => cal.id);
+
+  if (calendarIds.length === 0) {
     return [];
   }
 
-  const calendarIds = calendars.map((calendar) => calendar.id);
   const parsedLimit = Number(limit);
   const safeLimit =
     Number.isFinite(parsedLimit) && parsedLimit > 0
-      ? Math.min(100, Math.floor(parsedLimit))
+      ? Math.min(50, Math.floor(parsedLimit))
       : 20;
 
   const todayStart = new Date();

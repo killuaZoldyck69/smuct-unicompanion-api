@@ -94,6 +94,15 @@ export const formatErrorResponse = (
       message = err.message || "Invalid file upload payload.";
     }
   }
+  else if (
+    err?.type === "entity.too.large" ||
+    err?.statusCode === 413 ||
+    err?.status === 413
+  ) {
+    isExpectedOperational = true;
+    statusCode = 413;
+    message = "Request payload exceeds the maximum allowed size limit.";
+  }
 
   if (!isExpectedOperational && statusCode >= 500) {
     console.error(

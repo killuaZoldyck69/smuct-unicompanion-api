@@ -133,8 +133,8 @@ app.use("/api", globalLimiter);
 
 app.all("/api/auth/{*any}", toNodeHandler(auth));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 app.get("/health", (req: Request, res: Response) => {
   res.status(200).json({

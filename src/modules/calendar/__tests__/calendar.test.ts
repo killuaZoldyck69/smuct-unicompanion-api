@@ -18,9 +18,12 @@ import {
   calendarEventParamSchema,
   calendarEventInputSchema,
   updateEventInputSchema,
+  createCalendarBodySchema,
+  updateCalendarBodySchema,
   validateCsvSchema,
   upcomingEventsQuerySchema,
 } from "../calendar.schema";
+import { formatErrorResponse } from "../../../middleware/globalErrorHandler";
 
 // Simple test assertion helper
 function assert(condition: boolean, message: string) {
@@ -383,7 +386,55 @@ Mid-term Examination,Offline Mode,EXAM,2026-09-30,2026-10-15,8,false,true,Offlin
     "Upcoming limit > 50 must fail",
   );
 
-  console.log("\n✅ All 15 Calendar & CSV Unit Tests Passed Successfully!\n");
+  // 16. Test Security & Reliability Audit Fixes
+  console.log("  [16/16] Testing Audience Item Validation, CSV Column Bounds & 413 Error Mapping...");
+  assert(
+    !createCalendarBodySchema.safeParse({
+      title: "Spring 2027",
+      semester: "Spring",
+      academicYear: 2027,
+      targetPrograms: [""],
+      targetBatch: "22",
+    }).success,
+    "createCalendarBodySchema must reject empty-string targetPrograms items",
+  );
+  assert(
+    !updateCalendarBodySchema.safeParse({
+      targetPrograms: ["  "],
+    }).success,
+    "updateCalendarBodySchema must reject whitespace-only targetPrograms items",
+  );
+  const parsedUpdate = updateCalendarBodySchema.parse({
+    targetBatch: "   ",
+    semesterDuration: "",
+  });
+  assertEquals(parsedUpdate.targetBatch, null, "Empty targetBatch should normalize to null");
+  assertEquals(parsedUpdate.semesterDuration, null, "Empty semesterDuration should normalize to null");
+
+  const oversizedCsvResult = validateAndParseCsv(
+    `title,description,category,startDate,endDate,weekNumber,isHoliday,isAllDay,remarks\n${"T".repeat(201)},desc,CLASS,2026-08-22,,1,false,true,\nOk,${"D".repeat(2001)},CLASS,2026-08-22,,1,false,true,\nOk2,desc,CLASS,2026-08-22,,1,false,true,${"R".repeat(501)}`,
+  );
+  assert(!oversizedCsvResult.isValid, "CSV rows exceeding field length limits must fail");
+  assert(
+    oversizedCsvResult.errors.some((e) => e.rowNumber === 2 && e.field === "title") &&
+      oversizedCsvResult.errors.some((e) => e.rowNumber === 3 && e.field === "description") &&
+      oversizedCsvResult.errors.some((e) => e.rowNumber === 4 && e.field === "remarks"),
+    "CSV parser must report title (>200), description (>2000), and remarks (>500) errors",
+  );
+
+  const payloadError = formatErrorResponse(
+    { type: "entity.too.large", statusCode: 413, message: "request entity too large" },
+    { method: "POST", originalUrl: "/api/calendars/validate-csv" } as any,
+    "production",
+  );
+  assertEquals(payloadError.statusCode, 413, "entity.too.large must return HTTP 413");
+  assertEquals(
+    payloadError.body.message,
+    "Request payload exceeds the maximum allowed size limit.",
+    "413 response must return safe normalized message",
+  );
+
+  console.log("\n✅ All 16 Calendar & CSV Unit Tests Passed Successfully!\n");
 }
 
 if (process.argv[1]?.includes("calendar.test.ts")) {

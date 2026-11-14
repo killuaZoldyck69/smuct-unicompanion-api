@@ -397,12 +397,37 @@ export function validateAndParseCsv(
 
     let rowHasError = false;
 
-    // 1. Title validation
+    // 1. Title & text length validation (aligned with calendarEventBaseSchema)
     if (!rawTitle) {
       errors.push({
         rowNumber,
         field: "title",
         message: 'Missing required field "title".',
+      });
+      rowHasError = true;
+    } else if (rawTitle.length > 200) {
+      errors.push({
+        rowNumber,
+        field: "title",
+        message: "Event title cannot exceed 200 characters.",
+      });
+      rowHasError = true;
+    }
+
+    if (rawDescription.length > 2000) {
+      errors.push({
+        rowNumber,
+        field: "description",
+        message: "Description cannot exceed 2000 characters.",
+      });
+      rowHasError = true;
+    }
+
+    if (rawRemarks.length > 500) {
+      errors.push({
+        rowNumber,
+        field: "remarks",
+        message: "Remarks cannot exceed 500 characters.",
       });
       rowHasError = true;
     }

@@ -53,6 +53,15 @@ export const findAllCalendarsAdmin = async (
       where,
       include: {
         events: {
+          select: {
+            id: true,
+            calendarId: true,
+            title: true,
+            category: true,
+            startDate: true,
+            endDate: true,
+            isHoliday: true,
+          },
           orderBy: { startDate: "asc" },
         },
         _count: {
@@ -170,10 +179,10 @@ export const updateAcademicCalendar = async (
         targetPrograms: data.targetPrograms,
       }),
       ...(data.semesterDuration !== undefined && {
-        semesterDuration: data.semesterDuration,
+        semesterDuration: data.semesterDuration?.trim() || null,
       }),
       ...(data.targetBatch !== undefined && {
-        targetBatch: data.targetBatch,
+        targetBatch: data.targetBatch?.trim() || null,
       }),
       ...(data.isActive !== undefined && { isActive: data.isActive }),
       updatedBy: userId || null,
@@ -277,7 +286,7 @@ export const findEventByIdAndCalendar = async (
   });
 };
 
-export const findAllPublishedCalendarsForAdmin = async () => {
+export const findAllPublishedCalendarsForAdmin = async (limit = 50) => {
   return await prisma.academicCalendar.findMany({
     where: {
       status: CalendarStatus.PUBLISHED,
@@ -289,6 +298,33 @@ export const findAllPublishedCalendarsForAdmin = async () => {
       },
     },
     orderBy: { createdAt: "desc" },
+    take: Math.min(50, Math.max(1, limit)),
+  });
+};
+
+export const findVisibleCalendarSummaries = async (
+  orConditions?: any[],
+  isAdmin = false,
+) => {
+  if (!isAdmin && (!orConditions || orConditions.length === 0)) {
+    return [];
+  }
+  return await prisma.academicCalendar.findMany({
+    where: {
+      status: CalendarStatus.PUBLISHED,
+      isActive: true,
+      ...(isAdmin ? {} : { OR: orConditions }),
+    },
+    select: {
+      id: true,
+      status: true,
+      isActive: true,
+      targetFaculties: true,
+      targetPrograms: true,
+      targetBatch: true,
+    },
+    orderBy: { createdAt: "desc" },
+    take: 50,
   });
 };
 
