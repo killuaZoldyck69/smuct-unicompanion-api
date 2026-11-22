@@ -5,8 +5,8 @@ export interface CsvEventRow {
   title: string;
   description?: string | null;
   category: EventCategory;
-  startDate: string; // YYYY-MM-DD
-  endDate?: string | null; // YYYY-MM-DD or null
+  startDate: string;
+  endDate?: string | null;
   weekNumber?: number | null;
   isHoliday: boolean;
   isAllDay: boolean;
@@ -26,6 +26,15 @@ export interface CsvValidationWarning {
   message: string;
 }
 
+export interface CsvDiffItem {
+  status: "NEW" | "UPDATED" | "UNCHANGED";
+  title: string;
+  category: string;
+  startDate: string;
+  endDate?: string | null;
+  details?: string;
+}
+
 export interface CsvValidationResult {
   isValid: boolean;
   totalRows: number;
@@ -39,15 +48,20 @@ export interface CsvValidationResult {
     newCount: number;
     updatedCount: number;
     unchangedCount: number;
-    diffs: Array<{
-      status: "NEW" | "UPDATED" | "UNCHANGED";
-      title: string;
-      category: string;
-      startDate: string;
-      endDate?: string | null;
-      details?: string;
-    }>;
+    diffs: CsvDiffItem[];
   };
+}
+
+export interface ExistingCalendarEventSnapshot {
+  title: string;
+  description?: string | null;
+  category: string;
+  startDate: Date | string;
+  endDate?: Date | string | null;
+  weekNumber?: number | null;
+  isHoliday?: boolean;
+  isAllDay?: boolean;
+  remarks?: string | null;
 }
 
 export const VALID_EVENT_CATEGORIES: EventCategory[] = [
@@ -72,152 +86,175 @@ const CSV_CANONICAL_HEADERS = [
   "isHoliday",
   "isAllDay",
   "remarks",
-];
+] as const;
 
-/**
- * Robust RFC 4180 CSV tokenizer and parser.
- * Handles UTF-8 BOM, quoted fields, multiline cells, and escaped quotes ("").
- */
+const MAX_ALLOWED_CSV_ROWS = 500;
+
+const CATEGORY_ALIASES: Record<string, EventCategory> = {
+  CLASS: "CLASS",
+  CLASSES: "CLASS",
+  REGULAR_CLASS: "CLASS",
+  REGISTRATION: "REGISTRATION",
+  SEMESTER_REGISTRATION: "REGISTRATION",
+  DEADLINE: "DEADLINE",
+  DUE_DATE: "DEADLINE",
+  PAYMENT_DEADLINE: "DEADLINE",
+  EXAM: "EXAM",
+  EXAMINATION: "EXAM",
+  MIDTERM: "EXAM",
+  FINAL_EXAM: "EXAM",
+  HOLIDAY: "HOLIDAY",
+  VACATION: "HOLIDAY",
+  MAKEUP_CLASS: "MAKEUP_CLASS",
+  MAKEUP: "MAKEUP_CLASS",
+  RESULT: "RESULT",
+  RESULT_PUBLICATION: "RESULT",
+  ACADEMIC: "ACADEMIC",
+  OTHER: "OTHER",
+};
+
+const TRUTHY_BOOL = new Set(["true", "1", "yes", "y"]);
+const FALSY_BOOL = new Set(["false", "0", "no", "n"]);
+
+const formatDateYmd = (value: Date | string | null | undefined): string => {
+  if (!value) return "";
+  return typeof value === "string"
+    ? value.split("T")[0]
+    : value.toISOString().split("T")[0];
+};
+
+const normalizeHeaderKey = (header: string): string =>
+  header.trim().toLowerCase().replace(/[_\s-]/g, "");
+
+const emptyResult = (
+  totalRows: number,
+  errors: CsvValidationError[],
+): CsvValidationResult => ({
+  isValid: false,
+  totalRows,
+  validRowsCount: 0,
+  errorCount: errors.length,
+  warningCount: 0,
+  errors,
+  warnings: [],
+  parsedEvents: [],
+});
+
 export function parseCsvTokens(csvText: string): string[][] {
-  // Strip UTF-8 BOM if present
-  let text = csvText.replace(/^\uFEFF/, "");
-
+  const text = csvText.replace(/^\uFEFF/, "");
   const rows: string[][] = [];
-  let currentRow: string[] = [];
-  let currentField = "";
-  let insideQuotes = false;
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  const commitRow = () => {
+    row.push(field);
+    rows.push(row);
+    row = [];
+    field = "";
+  };
 
   for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    const nextChar = text[i + 1];
+    const ch = text[i];
+    const next = text[i + 1];
 
-    if (insideQuotes) {
-      if (char === '"') {
-        if (nextChar === '"') {
-          // Escaped quote
-          currentField += '"';
-          i++; // Skip the second quote
-        } else {
-          // End of quote
-          insideQuotes = false;
-        }
+    if (inQuotes) {
+      if (ch === '"' && next === '"') {
+        field += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
       } else {
-        currentField += char;
+        field += ch;
       }
+      continue;
+    }
+
+    if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      row.push(field);
+      field = "";
+    } else if (ch === "\r") {
+      if (next === "\n") i++;
+      commitRow();
+    } else if (ch === "\n") {
+      commitRow();
     } else {
-      if (char === '"') {
-        insideQuotes = true;
-      } else if (char === ",") {
-        currentRow.push(currentField);
-        currentField = "";
-      } else if (char === "\r") {
-        if (nextChar === "\n") {
-          i++; // Skip \n
-        }
-        currentRow.push(currentField);
-        currentField = "";
-        rows.push(currentRow);
-        currentRow = [];
-      } else if (char === "\n") {
-        currentRow.push(currentField);
-        currentField = "";
-        rows.push(currentRow);
-        currentRow = [];
-      } else {
-        currentField += char;
-      }
+      field += ch;
     }
   }
 
-  // Push last field & row if not empty
-  if (currentField.length > 0 || currentRow.length > 0) {
-    currentRow.push(currentField);
-    rows.push(currentRow);
+  if (field.length > 0 || row.length > 0) {
+    commitRow();
   }
 
-  // Filter out completely empty rows
-  return rows.filter((row) =>
-    row.some((cell) => cell.trim().length > 0),
-  );
+  return rows.filter((r) => r.some((cell) => cell.trim().length > 0));
 }
 
 /**
- * Validates YYYY-MM-DD format strictly.
- * Rejects DD/MM/YYYY, MM/DD/YYYY, or impossible dates like 2026-02-31.
+ * Parses and validates YYYY-MM-DD, spreadsheet M/D/YYYY, or ISO timestamps
+ * while rejecting non-existent calendar dates such as 2026-02-31.
  */
-export function validateIsoDateString(dateStr: string): {
-  valid: boolean;
-  formatted?: string;
-  error?: string;
-} {
+export function validateIsoDateString(
+  dateStr: string,
+): { valid: true; formatted: string } | { valid: false; error: string } {
   const trimmed = dateStr.trim();
-  const isoRegex = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/;
-  const slashRegex = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/;
+  const isoMatch = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  const slashMatch = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
 
   let year: number;
   let month: number;
   let day: number;
 
-  const isoMatch = trimmed.match(isoRegex);
-  const slashMatch = trimmed.match(slashRegex);
-
   if (isoMatch) {
-    year = parseInt(isoMatch[1], 10);
-    month = parseInt(isoMatch[2], 10);
-    day = parseInt(isoMatch[3], 10);
+    year = Number.parseInt(isoMatch[1], 10);
+    month = Number.parseInt(isoMatch[2], 10);
+    day = Number.parseInt(isoMatch[3], 10);
   } else if (slashMatch) {
-    month = parseInt(slashMatch[1], 10);
-    day = parseInt(slashMatch[2], 10);
-    year = parseInt(slashMatch[3], 10);
+    month = Number.parseInt(slashMatch[1], 10);
+    day = Number.parseInt(slashMatch[2], 10);
+    year = Number.parseInt(slashMatch[3], 10);
   } else {
     const parsed = new Date(trimmed);
-    if (!isNaN(parsed.getTime())) {
-      year = parsed.getUTCFullYear();
-      month = parsed.getUTCMonth() + 1;
-      day = parsed.getUTCDate();
-    } else {
+    if (Number.isNaN(parsed.getTime())) {
       return {
         valid: false,
         error: `Invalid date format "${dateStr}". Supported formats: YYYY-MM-DD or M/D/YYYY (e.g. 2026-08-22 or 8/22/2026).`,
       };
     }
+    year = parsed.getUTCFullYear();
+    month = parsed.getUTCMonth() + 1;
+    day = parsed.getUTCDate();
   }
 
   if (month < 1 || month > 12) {
     return { valid: false, error: `Invalid month "${month}" in date "${dateStr}".` };
   }
 
-  const dateObj = new Date(Date.UTC(year, month - 1, day));
+  const probe = new Date(Date.UTC(year, month - 1, day));
   if (
-    dateObj.getUTCFullYear() !== year ||
-    dateObj.getUTCMonth() !== month - 1 ||
-    dateObj.getUTCDate() !== day
+    probe.getUTCFullYear() !== year ||
+    probe.getUTCMonth() !== month - 1 ||
+    probe.getUTCDate() !== day
   ) {
     return { valid: false, error: `Calendar date "${dateStr}" does not exist.` };
   }
 
-  const formatted = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  return { valid: true, formatted };
+  return {
+    valid: true,
+    formatted: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+  };
 }
 
-/**
- * Normalizes boolean strings (true/false, 1/0, yes/no).
- */
 export function parseBooleanValue(
   value: string | undefined | null,
   defaultValue: boolean,
 ): { valid: boolean; value: boolean; error?: string } {
-  if (value === undefined || value === null || value.trim() === "") {
-    return { valid: true, value: defaultValue };
-  }
-
-  const lower = value.trim().toLowerCase();
-  if (["true", "1", "yes", "y"].includes(lower)) {
-    return { valid: true, value: true };
-  }
-  if (["false", "0", "no", "n"].includes(lower)) {
-    return { valid: true, value: false };
-  }
+  const trimmed = value?.trim().toLowerCase() ?? "";
+  if (!trimmed) return { valid: true, value: defaultValue };
+  if (TRUTHY_BOOL.has(trimmed)) return { valid: true, value: true };
+  if (FALSY_BOOL.has(trimmed)) return { valid: true, value: false };
 
   return {
     valid: false,
@@ -226,47 +263,16 @@ export function parseBooleanValue(
   };
 }
 
-/**
- * Normalizes category string to EventCategory enum.
- */
 export function normalizeCategory(categoryStr: string): {
   valid: boolean;
   category: EventCategory;
   error?: string;
 } {
-  if (!categoryStr || categoryStr.trim() === "") {
-    return { valid: true, category: "ACADEMIC" };
-  }
+  const trimmed = categoryStr?.trim();
+  if (!trimmed) return { valid: true, category: "ACADEMIC" };
 
-  const upper = categoryStr.trim().toUpperCase().replace(/[-\s]/g, "_");
-
-  // Category synonyms mapping for robustness
-  const aliases: Record<string, EventCategory> = {
-    CLASS: "CLASS",
-    CLASSES: "CLASS",
-    REGULAR_CLASS: "CLASS",
-    REGISTRATION: "REGISTRATION",
-    SEMESTER_REGISTRATION: "REGISTRATION",
-    DEADLINE: "DEADLINE",
-    DUE_DATE: "DEADLINE",
-    PAYMENT_DEADLINE: "DEADLINE",
-    EXAM: "EXAM",
-    EXAMINATION: "EXAM",
-    MIDTERM: "EXAM",
-    FINAL_EXAM: "EXAM",
-    HOLIDAY: "HOLIDAY",
-    VACATION: "HOLIDAY",
-    MAKEUP_CLASS: "MAKEUP_CLASS",
-    MAKEUP: "MAKEUP_CLASS",
-    RESULT: "RESULT",
-    RESULT_PUBLICATION: "RESULT",
-    ACADEMIC: "ACADEMIC",
-    OTHER: "OTHER",
-  };
-
-  if (aliases[upper]) {
-    return { valid: true, category: aliases[upper] };
-  }
+  const mapped = CATEGORY_ALIASES[trimmed.toUpperCase().replace(/[-\s]/g, "_")];
+  if (mapped) return { valid: true, category: mapped };
 
   return {
     valid: false,
@@ -275,387 +281,252 @@ export function normalizeCategory(categoryStr: string): {
   };
 }
 
-/**
- * Validates and parses raw CSV string into validated CsvEventRow list.
- */
+function buildDiffSummary(
+  parsedEvents: CsvEventRow[],
+  existingEvents: ExistingCalendarEventSnapshot[],
+): NonNullable<CsvValidationResult["diffSummary"]> {
+  const existingByKey = new Map<string, ExistingCalendarEventSnapshot>();
+  for (const ex of existingEvents) {
+    const key = `${ex.title.trim().toLowerCase()}|${formatDateYmd(ex.startDate)}`;
+    if (!existingByKey.has(key)) {
+      existingByKey.set(key, ex);
+    }
+  }
+
+  let newCount = 0;
+  let updatedCount = 0;
+  let unchangedCount = 0;
+  const diffs: CsvDiffItem[] = [];
+
+  for (const ev of parsedEvents) {
+    const match = existingByKey.get(`${ev.title.trim().toLowerCase()}|${ev.startDate}`);
+    if (!match) {
+      newCount++;
+      diffs.push({
+        status: "NEW",
+        title: ev.title,
+        category: ev.category,
+        startDate: ev.startDate,
+        endDate: ev.endDate,
+        details: "New event to be created",
+      });
+      continue;
+    }
+
+    const changed =
+      formatDateYmd(match.endDate) !== (ev.endDate ?? "") ||
+      match.category !== ev.category ||
+      (match.remarks ?? "") !== (ev.remarks ?? "") ||
+      (match.weekNumber ?? null) !== (ev.weekNumber ?? null) ||
+      Boolean(match.isHoliday) !== ev.isHoliday;
+
+    if (changed) updatedCount++;
+    else unchangedCount++;
+
+    diffs.push({
+      status: changed ? "UPDATED" : "UNCHANGED",
+      title: ev.title,
+      category: ev.category,
+      startDate: ev.startDate,
+      endDate: ev.endDate,
+      details: changed ? "Updated dates/category/remarks" : "Identical to existing event",
+    });
+  }
+
+  return { newCount, updatedCount, unchangedCount, diffs };
+}
+
 export function validateAndParseCsv(
   csvContent: string,
-  existingEvents?: Array<{
-    title: string;
-    category: string;
-    startDate: Date | string;
-    endDate?: Date | string | null;
-    weekNumber?: number | null;
-    isHoliday?: boolean;
-    remarks?: string | null;
-  }>,
+  existingEvents?: ExistingCalendarEventSnapshot[],
 ): CsvValidationResult {
+  const rawRows = parseCsvTokens(csvContent);
+  if (rawRows.length === 0) {
+    return emptyResult(0, [
+      {
+        rowNumber: 1,
+        field: "file",
+        message: "The provided CSV file is empty or could not be read.",
+      },
+    ]);
+  }
+
+  const totalDataRows = rawRows.length - 1;
+  if (totalDataRows > MAX_ALLOWED_CSV_ROWS) {
+    return emptyResult(totalDataRows, [
+      {
+        rowNumber: 1,
+        field: "file",
+        message: `The uploaded CSV contains ${totalDataRows} events, which exceeds the maximum limit of ${MAX_ALLOWED_CSV_ROWS} events per academic schedule.`,
+      },
+    ]);
+  }
+
+  const headerMap = new Map<string, number>();
+  rawRows[0].forEach((header, idx) => headerMap.set(normalizeHeaderKey(header), idx));
+
+  const headerErrors: CsvValidationError[] = [];
+  if (!headerMap.has("title")) {
+    headerErrors.push({ rowNumber: 1, field: "headers", message: 'Missing required header "title".' });
+  }
+  if (!headerMap.has("startdate")) {
+    headerErrors.push({ rowNumber: 1, field: "headers", message: 'Missing required header "startDate".' });
+  }
+  if (headerErrors.length > 0) {
+    return emptyResult(totalDataRows, headerErrors);
+  }
+
+  const getCell = (row: string[], normalizedCol: string): string => {
+    const idx = headerMap.get(normalizedCol);
+    return idx !== undefined && idx < row.length ? row[idx].trim() : "";
+  };
+
   const errors: CsvValidationError[] = [];
   const warnings: CsvValidationWarning[] = [];
   const parsedEvents: CsvEventRow[] = [];
 
-  const rawRows = parseCsvTokens(csvContent);
-
-  if (rawRows.length === 0) {
-    return {
-      isValid: false,
-      totalRows: 0,
-      validRowsCount: 0,
-      errorCount: 1,
-      warningCount: 0,
-      errors: [
-        {
-          rowNumber: 1,
-          field: "file",
-          message: "The provided CSV file is empty or could not be read.",
-        },
-      ],
-      warnings: [],
-      parsedEvents: [],
-    };
-  }
-
-  // Maximum CSV rows safeguard (DoS / ReDoS prevention)
-  const MAX_ALLOWED_CSV_ROWS = 500;
-  if (rawRows.length - 1 > MAX_ALLOWED_CSV_ROWS) {
-    return {
-      isValid: false,
-      totalRows: rawRows.length - 1,
-      validRowsCount: 0,
-      errorCount: 1,
-      warningCount: 0,
-      errors: [
-        {
-          rowNumber: 1,
-          field: "file",
-          message: `The uploaded CSV contains ${rawRows.length - 1} events, which exceeds the maximum limit of ${MAX_ALLOWED_CSV_ROWS} events per academic schedule.`,
-        },
-      ],
-      warnings: [],
-      parsedEvents: [],
-    };
-  }
-
-  // Header Validation
-  const headerRow = rawRows[0].map((h) => h.trim().toLowerCase());
-  const headerMap: Record<string, number> = {};
-
-  headerRow.forEach((header, index) => {
-    // Normalize header names (e.g. "start_date" -> "startdate", "is_holiday" -> "isholiday")
-    const cleanHeader = header.replace(/[_\s-]/g, "");
-    headerMap[cleanHeader] = index;
-  });
-
-  // Check required headers
-  if (!("title" in headerMap)) {
-    errors.push({
-      rowNumber: 1,
-      field: "headers",
-      message: 'Missing required header "title".',
-    });
-  }
-  if (!("startdate" in headerMap)) {
-    errors.push({
-      rowNumber: 1,
-      field: "headers",
-      message: 'Missing required header "startDate".',
-    });
-  }
-
-  if (errors.length > 0) {
-    return {
-      isValid: false,
-      totalRows: rawRows.length - 1,
-      validRowsCount: 0,
-      errorCount: errors.length,
-      warningCount: 0,
-      errors,
-      warnings,
-      parsedEvents: [],
-    };
-  }
-
-  const getCell = (row: string[], colName: string): string => {
-    const idx = headerMap[colName.toLowerCase().replace(/[_\s-]/g, "")];
-    return idx !== undefined && idx < row.length ? row[idx].trim() : "";
-  };
-
-  // Row by row validation (1-indexed, skipping header which is row 1)
   for (let i = 1; i < rawRows.length; i++) {
     const row = rawRows[i];
-    const rowNumber = i + 1; // 1-based index in Excel/file
+    const rowNumber = i + 1;
+    let hasError = false;
 
-    const rawTitle = getCell(row, "title");
-    const rawDescription = getCell(row, "description");
+    const addError = (field: string, message: string, rawValue?: string) => {
+      errors.push({
+        rowNumber,
+        field,
+        message,
+        ...(rawValue !== undefined ? { rawValue } : {}),
+      });
+      hasError = true;
+    };
+
+    const title = getCell(row, "title");
+    const description = getCell(row, "description");
     const rawCategory = getCell(row, "category");
-    const rawStartDate = getCell(row, "startDate");
-    const rawEndDate = getCell(row, "endDate");
-    const rawWeekNumber = getCell(row, "weekNumber");
-    const rawIsHoliday = getCell(row, "isHoliday");
-    const rawIsAllDay = getCell(row, "isAllDay");
-    const rawRemarks = getCell(row, "remarks");
+    const rawStartDate = getCell(row, "startdate");
+    const rawEndDate = getCell(row, "enddate");
+    const rawWeekNumber = getCell(row, "weeknumber");
+    const rawIsHoliday = getCell(row, "isholiday");
+    const rawIsAllDay = getCell(row, "isallday");
+    const remarks = getCell(row, "remarks");
 
-    let rowHasError = false;
-
-    // 1. Title & text length validation (aligned with calendarEventBaseSchema)
-    if (!rawTitle) {
-      errors.push({
-        rowNumber,
-        field: "title",
-        message: 'Missing required field "title".',
-      });
-      rowHasError = true;
-    } else if (rawTitle.length > 200) {
-      errors.push({
-        rowNumber,
-        field: "title",
-        message: "Event title cannot exceed 200 characters.",
-      });
-      rowHasError = true;
+    if (!title) {
+      addError("title", 'Missing required field "title".');
+    } else if (title.length > 200) {
+      addError("title", "Event title cannot exceed 200 characters.");
     }
 
-    if (rawDescription.length > 2000) {
-      errors.push({
-        rowNumber,
-        field: "description",
-        message: "Description cannot exceed 2000 characters.",
-      });
-      rowHasError = true;
+    if (description.length > 2000) {
+      addError("description", "Description cannot exceed 2000 characters.");
+    }
+    if (remarks.length > 500) {
+      addError("remarks", "Remarks cannot exceed 500 characters.");
     }
 
-    if (rawRemarks.length > 500) {
-      errors.push({
-        rowNumber,
-        field: "remarks",
-        message: "Remarks cannot exceed 500 characters.",
-      });
-      rowHasError = true;
-    }
-
-    // 2. StartDate validation
+    let startDate: string | null = null;
     if (!rawStartDate) {
-      errors.push({
-        rowNumber,
-        field: "startDate",
-        message: 'Missing required field "startDate". Expected format: YYYY-MM-DD.',
-      });
-      rowHasError = true;
-    }
-
-    const startDateValidation = validateIsoDateString(rawStartDate);
-    if (!startDateValidation.valid) {
-      errors.push({
-        rowNumber,
-        field: "startDate",
-        message: startDateValidation.error || "Invalid startDate.",
-        rawValue: rawStartDate,
-      });
-      rowHasError = true;
-    }
-
-    // 3. EndDate validation (optional)
-    let validatedEndDate: string | null = null;
-    if (rawEndDate) {
-      const endDateValidation = validateIsoDateString(rawEndDate);
-      if (!endDateValidation.valid) {
-        errors.push({
-          rowNumber,
-          field: "endDate",
-          message: endDateValidation.error || "Invalid endDate.",
-          rawValue: rawEndDate,
-        });
-        rowHasError = true;
+      addError("startDate", 'Missing required field "startDate". Expected format: YYYY-MM-DD.');
+    } else {
+      const parsedStart = validateIsoDateString(rawStartDate);
+      if (!parsedStart.valid) {
+        addError("startDate", parsedStart.error, rawStartDate);
       } else {
-        validatedEndDate = endDateValidation.formatted || null;
+        startDate = parsedStart.formatted;
+      }
+    }
 
-        if (
-          startDateValidation.valid &&
-          validatedEndDate &&
-          validatedEndDate < (startDateValidation.formatted || "")
-        ) {
-          errors.push({
-            rowNumber,
-            field: "endDate",
-            message: `endDate "${validatedEndDate}" cannot be earlier than startDate "${startDateValidation.formatted}".`,
-          });
-          rowHasError = true;
+    let endDate: string | null = null;
+    if (rawEndDate) {
+      const parsedEnd = validateIsoDateString(rawEndDate);
+      if (!parsedEnd.valid) {
+        addError("endDate", parsedEnd.error, rawEndDate);
+      } else {
+        endDate = parsedEnd.formatted;
+        if (startDate && endDate < startDate) {
+          addError("endDate", `endDate "${endDate}" cannot be earlier than startDate "${startDate}".`);
         }
       }
     }
 
-    // 4. Category validation
-    let categoryValidation = normalizeCategory(rawCategory);
-    if (!categoryValidation.valid) {
-      errors.push({
-        rowNumber,
-        field: "category",
-        message: categoryValidation.error || "Invalid category.",
-        rawValue: rawCategory,
-      });
-      rowHasError = true;
+    const catResult = normalizeCategory(rawCategory);
+    let category = catResult.category;
+    if (!catResult.valid) {
+      addError("category", catResult.error ?? "Invalid category.", rawCategory);
     } else if (
-      categoryValidation.category === "CLASS" &&
-      (rawTitle.toLowerCase().includes("commencement") ||
-        rawTitle.toLowerCase().includes("next sem") ||
-        rawTitle.toLowerCase().includes("next semester"))
+      category === "CLASS" &&
+      /(commencement|next sem|next semester)/i.test(title)
     ) {
-      // Future semester start is an academic milestone, not a current regular class
-      categoryValidation = { valid: true, category: "ACADEMIC" };
+      // Future semester start is a milestone rather than an active class session.
+      category = "ACADEMIC";
     }
 
-    // 5. Week number validation
-    let parsedWeekNumber: number | null = null;
+    let weekNumber: number | null = null;
     if (rawWeekNumber) {
-      const parsed = parseInt(rawWeekNumber, 10);
-      if (isNaN(parsed) || parsed <= 0 || parsed > 52) {
+      const parsed = Number.parseInt(rawWeekNumber, 10);
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 52) {
         warnings.push({
           rowNumber,
           field: "weekNumber",
           message: `Unusual or invalid weekNumber "${rawWeekNumber}". Must be an integer between 1 and 52.`,
         });
       } else {
-        parsedWeekNumber = parsed;
+        weekNumber = parsed;
       }
     }
 
-    // 6. Boolean fields validation
-    const isHolidayValidation = parseBooleanValue(rawIsHoliday, false);
-    if (!isHolidayValidation.valid) {
+    const holidayResult = parseBooleanValue(rawIsHoliday, false);
+    if (!holidayResult.valid) {
       warnings.push({
         rowNumber,
         field: "isHoliday",
-        message: isHolidayValidation.error || "Invalid isHoliday value, defaulting to false.",
+        message: holidayResult.error || "Invalid isHoliday value, defaulting to false.",
       });
     }
 
-    let finalIsHoliday = isHolidayValidation.value;
-    // Safeguard: DEADLINE events (like tuition fee payments, retake/registration deadlines) are never holidays
-    if (categoryValidation.category === "DEADLINE" && finalIsHoliday) {
-      finalIsHoliday = false;
+    let isHoliday = holidayResult.value;
+    if (isHoliday && category === "DEADLINE") {
+      isHoliday = false;
       warnings.push({
         rowNumber,
         field: "isHoliday",
-        message: `Event "${rawTitle}" is a DEADLINE, so isHoliday was automatically corrected to false.`,
+        message: `Event "${title}" is a DEADLINE, so isHoliday was automatically corrected to false.`,
       });
-    } else if (
-      categoryValidation.category === "CLASS" &&
-      finalIsHoliday &&
-      !rawTitle.toLowerCase().includes("holiday") &&
-      !rawTitle.toLowerCase().includes("break")
-    ) {
-      finalIsHoliday = false;
+    } else if (isHoliday && category === "CLASS" && !/(holiday|break)/i.test(title)) {
+      isHoliday = false;
       warnings.push({
         rowNumber,
         field: "isHoliday",
-        message: `Event "${rawTitle}" is categorized as CLASS, so isHoliday was automatically corrected to false.`,
+        message: `Event "${title}" is categorized as CLASS, so isHoliday was automatically corrected to false.`,
       });
     }
 
-    const isAllDayValidation = parseBooleanValue(rawIsAllDay, true);
-    if (!isAllDayValidation.valid) {
+    const allDayResult = parseBooleanValue(rawIsAllDay, true);
+    if (!allDayResult.valid) {
       warnings.push({
         rowNumber,
         field: "isAllDay",
-        message: isAllDayValidation.error || "Invalid isAllDay value, defaulting to true.",
+        message: allDayResult.error || "Invalid isAllDay value, defaulting to true.",
       });
     }
 
-    if (!rowHasError) {
+    if (!hasError && startDate) {
       parsedEvents.push({
         rowNumber,
-        title: rawTitle,
-        description: rawDescription || null,
-        category: categoryValidation.category,
-        startDate: startDateValidation.formatted!,
-        endDate: validatedEndDate,
-        weekNumber: parsedWeekNumber,
-        isHoliday: finalIsHoliday,
-        isAllDay: isAllDayValidation.value,
-        remarks: rawRemarks || null,
+        title,
+        description: description || null,
+        category,
+        startDate,
+        endDate,
+        weekNumber,
+        isHoliday,
+        isAllDay: allDayResult.value,
+        remarks: remarks || null,
       });
     }
   }
 
-  // Calculate Diff if existing events are supplied
-  let diffSummary: CsvValidationResult["diffSummary"] = undefined;
-  if (existingEvents) {
-    const diffs: NonNullable<CsvValidationResult["diffSummary"]>["diffs"] = [];
-    let newCount = 0;
-    let updatedCount = 0;
-    let unchangedCount = 0;
-
-    const formatDateStr = (d: Date | string | null | undefined): string => {
-      if (!d) return "";
-      if (typeof d === "string") return d.split("T")[0];
-      return d.toISOString().split("T")[0];
-    };
-
-    for (const newEv of parsedEvents) {
-      const match = existingEvents.find(
-        (ex) =>
-          ex.title.trim().toLowerCase() === newEv.title.trim().toLowerCase() &&
-          formatDateStr(ex.startDate) === newEv.startDate,
-      );
-
-      if (!match) {
-        newCount++;
-        diffs.push({
-          status: "NEW",
-          title: newEv.title,
-          category: newEv.category,
-          startDate: newEv.startDate,
-          endDate: newEv.endDate,
-          details: "New event to be created",
-        });
-      } else {
-        const matchEnd = formatDateStr(match.endDate);
-        const matchCat = match.category;
-        const matchRem = match.remarks || "";
-
-        const hasChanged =
-          matchEnd !== (newEv.endDate || "") ||
-          matchCat !== newEv.category ||
-          matchRem !== (newEv.remarks || "") ||
-          (match.weekNumber ?? null) !== (newEv.weekNumber ?? null) ||
-          !!match.isHoliday !== newEv.isHoliday;
-
-        if (hasChanged) {
-          updatedCount++;
-          diffs.push({
-            status: "UPDATED",
-            title: newEv.title,
-            category: newEv.category,
-            startDate: newEv.startDate,
-            endDate: newEv.endDate,
-            details: "Updated dates/category/remarks",
-          });
-        } else {
-          unchangedCount++;
-          diffs.push({
-            status: "UNCHANGED",
-            title: newEv.title,
-            category: newEv.category,
-            startDate: newEv.startDate,
-            endDate: newEv.endDate,
-            details: "Identical to existing event",
-          });
-        }
-      }
-    }
-
-    diffSummary = {
-      newCount,
-      updatedCount,
-      unchangedCount,
-      diffs,
-    };
-  }
-
-  const totalDataRows = rawRows.length - 1;
-  const isValid = errors.length === 0 && parsedEvents.length > 0;
-
   return {
-    isValid,
+    isValid: errors.length === 0 && parsedEvents.length > 0,
     totalRows: totalDataRows,
     validRowsCount: parsedEvents.length,
     errorCount: errors.length,
@@ -663,129 +534,51 @@ export function validateAndParseCsv(
     errors,
     warnings,
     parsedEvents,
-    diffSummary,
+    diffSummary: existingEvents ? buildDiffSummary(parsedEvents, existingEvents) : undefined,
   };
 }
 
-/**
- * Escapes a cell value for RFC 4180 CSV output.
- */
-function escapeCsvCell(value: any): string {
+function escapeCsvCell(value: unknown): string {
   if (value === null || value === undefined) return "";
   let str = String(value);
-  // Mitigate CSV Formula Injection (CWE-1236): Neutralize formula prefixes
+  // Mitigate CSV formula injection (CWE-1236) when opened in spreadsheets.
   if (/^[=+@\-\t\r]/.test(str)) {
     str = `'${str}`;
   }
-  if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
+  if (/[,"\n\r]/.test(str)) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
 }
 
-/**
- * Generates RFC 4180 CSV content from a list of events.
- */
-export function generateCsvFromEvents(
-  events: Array<{
-    title: string;
-    description?: string | null;
-    category: string;
-    startDate: Date | string;
-    endDate?: Date | string | null;
-    weekNumber?: number | null;
-    isHoliday?: boolean;
-    isAllDay?: boolean;
-    remarks?: string | null;
-  }>,
-): string {
-  const formatDateStr = (d: Date | string | null | undefined): string => {
-    if (!d) return "";
-    if (typeof d === "string") return d.split("T")[0];
-    return d.toISOString().split("T")[0];
-  };
+export function generateCsvFromEvents(events: ExistingCalendarEventSnapshot[]): string {
+  const lines = events.map((ev) =>
+    [
+      ev.title,
+      ev.description || "",
+      ev.category,
+      formatDateYmd(ev.startDate),
+      formatDateYmd(ev.endDate),
+      ev.weekNumber ?? "",
+      ev.isHoliday ? "true" : "false",
+      ev.isAllDay !== false ? "true" : "false",
+      ev.remarks || "",
+    ]
+      .map(escapeCsvCell)
+      .join(","),
+  );
 
-  const headerLine = CSV_CANONICAL_HEADERS.join(",");
-
-  const lines = events.map((ev) => {
-    const row = [
-      escapeCsvCell(ev.title),
-      escapeCsvCell(ev.description || ""),
-      escapeCsvCell(ev.category),
-      escapeCsvCell(formatDateStr(ev.startDate)),
-      escapeCsvCell(formatDateStr(ev.endDate)),
-      escapeCsvCell(ev.weekNumber ?? ""),
-      escapeCsvCell(ev.isHoliday ? "true" : "false"),
-      escapeCsvCell(ev.isAllDay !== false ? "true" : "false"),
-      escapeCsvCell(ev.remarks || ""),
-    ];
-    return row.join(",");
-  });
-
-  return [headerLine, ...lines].join("\r\n");
+  return [CSV_CANONICAL_HEADERS.join(","), ...lines].join("\r\n");
 }
 
-/**
- * Generates a clean CSV template with headers and helpful sample rows.
- */
 export function generateCsvTemplate(): string {
   const headerLine = CSV_CANONICAL_HEADERS.join(",");
   const sampleRows = [
-    [
-      "Classes will start",
-      "Classes will start from 22.08.2026 (Saturday)",
-      "CLASS",
-      "2026-08-22",
-      "",
-      "1",
-      "false",
-      "true",
-      "",
-    ].join(","),
-    [
-      "Sem. Registration Week",
-      "Semester Registration Week",
-      "REGISTRATION",
-      "2026-08-22",
-      "2026-08-28",
-      "1",
-      "false",
-      "true",
-      "",
-    ].join(","),
-    [
-      "Last Date for Semester Registration",
-      "Last Date for Semester Registration and Retake",
-      "DEADLINE",
-      "2026-09-03",
-      "",
-      "2",
-      "false",
-      "true",
-      "",
-    ].join(","),
-    [
-      "Mid-term Examination",
-      "Offline Mode",
-      "EXAM",
-      "2026-09-30",
-      "2026-10-15",
-      "8",
-      "false",
-      "true",
-      "Offline Mode",
-    ].join(","),
-    [
-      "National Holiday",
-      "University Closed",
-      "HOLIDAY",
-      "2026-10-21",
-      "",
-      "11",
-      "true",
-      "true",
-      "University Holiday",
-    ].join(","),
+    ["Classes will start", "Classes will start from 22.08.2026 (Saturday)", "CLASS", "2026-08-22", "", "1", "false", "true", ""].join(","),
+    ["Sem. Registration Week", "Semester Registration Week", "REGISTRATION", "2026-08-22", "2026-08-28", "1", "false", "true", ""].join(","),
+    ["Last Date for Semester Registration", "Last Date for Semester Registration and Retake", "DEADLINE", "2026-09-03", "", "2", "false", "true", ""].join(","),
+    ["Mid-term Examination", "Offline Mode", "EXAM", "2026-09-30", "2026-10-15", "8", "false", "true", "Offline Mode"].join(","),
+    ["National Holiday", "University Closed", "HOLIDAY", "2026-10-21", "", "11", "true", "true", "University Holiday"].join(","),
   ];
 
   return [headerLine, ...sampleRows].join("\r\n");

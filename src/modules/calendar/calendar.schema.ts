@@ -158,7 +158,12 @@ export const createCalendarBodySchema = z
     semester: z.enum(SMUCT_SEMESTERS, {
       message: "Semester must be one of: Summer, Winter, Spring, Fall",
     }),
-    academicYear: z.coerce.number().int().min(2000).max(2100).default(2026),
+    academicYear: z.coerce
+      .number()
+      .int()
+      .min(2000)
+      .max(2100)
+      .default(() => new Date().getFullYear()),
     targetFaculties: z
       .array(nonEmptyAudienceItemSchema)
       .max(20, "Too many target faculties")

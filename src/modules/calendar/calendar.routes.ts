@@ -72,20 +72,8 @@ const calendarCsvLimiter = rateLimit({
   },
 });
 
-// ==========================================
-// CSV TEMPLATE & VALIDATION (Specific static paths first)
-// ==========================================
-
-// GET /api/calendars/template/csv - Download CSV Template
-router.get(
-  "/template/csv",
-  requireAuth,
-  requireAdmin,
-  calendarCsvLimiter,
-  getCsvTemplate,
-);
-
-// POST /api/calendars/validate-csv - Dry-run validate CSV content & generate diff
+// Static paths must precede `/:id` so Express does not treat path segments as UUID params.
+router.get("/template/csv", requireAuth, requireAdmin, calendarCsvLimiter, getCsvTemplate);
 router.post(
   "/validate-csv",
   requireAuth,
@@ -94,8 +82,6 @@ router.post(
   validateRequest(validateCsvSchema),
   validateCsv,
 );
-
-// GET /api/calendars/admin/all - Fetch all calendars for Admin Management
 router.get(
   "/admin/all",
   requireAuth,
@@ -105,14 +91,7 @@ router.get(
   getAdminCalendars,
 );
 
-// ==========================================
-// STUDENT / TEACHER ACCESSIBLE ENDPOINTS
-// ==========================================
-
-// GET /api/calendars/current - Fetch the current active published calendar
 router.get("/current", requireAuth, calendarReadLimiter, getCurrentCalendar);
-
-// GET /api/calendars/events/upcoming - Fetch upcoming events
 router.get(
   "/events/upcoming",
   requireAuth,
@@ -120,8 +99,6 @@ router.get(
   validateRequest(upcomingEventsQuerySchema),
   getUpcomingEvents,
 );
-
-// GET /api/calendars - Fetch relevant published calendars for logged-in user
 router.get(
   "/",
   requireAuth,
@@ -129,8 +106,6 @@ router.get(
   validateRequest(calendarListQuerySchema),
   getCalendars,
 );
-
-// GET /api/calendars/:id - Fetch single calendar details (Published for students, any for Admin)
 router.get(
   "/:id",
   requireAuth,
@@ -139,11 +114,6 @@ router.get(
   getCalendarById,
 );
 
-// ==========================================
-// ADMIN CALENDAR CRUD
-// ==========================================
-
-// POST /api/calendars - Create Calendar
 router.post(
   "/",
   requireAuth,
@@ -152,8 +122,6 @@ router.post(
   validateRequest(createCalendarSchema),
   createCalendar,
 );
-
-// PUT /api/calendars/:id - Update Calendar Metadata
 router.put(
   "/:id",
   requireAuth,
@@ -162,8 +130,6 @@ router.put(
   validateRequest(updateCalendarSchema),
   updateCalendar,
 );
-
-// PATCH /api/calendars/:id/status - Update Status (DRAFT, PUBLISHED, ARCHIVED)
 router.patch(
   "/:id/status",
   requireAuth,
@@ -172,8 +138,6 @@ router.patch(
   validateRequest(updateCalendarStatusSchema),
   updateCalendarStatus,
 );
-
-// POST /api/calendars/:id/duplicate - Duplicate calendar into Draft
 router.post(
   "/:id/duplicate",
   requireAuth,
@@ -182,8 +146,6 @@ router.post(
   validateRequest(duplicateCalendarSchema),
   duplicateCalendar,
 );
-
-// DELETE /api/calendars/:id - Delete Calendar
 router.delete(
   "/:id",
   requireAuth,
@@ -193,11 +155,6 @@ router.delete(
   deleteCalendar,
 );
 
-// ==========================================
-// ADMIN EVENT CRUD
-// ==========================================
-
-// POST /api/calendars/:id/events - Add single event
 router.post(
   "/:id/events",
   requireAuth,
@@ -206,8 +163,6 @@ router.post(
   validateRequest(createSingleEventSchema),
   addEvent,
 );
-
-// PUT /api/calendars/:id/events/:eventId - Update single event
 router.put(
   "/:id/events/:eventId",
   requireAuth,
@@ -216,8 +171,6 @@ router.put(
   validateRequest(updateSingleEventSchema),
   updateEvent,
 );
-
-// DELETE /api/calendars/:id/events/:eventId - Delete single event
 router.delete(
   "/:id/events/:eventId",
   requireAuth,
@@ -227,11 +180,6 @@ router.delete(
   deleteEvent,
 );
 
-// ==========================================
-// ADMIN CSV IMPORT / EXPORT
-// ==========================================
-
-// POST /api/calendars/:id/import-csv - Commit CSV import into calendar
 router.post(
   "/:id/import-csv",
   requireAuth,
@@ -240,8 +188,6 @@ router.post(
   validateRequest(importCsvSchema),
   importCsv,
 );
-
-// GET /api/calendars/:id/export-csv - Export calendar events to CSV
 router.get(
   "/:id/export-csv",
   requireAuth,

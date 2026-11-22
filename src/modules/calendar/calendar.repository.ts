@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma";
 import {
   CalendarStatus,
   EventCategory,
+  Prisma,
 } from "../../../generated/prisma/client";
 import {
   CreateCalendarPayload,
@@ -11,42 +12,33 @@ import {
 } from "./calendar.schema";
 import { CsvEventRow } from "./calendar.csv";
 
-/**
- * Helper to convert YYYY-MM-DD or string to UTC midnight Date
- */
 export function toUtcDate(dateStr: string | Date): Date {
   if (dateStr instanceof Date) return dateStr;
   const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (match) {
-    const year = parseInt(match[1], 10);
-    const month = parseInt(match[2], 10);
-    const day = parseInt(match[3], 10);
-    return new Date(Date.UTC(year, month - 1, day));
+    return new Date(
+      Date.UTC(Number.parseInt(match[1], 10), Number.parseInt(match[2], 10) - 1, Number.parseInt(match[3], 10)),
+    );
   }
   return new Date(dateStr);
 }
 
-export const findUserWithAcademicProfiles = async (userId: string) => {
-  return await prisma.user.findUnique({
+export const findUserWithAcademicProfiles = (userId: string) =>
+  prisma.user.findUnique({
     where: { id: userId },
     include: {
       studentProfile: true,
       teacherProfile: true,
     },
   });
-};
 
 export const findAllCalendarsAdmin = async (
-  statusFilter?: CalendarStatus,
-  pagination?: { page?: number; limit?: number },
+  statusFilter: CalendarStatus | undefined,
+  pagination: { page: number; limit: number },
 ) => {
-  const page = Math.max(1, Number(pagination?.page ?? 1));
-  const limit = Math.min(50, Math.max(1, Number(pagination?.limit ?? 25)));
+  const { page, limit } = pagination;
   const skip = (page - 1) * limit;
   const where = statusFilter ? { status: statusFilter } : undefined;
-  const isPaginated =
-    Boolean(pagination) &&
-    (pagination?.page !== undefined || pagination?.limit !== undefined);
 
   const [items, total, statusGroups] = await Promise.all([
     prisma.academicCalendar.findMany({
@@ -73,46 +65,40 @@ export const findAllCalendarsAdmin = async (
       take: limit,
     }),
     prisma.academicCalendar.count({ where }),
-    isPaginated
-      ? prisma.academicCalendar.groupBy({
-          by: ["status"],
-          _count: { _all: true },
-        })
-      : Promise.resolve([]),
+    prisma.academicCalendar.groupBy({
+      by: ["status"],
+      _count: { _all: true },
+    }),
   ]);
 
-  if (isPaginated) {
-    const counts = {
-      all: 0,
-      published: 0,
-      draft: 0,
-      archived: 0,
-    };
-    for (const group of statusGroups) {
-      const count = group._count._all;
-      if (group.status === CalendarStatus.PUBLISHED) counts.published = count;
-      else if (group.status === CalendarStatus.DRAFT) counts.draft = count;
-      else if (group.status === CalendarStatus.ARCHIVED) counts.archived = count;
-    }
-    counts.all = counts.published + counts.draft + counts.archived;
-
-    return {
-      items,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-        counts,
-      },
-    };
+  const counts = {
+    all: 0,
+    published: 0,
+    draft: 0,
+    archived: 0,
+  };
+  for (const group of statusGroups) {
+    const count = group._count._all;
+    if (group.status === CalendarStatus.PUBLISHED) counts.published = count;
+    else if (group.status === CalendarStatus.DRAFT) counts.draft = count;
+    else if (group.status === CalendarStatus.ARCHIVED) counts.archived = count;
   }
+  counts.all = counts.published + counts.draft + counts.archived;
 
-  return items;
+  return {
+    items,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      counts,
+    },
+  };
 };
 
-export const findCalendarById = async (id: string) => {
-  return await prisma.academicCalendar.findUnique({
+export const findCalendarById = (id: string) =>
+  prisma.academicCalendar.findUnique({
     where: { id },
     include: {
       events: {
@@ -120,17 +106,16 @@ export const findCalendarById = async (id: string) => {
       },
     },
   });
-};
 
-export const createAcademicCalendar = async (
+export const createAcademicCalendar = (
   data: CreateCalendarPayload,
   userId?: string,
-) => {
-  return await prisma.academicCalendar.create({
+) =>
+  prisma.academicCalendar.create({
     data: {
       title: data.title,
       semester: data.semester,
-      academicYear: data.academicYear || 2026,
+      academicYear: data.academicYear ?? new Date().getFullYear(),
       status: data.status || "DRAFT",
       isActive: true,
       targetFaculties: data.targetFaculties || [],
@@ -159,14 +144,13 @@ export const createAcademicCalendar = async (
       },
     },
   });
-};
 
-export const updateAcademicCalendar = async (
+export const updateAcademicCalendar = (
   id: string,
   data: UpdateCalendarPayload,
   userId?: string,
-) => {
-  return await prisma.academicCalendar.update({
+) =>
+  prisma.academicCalendar.update({
     where: { id },
     data: {
       ...(data.title !== undefined && { title: data.title }),
@@ -193,19 +177,17 @@ export const updateAcademicCalendar = async (
       },
     },
   });
-};
 
-export const updateCalendarStatus = async (
+export const updateCalendarStatus = (
   id: string,
   status: CalendarStatus,
   userId?: string,
-) => {
-  const isPublished = status === "PUBLISHED";
-  return await prisma.academicCalendar.update({
+) =>
+  prisma.academicCalendar.update({
     where: { id },
     data: {
       status,
-      ...(isPublished && { publishedAt: new Date() }),
+      ...(status === CalendarStatus.PUBLISHED && { publishedAt: new Date() }),
       updatedBy: userId || null,
     },
     include: {
@@ -214,19 +196,17 @@ export const updateCalendarStatus = async (
       },
     },
   });
-};
 
-export const deleteAcademicCalendar = async (id: string) => {
-  return await prisma.academicCalendar.delete({
+export const deleteAcademicCalendar = (id: string) =>
+  prisma.academicCalendar.delete({
     where: { id },
   });
-};
 
-export const createCalendarEvent = async (
+export const createCalendarEvent = (
   calendarId: string,
   event: CalendarEventInput,
-) => {
-  return await prisma.calendarEvent.create({
+) =>
+  prisma.calendarEvent.create({
     data: {
       calendarId,
       title: event.title,
@@ -240,13 +220,12 @@ export const createCalendarEvent = async (
       remarks: event.remarks || null,
     },
   });
-};
 
-export const updateCalendarEvent = async (
+export const updateCalendarEvent = (
   eventId: string,
   data: UpdateCalendarEventInput,
-) => {
-  return await prisma.calendarEvent.update({
+) =>
+  prisma.calendarEvent.update({
     where: { id: eventId },
     data: {
       ...(data.title !== undefined && { title: data.title }),
@@ -266,28 +245,22 @@ export const updateCalendarEvent = async (
       ...(data.remarks !== undefined && { remarks: data.remarks }),
     },
   });
-};
 
-export const deleteCalendarEvent = async (eventId: string) => {
-  return await prisma.calendarEvent.delete({
+export const deleteCalendarEvent = (eventId: string) =>
+  prisma.calendarEvent.delete({
     where: { id: eventId },
   });
-};
 
-export const findEventByIdAndCalendar = async (
-  eventId: string,
-  calendarId: string,
-) => {
-  return await prisma.calendarEvent.findFirst({
+export const findEventByIdAndCalendar = (eventId: string, calendarId: string) =>
+  prisma.calendarEvent.findFirst({
     where: {
       id: eventId,
       calendarId,
     },
   });
-};
 
-export const findAllPublishedCalendarsForAdmin = async (limit = 50) => {
-  return await prisma.academicCalendar.findMany({
+export const findAllPublishedCalendarsForAdmin = (limit = 50) =>
+  prisma.academicCalendar.findMany({
     where: {
       status: CalendarStatus.PUBLISHED,
       isActive: true,
@@ -300,16 +273,15 @@ export const findAllPublishedCalendarsForAdmin = async (limit = 50) => {
     orderBy: { createdAt: "desc" },
     take: Math.min(50, Math.max(1, limit)),
   });
-};
 
-export const findVisibleCalendarSummaries = async (
-  orConditions?: any[],
+export const findVisibleCalendarSummaries = (
+  orConditions?: Prisma.AcademicCalendarWhereInput[],
   isAdmin = false,
 ) => {
   if (!isAdmin && (!orConditions || orConditions.length === 0)) {
-    return [];
+    return Promise.resolve([]);
   }
-  return await prisma.academicCalendar.findMany({
+  return prisma.academicCalendar.findMany({
     where: {
       status: CalendarStatus.PUBLISHED,
       isActive: true,
@@ -322,19 +294,20 @@ export const findVisibleCalendarSummaries = async (
       targetFaculties: true,
       targetPrograms: true,
       targetBatch: true,
+      createdAt: true,
     },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
 };
 
-export const findUpcomingEventsForCalendars = async (
+export const findUpcomingEventsForCalendars = (
   calendarIds: string[],
   todayStart: Date,
   limit = 20,
 ) => {
-  if (calendarIds.length === 0) return [];
-  return await prisma.calendarEvent.findMany({
+  if (calendarIds.length === 0) return Promise.resolve([]);
+  return prisma.calendarEvent.findMany({
     where: {
       calendarId: { in: calendarIds },
       OR: [
@@ -347,21 +320,14 @@ export const findUpcomingEventsForCalendars = async (
   });
 };
 
-/**
- * Atomically replaces all events in a calendar using a database transaction.
- */
-export const replaceCalendarEventsTransaction = async (
+export const replaceCalendarEventsTransaction = (
   calendarId: string,
   events: CsvEventRow[],
   userId?: string,
-) => {
-  return await prisma.$transaction(async (tx) => {
-    // 1. Delete all existing events in this calendar
-    await tx.calendarEvent.deleteMany({
-      where: { calendarId },
-    });
+) =>
+  prisma.$transaction(async (tx) => {
+    await tx.calendarEvent.deleteMany({ where: { calendarId } });
 
-    // 2. Insert new validated events
     if (events.length > 0) {
       await tx.calendarEvent.createMany({
         data: events.map((ev) => ({
@@ -379,12 +345,9 @@ export const replaceCalendarEventsTransaction = async (
       });
     }
 
-    // 3. Touch calendar updated timestamp & user
-    return await tx.academicCalendar.update({
+    return tx.academicCalendar.update({
       where: { id: calendarId },
-      data: {
-        updatedBy: userId || null,
-      },
+      data: { updatedBy: userId || null },
       include: {
         events: {
           orderBy: { startDate: "asc" },
@@ -392,81 +355,15 @@ export const replaceCalendarEventsTransaction = async (
       },
     });
   });
-};
 
-/**
- * Finds published calendars filtered by user audience conditions.
- */
-export const findActiveCalendarsFiltered = async (
-  orConditions: any[],
-  pagination?: { page?: number; limit?: number },
+export const findActiveCalendarsFiltered = (
+  orConditions: Prisma.AcademicCalendarWhereInput[],
 ) => {
-  if (!orConditions || orConditions.length === 0) {
-    return pagination && (pagination.page !== undefined || pagination.limit !== undefined)
-      ? {
-          items: [],
-          pagination: {
-            page: Math.max(1, Number(pagination.page ?? 1)),
-            limit: Math.min(50, Math.max(1, Number(pagination.limit ?? 25))),
-            total: 0,
-            totalPages: 0,
-          },
-        }
-      : [];
+  if (orConditions.length === 0) {
+    return Promise.resolve([]);
   }
 
-  const page = Math.max(1, Number(pagination?.page ?? 1));
-  const limit = Math.min(50, Math.max(1, Number(pagination?.limit ?? 25)));
-  const skip = (page - 1) * limit;
-
-  const [items, total] = await Promise.all([
-    prisma.academicCalendar.findMany({
-      where: {
-        status: "PUBLISHED",
-        isActive: true,
-        OR: orConditions,
-      },
-      include: {
-        events: {
-          orderBy: { startDate: "asc" },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: limit,
-    }),
-    prisma.academicCalendar.count({
-      where: {
-        status: "PUBLISHED",
-        isActive: true,
-        OR: orConditions,
-      },
-    }),
-  ]);
-
-  if (pagination && (pagination.page !== undefined || pagination.limit !== undefined)) {
-    return {
-      items,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
-  return items;
-};
-
-/**
- * Finds the latest published calendar for a user audience.
- */
-export const findCurrentPublishedCalendar = async (orConditions: any[]) => {
-  if (!orConditions || orConditions.length === 0) {
-    return null;
-  }
-  return await prisma.academicCalendar.findFirst({
+  return prisma.academicCalendar.findMany({
     where: {
       status: "PUBLISHED",
       isActive: true,
@@ -478,30 +375,29 @@ export const findCurrentPublishedCalendar = async (orConditions: any[]) => {
       },
     },
     orderBy: { createdAt: "desc" },
+    take: 50,
   });
 };
 
 /**
- * Duplicates an existing academic calendar into a new DRAFT calendar.
+ * Clamps cloned calendar title within the 200-char Zod bound.
  */
+export function formatClonedCalendarTitle(originalTitle: string): string {
+  const copySuffix = " (Copy)";
+  const maxBaseLen = 200 - copySuffix.length;
+  return `${originalTitle.slice(0, maxBaseLen).trimEnd()}${copySuffix}`;
+}
+
 export const duplicateAcademicCalendar = async (
   calendarId: string,
   userId?: string,
 ) => {
-  const original = await prisma.academicCalendar.findUnique({
-    where: { id: calendarId },
-    include: {
-      events: {
-        orderBy: { startDate: "asc" },
-      },
-    },
-  });
-
+  const original = await findCalendarById(calendarId);
   if (!original) return null;
 
-  return await prisma.academicCalendar.create({
+  return prisma.academicCalendar.create({
     data: {
-      title: `${original.title} (Copy)`,
+      title: formatClonedCalendarTitle(original.title),
       semester: original.semester,
       academicYear: original.academicYear,
       status: "DRAFT",

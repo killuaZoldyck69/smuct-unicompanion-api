@@ -1,11 +1,8 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../../utils/catchAsync";
 import * as calendarService from "./calendar.service";
+import { generateCsvTemplate } from "./calendar.csv";
 import { CalendarStatus } from "../../../generated/prisma/client";
-
-// ==========================================
-// STUDENT & PUBLIC ENDPOINTS
-// ==========================================
 
 export const getCalendars = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user.id;
@@ -19,16 +16,16 @@ export const getCalendars = catchAsync(async (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     message: "Relevant academic calendars retrieved successfully.",
-    data: result.items ?? [],
+    data: result.items,
     ...(result.pagination ? { pagination: result.pagination } : {}),
   });
 });
 
 export const getCurrentCalendar = catchAsync(
   async (req: Request, res: Response) => {
-    const userId = req.user.id;
-    const calendar =
-      await calendarService.getCurrentPublishedCalendarService(userId);
+    const calendar = await calendarService.getCurrentPublishedCalendarService(
+      req.user.id,
+    );
 
     res.status(200).json({
       success: true,
@@ -42,11 +39,10 @@ export const getCurrentCalendar = catchAsync(
 
 export const getUpcomingEvents = catchAsync(
   async (req: Request, res: Response) => {
-    const userId = req.user.id;
     const limit =
       req.query.limit !== undefined ? Number(req.query.limit) : undefined;
     const events = await calendarService.getUpcomingEventsService(
-      userId,
+      req.user.id,
       limit,
     );
 
@@ -60,12 +56,9 @@ export const getUpcomingEvents = catchAsync(
 
 export const getCalendarById = catchAsync(
   async (req: Request, res: Response) => {
-    const calendarId = req.params.id as string;
-    const user = req.user;
-
     const calendar = await calendarService.getCalendarByIdService(
-      calendarId,
-      user,
+      req.params.id as string,
+      req.user,
     );
 
     res.status(200).json({
@@ -75,10 +68,6 @@ export const getCalendarById = catchAsync(
     });
   },
 );
-
-// ==========================================
-// ADMIN MANAGEMENT ENDPOINTS
-// ==========================================
 
 export const getAdminCalendars = catchAsync(
   async (req: Request, res: Response) => {
@@ -93,18 +82,17 @@ export const getAdminCalendars = catchAsync(
     res.status(200).json({
       success: true,
       message: "All academic calendars retrieved successfully.",
-      data: result.items ?? [],
-      ...(result.pagination ? { pagination: result.pagination } : {}),
+      data: result.items,
+      pagination: result.pagination,
     });
   },
 );
 
 export const createCalendar = catchAsync(
   async (req: Request, res: Response) => {
-    const userId = req.user.id;
     const newCalendar = await calendarService.createCalendarService(
       req.body,
-      userId,
+      req.user.id,
     );
 
     res.status(201).json({
@@ -117,13 +105,10 @@ export const createCalendar = catchAsync(
 
 export const updateCalendar = catchAsync(
   async (req: Request, res: Response) => {
-    const calendarId = req.params.id as string;
-    const userId = req.user.id;
-
     const updated = await calendarService.updateCalendarService(
-      calendarId,
+      req.params.id as string,
       req.body,
-      userId,
+      req.user.id,
     );
 
     res.status(200).json({
@@ -136,14 +121,11 @@ export const updateCalendar = catchAsync(
 
 export const updateCalendarStatus = catchAsync(
   async (req: Request, res: Response) => {
-    const calendarId = req.params.id as string;
     const status = req.body.status as CalendarStatus;
-    const userId = req.user.id;
-
     const updated = await calendarService.updateCalendarStatusService(
-      calendarId,
+      req.params.id as string,
       status,
-      userId,
+      req.user.id,
     );
 
     res.status(200).json({
@@ -156,12 +138,9 @@ export const updateCalendarStatus = catchAsync(
 
 export const duplicateCalendar = catchAsync(
   async (req: Request, res: Response) => {
-    const calendarId = req.params.id as string;
-    const userId = req.user.id;
-
     const duplicated = await calendarService.duplicateCalendarService(
-      calendarId,
-      userId,
+      req.params.id as string,
+      req.user.id,
     );
 
     res.status(201).json({
@@ -174,8 +153,7 @@ export const duplicateCalendar = catchAsync(
 
 export const deleteCalendar = catchAsync(
   async (req: Request, res: Response) => {
-    const calendarId = req.params.id as string;
-    await calendarService.deleteCalendarService(calendarId);
+    await calendarService.deleteCalendarService(req.params.id as string);
 
     res.status(200).json({
       success: true,
@@ -185,8 +163,10 @@ export const deleteCalendar = catchAsync(
 );
 
 export const addEvent = catchAsync(async (req: Request, res: Response) => {
-  const calendarId = req.params.id as string;
-  const event = await calendarService.addEventService(calendarId, req.body);
+  const event = await calendarService.addEventService(
+    req.params.id as string,
+    req.body,
+  );
 
   res.status(201).json({
     success: true,
@@ -196,12 +176,9 @@ export const addEvent = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const updateEvent = catchAsync(async (req: Request, res: Response) => {
-  const calendarId = req.params.id as string;
-  const eventId = req.params.eventId as string;
-
   const updated = await calendarService.updateEventService(
-    calendarId,
-    eventId,
+    req.params.id as string,
+    req.params.eventId as string,
     req.body,
   );
 
@@ -213,20 +190,16 @@ export const updateEvent = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const deleteEvent = catchAsync(async (req: Request, res: Response) => {
-  const calendarId = req.params.id as string;
-  const eventId = req.params.eventId as string;
-
-  await calendarService.deleteEventService(calendarId, eventId);
+  await calendarService.deleteEventService(
+    req.params.id as string,
+    req.params.eventId as string,
+  );
 
   res.status(200).json({
     success: true,
     message: "Event deleted successfully.",
   });
 });
-
-// ==========================================
-// CSV IMPORT / EXPORT / TEMPLATE
-// ==========================================
 
 export const validateCsv = catchAsync(async (req: Request, res: Response) => {
   const { csvContent, calendarId } = req.body;
@@ -245,14 +218,10 @@ export const validateCsv = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const importCsv = catchAsync(async (req: Request, res: Response) => {
-  const calendarId = req.params.id as string;
-  const { csvContent } = req.body;
-  const userId = req.user.id;
-
   const result = await calendarService.importCsvService(
-    calendarId,
-    csvContent,
-    userId,
+    req.params.id as string,
+    req.body.csvContent,
+    req.user.id,
   );
 
   res.status(200).json({
@@ -276,7 +245,7 @@ export const exportCsv = catchAsync(async (req: Request, res: Response) => {
 
 export const getCsvTemplate = catchAsync(
   async (_req: Request, res: Response) => {
-    const templateData = calendarService.getCsvTemplateService();
+    const templateData = generateCsvTemplate();
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader(

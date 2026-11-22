@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   parseCsvTokens,
   validateIsoDateString,
@@ -12,7 +15,9 @@ import {
   isCalendarVisibleToUser,
   expandProgramAliases,
   expandFacultyAliases,
+  getDhakaTodayStartUtc,
 } from "../calendar.service";
+import { formatClonedCalendarTitle } from "../calendar.repository";
 import {
   calendarIdParamSchema,
   calendarEventParamSchema,
@@ -434,7 +439,64 @@ Mid-term Examination,Offline Mode,EXAM,2026-09-30,2026-10-15,8,false,true,Offlin
     "413 response must return safe normalized message",
   );
 
-  console.log("\n✅ All 16 Calendar & CSV Unit Tests Passed Successfully!\n");
+  // 17. Test Production-Readiness Clone Title Clamping & Dhaka Midnight Cutoff
+  console.log("  [17/17] Testing Cloned Title Clamping & Asia/Dhaka Upcoming Cutoff...");
+  const longTitle = "A".repeat(200);
+  const clampedCloneTitle = formatClonedCalendarTitle(longTitle);
+  assert(
+    clampedCloneTitle.length <= 200 && clampedCloneTitle.endsWith(" (Copy)"),
+    "formatClonedCalendarTitle must clamp titles to <= 200 chars while keeping suffix",
+  );
+  assertEquals(
+    getDhakaTodayStartUtc(Date.UTC(2026, 7, 21, 19, 0, 0)).toISOString(),
+    "2026-08-22T00:00:00.000Z",
+    "01:00 BST (19:00 UTC prev day) must resolve to 2026-08-22 UTC midnight",
+  );
+  assertEquals(
+    getDhakaTodayStartUtc(Date.UTC(2026, 7, 21, 17, 59, 59)).toISOString(),
+    "2026-08-21T00:00:00.000Z",
+    "23:59 BST (17:59 UTC) must resolve to 2026-08-21 UTC midnight",
+  );
+
+  // 18. Test Code-Quality Refactors (Single Error on Blank startDate, Dynamic Year, Zero `any`)
+  console.log("  [18/18] Testing CSV Blank-Date Single Error, Dynamic Year Default & Strict Typing...");
+  const blankStartResult = validateAndParseCsv(
+    `title,description,category,startDate,endDate,weekNumber,isHoliday,isAllDay,remarks\nOrientation,,CLASS,,,1,false,true,`,
+  );
+  const startDateRow2Errors = blankStartResult.errors.filter(
+    (e) => e.rowNumber === 2 && e.field === "startDate",
+  );
+  assertEquals(
+    startDateRow2Errors.length,
+    1,
+    "Blank startDate must report exactly one error per row",
+  );
+
+  const parsedDefaultYear = createCalendarBodySchema.parse({
+    title: "Dynamic Semester",
+    semester: "Spring",
+  });
+  assertEquals(
+    parsedDefaultYear.academicYear,
+    new Date().getFullYear(),
+    "createCalendarBodySchema must default academicYear to the current year",
+  );
+
+  const calendarDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  for (const filename of ["calendar.service.ts", "calendar.repository.ts", "calendar.csv.ts"]) {
+    const src = fs.readFileSync(path.join(calendarDir, filename), "utf8");
+    assert(
+      !/: any\b|any\[\]/.test(src),
+      `${filename} must not contain loose any annotations`,
+    );
+  }
+  const repoSrc = fs.readFileSync(path.join(calendarDir, "calendar.repository.ts"), "utf8");
+  assert(
+    !repoSrc.includes("findCurrentPublishedCalendar"),
+    "Dead export findCurrentPublishedCalendar must stay removed",
+  );
+
+  console.log("\n✅ All 18 Calendar & CSV Unit Tests Passed Successfully!\n");
 }
 
 if (process.argv[1]?.includes("calendar.test.ts")) {
