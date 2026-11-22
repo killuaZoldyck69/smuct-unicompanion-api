@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import express, { Application, Request, Response } from "express";
 import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
@@ -26,12 +27,62 @@ import { notificationRoutes } from "./modules/notification/notification.routes";
 
 import { envConfig } from "./config/env";
 import { prisma } from "./lib/prisma";
+import { runAcademicReminderPassLocked } from "./services/academic-reminder.service";
 import {
   globalLimiter,
   authLimiter,
   authActionLimiter,
   otpEmailLimiter,
 } from "./middleware/rateLimit.middleware";
+
+function timingSafeSecretEqual(provided: string, expected: string): boolean {
+  const providedHash = crypto.createHash("sha256").update(provided).digest();
+  const expectedHash = crypto.createHash("sha256").update(expected).digest();
+  return crypto.timingSafeEqual(providedHash, expectedHash);
+}
+
+export const createAcademicReminderCronHandler = (
+  runPass: () => Promise<{ ran: boolean; skipped: boolean }>,
+  getSecret: () => string | undefined,
+) => {
+  return async (req: Request, res: Response): Promise<void> => {
+    const secret = getSecret();
+    if (!secret) {
+      res.status(503).json({
+        success: false,
+        message: "Cron secret not configured.",
+      });
+      return;
+    }
+
+    const authHeader =
+      typeof req.headers.authorization === "string"
+        ? req.headers.authorization
+        : "";
+    const bearerToken = authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7).trim()
+      : "";
+    const headerSecret =
+      typeof req.headers["x-cron-secret"] === "string"
+        ? req.headers["x-cron-secret"].trim()
+        : "";
+    const provided = bearerToken || headerSecret;
+
+    if (!provided || !timingSafeSecretEqual(provided, secret)) {
+      res.status(401).json({
+        success: false,
+        message: "Unauthorized cron trigger.",
+      });
+      return;
+    }
+
+    const result = await runPass();
+    res.status(200).json({
+      success: true,
+      ...result,
+    });
+  };
+};
 
 export const createReadinessHandler = (
   checkDb: () => Promise<unknown>,
@@ -147,6 +198,14 @@ app.get("/health", (req: Request, res: Response) => {
 app.get(
   "/health/ready",
   createReadinessHandler(() => prisma.$queryRaw`SELECT 1`),
+);
+
+app.post(
+  "/api/internal/cron/reminders",
+  createAcademicReminderCronHandler(
+    runAcademicReminderPassLocked,
+    () => envConfig.CRON_SECRET,
+  ),
 );
 
 app.use("/api/students", studentRoutes);

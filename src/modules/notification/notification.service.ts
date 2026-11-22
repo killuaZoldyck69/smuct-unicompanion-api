@@ -55,10 +55,23 @@ export const createNotificationsForRecipients = async (
   const uniqueNotifications = [...notificationsByRecipientAndKey.values()];
   if (!uniqueNotifications.length) return;
 
+  let insertedNotifications: Array<{
+    userId: string;
+    title: string;
+    body: string;
+    route: string;
+  }> = [];
+
   try {
-    await prisma.notification.createMany({
+    insertedNotifications = await prisma.notification.createManyAndReturn({
       data: uniqueNotifications,
       skipDuplicates: true,
+      select: {
+        userId: true,
+        title: true,
+        body: true,
+        route: true,
+      },
     });
   } catch (error) {
     // Notifications must not turn a successful feature action into an API error.
@@ -69,7 +82,10 @@ export const createNotificationsForRecipients = async (
         errorType: error instanceof Error ? error.name : "UnknownError",
       }),
     );
+    return;
   }
+
+  if (!insertedNotifications.length) return;
 
   // Dispatch push notifications to registered devices (non-blocking)
   try {
@@ -78,7 +94,7 @@ export const createNotificationsForRecipients = async (
       { userIds: string[]; title: string; body: string; route: string }
     >();
 
-    for (const notif of uniqueNotifications) {
+    for (const notif of insertedNotifications) {
       const key = `${notif.title}\u0000${notif.body}\u0000${notif.route}`;
       const existing = batches.get(key);
       if (existing) {
@@ -211,7 +227,6 @@ const attachCourseHubContext = async <
 >(notifications: T[]) => {
   const hubNotificationTypes = new Set([
     "HUB_ANNOUNCEMENT",
-    "CLASS_NOTICE",
     "ASSESSMENT",
     "GRADE",
     "MATERIAL",

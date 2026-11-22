@@ -85,7 +85,7 @@ export interface FindAvailableTeachersQuery {
 export const findAvailableTeachers = async (
   query?: FindAvailableTeachersQuery,
 ) => {
-  const where: any = { role: "TEACHER" };
+  const where: Prisma.UserWhereInput = { role: "TEACHER" };
 
   if (query?.department?.trim()) {
     where.teacherProfile = {
@@ -183,28 +183,28 @@ export const findAvailableTeachers = async (
   };
 };
 
-export const findUserWithStudentProfile = async (userId: string) => {
-  return await prisma.user.findUnique({
+export const findUserWithStudentProfile = (userId: string) =>
+  prisma.user.findUnique({
     where: { id: userId },
     include: { studentProfile: true },
   });
-};
 
-export const createHubWithMembers = async (
+export const createHubWithMembers = (
   userId: string,
   data: CreateHubPayload,
   isTeacher: boolean,
   isCR: boolean,
   joinCode: string,
-) => {
-  return await prisma.$transaction(async (tx) => {
+) =>
+  prisma.$transaction(async (tx) => {
     const hub = await tx.courseHub.create({
       data: {
         courseCode: data.courseCode,
         courseName: data.courseName,
         credit: data.credit,
         termOffer: data.termOffer,
-        weeklyClassSchedule: data.weeklyClassSchedule as any,
+        weeklyClassSchedule:
+          data.weeklyClassSchedule as unknown as Prisma.InputJsonValue,
         department: data.department,
         batch: data.batch,
         section: data.section || null,
@@ -213,12 +213,10 @@ export const createHubWithMembers = async (
       },
     });
 
-    // Add Creator to the Hub
     await tx.hubMember.create({
       data: { userId, hubId: hub.id, role: isTeacher ? "TEACHER" : "CR" },
     });
 
-    // Automatically add the assigned teacher if a CR created it
     if (isCR && data.teacherId) {
       await tx.hubMember.create({
         data: { userId: data.teacherId, hubId: hub.id, role: "TEACHER" },
@@ -226,38 +224,67 @@ export const createHubWithMembers = async (
     }
     return hub;
   });
-};
 
-export const findHubByJoinCode = async (joinCode: string) => {
-  return await prisma.courseHub.findUnique({ where: { joinCode } });
-};
+export const findHubByJoinCode = (joinCode: string) =>
+  prisma.courseHub.findUnique({ where: { joinCode } });
 
-export const createHubMember = async (
+export const createHubMember = (
   userId: string,
   hubId: string,
   role: HubRole = "STUDENT",
-) => {
-  return await prisma.hubMember.create({
+) =>
+  prisma.hubMember.create({
     data: { userId, hubId, role },
     include: { hub: true },
   });
-};
 
-const ONE_DAY_PLACEHOLDER = ONE_DAY_MS;
-void ONE_DAY_PLACEHOLDER;
-
-export const getActiveNoticeCutoff = (now: Date = new Date()): Date => {
+const getActiveNoticeWindow = (now: Date = new Date()) => {
   const dhakaToday = getDhakaDayBoundsUtc(now);
   const startMs = dhakaToday ? dhakaToday.startUtc.getTime() : now.getTime();
-  return new Date(startMs - ONE_DAY_MS);
+  return {
+    cutoff: new Date(startMs - ONE_DAY_MS),
+    horizon: new Date(
+      startMs + (CLASS_NOTICE_LIMITS.advanceWindowDays + 1) * ONE_DAY_MS,
+    ),
+  };
 };
 
-export const getActiveNoticeHorizon = (now: Date = new Date()): Date => {
-  const dhakaToday = getDhakaDayBoundsUtc(now);
-  const startMs = dhakaToday ? dhakaToday.startUtc.getTime() : now.getTime();
-  return new Date(
-    startMs + (CLASS_NOTICE_LIMITS.advanceWindowDays + 1) * ONE_DAY_MS,
-  );
+export const getActiveNoticeCutoff = (now: Date = new Date()): Date =>
+  getActiveNoticeWindow(now).cutoff;
+
+export const getActiveNoticeHorizon = (now: Date = new Date()): Date =>
+  getActiveNoticeWindow(now).horizon;
+
+const buildActiveClassNoticesQuery = (now: Date = new Date()) => {
+  const { cutoff, horizon } = getActiveNoticeWindow(now);
+  return {
+    where: {
+      isActive: true,
+      effectiveDate: {
+        gte: cutoff,
+        lte: horizon,
+      },
+    },
+    select: {
+      id: true,
+      hubId: true,
+      type: true,
+      message: true,
+      targetDay: true,
+      targetStartTime: true,
+      effectiveDate: true,
+      newRoom: true,
+      newTime: true,
+      meetUrl: true,
+      isActive: true,
+      createdAt: true,
+      author: {
+        select: { id: true, name: true, image: true, role: true },
+      },
+    },
+    orderBy: { createdAt: "desc" as const },
+    take: 30,
+  };
 };
 
 /**
@@ -269,9 +296,6 @@ export const buildMyHubSelect = (
   view: "default" | "schedule" = "default",
   now: Date = new Date(),
 ) => {
-  const noticeCutoff = getActiveNoticeCutoff(now);
-  const noticeHorizon = getActiveNoticeHorizon(now);
-
   const baseSelect = {
     id: true,
     courseCode: true,
@@ -295,33 +319,7 @@ export const buildMyHubSelect = (
       },
       take: 1,
     },
-    classNotices: {
-      where: {
-        isActive: true,
-        effectiveDate: {
-          gte: noticeCutoff,
-          lte: noticeHorizon,
-        },
-      },
-      select: {
-        id: true,
-        hubId: true,
-        type: true,
-        message: true,
-        targetDay: true,
-        effectiveDate: true,
-        newRoom: true,
-        newTime: true,
-        meetUrl: true,
-        isActive: true,
-        createdAt: true,
-        author: {
-          select: { id: true, name: true, image: true, role: true },
-        },
-      },
-      orderBy: { createdAt: "desc" as const },
-      take: 30,
-    },
+    classNotices: buildActiveClassNoticesQuery(now),
   };
 
   if (view === "schedule") {
@@ -344,13 +342,13 @@ export const buildMyHubSelect = (
   };
 };
 
-export const findMyHubMemberships = async (
+export const findMyHubMemberships = (
   userId: string,
   view: "default" | "schedule" = "default",
 ) => {
   const hubSelect = buildMyHubSelect(view);
 
-  return await prisma.hubMember.findMany({
+  return prisma.hubMember.findMany({
     where: {
       userId,
       isActive: true,
@@ -389,7 +387,7 @@ export const findAllHubsForAdmin = async (
     id: `admin-view-${hub.id}`,
     userId: adminUserId,
     hubId: hub.id,
-    role: "ADMIN" as any,
+    role: "ADMIN" as HubRole | "ADMIN",
     isActive: true,
     joinedAt: hub.createdAt,
     hub,
@@ -405,15 +403,7 @@ export const findHubWithMembersAndDetails = async (hubId: string) => {
           where: { role: { in: [HubRole.TEACHER, HubRole.CR, HubRole.STUDENT] } },
           include: { user: { select: hubMemberUserSelect } },
         },
-        classNotices: {
-          where: { isActive: true },
-          include: {
-            author: {
-              select: { id: true, name: true, image: true, role: true },
-            },
-          },
-          orderBy: { createdAt: "desc" },
-        },
+        classNotices: buildActiveClassNoticesQuery(),
       },
     }),
     prisma.$queryRaw<
@@ -450,34 +440,25 @@ export const findHubWithMembersAndDetails = async (hubId: string) => {
   return { ...hub, members: [...hub.members, ...migratedMembers] };
 };
 
-export const findHubMemberById = async (memberId: string) => {
-  return await prisma.hubMember.findUnique({
+export const findHubMemberById = (memberId: string) =>
+  prisma.hubMember.findUnique({
     where: { id: memberId },
   });
-};
 
-export const updateHubMemberRole = async (
-  memberId: string,
-  role: HubRole,
-) => {
-  return await prisma.hubMember.update({
+export const updateHubMemberRole = (memberId: string, role: HubRole) =>
+  prisma.hubMember.update({
     where: { id: memberId },
     data: { role },
   });
-};
 
-export const deleteHubMemberById = async (memberId: string) => {
-  return await prisma.hubMember.delete({
+export const deleteHubMemberById = (memberId: string) =>
+  prisma.hubMember.delete({
     where: { id: memberId },
   });
-};
 
-export const updateHub = async (
-  hubId: string,
-  data: UpdateHubPayload,
-) => {
+export const updateHub = (hubId: string, data: UpdateHubPayload) => {
   const { weeklyClassSchedule, termExams, ...rest } = data;
-  return await prisma.courseHub.update({
+  return prisma.courseHub.update({
     where: { id: hubId },
     data: {
       ...rest,
@@ -491,50 +472,43 @@ export const updateHub = async (
   });
 };
 
-export const updateHubArchiveStatus = async (
-  hubId: string,
-  isArchived: boolean,
-) => {
-  return await prisma.courseHub.update({
+export const updateHubArchiveStatus = (hubId: string, isArchived: boolean) =>
+  prisma.courseHub.update({
     where: { id: hubId },
     data: { isArchived },
   });
-};
 
-export const updateHubLiveClass = async (
+export const updateHubLiveClass = (
   hubId: string,
   isClassLive: boolean,
   meetUrl?: string | null,
-) => {
-  return await prisma.courseHub.update({
+) =>
+  prisma.courseHub.update({
     where: { id: hubId },
     data: {
       isClassLive,
       ...(meetUrl !== undefined && { meetUrl }),
     },
   });
-};
 
-export const deleteHubById = async (hubId: string) => {
-  return await prisma.courseHub.delete({
+export const deleteHubById = (hubId: string) =>
+  prisma.courseHub.delete({
     where: { id: hubId },
   });
-};
 
-export const findHubStatusById = async (hubId: string) => {
-  return await prisma.courseHub.findUnique({
+export const findHubStatusById = (hubId: string) =>
+  prisma.courseHub.findUnique({
     where: { id: hubId },
     select: { id: true, isArchived: true },
   });
-};
 
-export const replaceClassNoticeAtomic = async (
+export const replaceClassNoticeAtomic = (
   hubId: string,
   authorId: string,
   data: SanitizedClassNoticeData,
   dhakaBounds: DhakaDayBounds,
-) => {
-  return await prisma.$transaction(async (tx) => {
+) =>
+  prisma.$transaction(async (tx) => {
     const [lockedHub] = await tx.$queryRaw<
       Array<{ id: string; isArchived: boolean }>
     >`
@@ -558,6 +532,9 @@ export const replaceClassNoticeAtomic = async (
       where: {
         hubId,
         targetDay: { equals: data.targetDay, mode: "insensitive" },
+        ...(data.targetStartTime !== undefined
+          ? { targetStartTime: data.targetStartTime }
+          : {}),
         effectiveDate: {
           gte: dhakaBounds.startUtc,
           lte: dhakaBounds.endUtc,
@@ -567,13 +544,14 @@ export const replaceClassNoticeAtomic = async (
       data: { isActive: false },
     });
 
-    return await tx.classNotice.create({
+    return tx.classNotice.create({
       data: {
         hubId,
         authorId,
         type: data.type,
         message: data.message,
         targetDay: data.targetDay,
+        targetStartTime: data.targetStartTime ?? null,
         effectiveDate: dhakaBounds.canonicalDate,
         newRoom: data.newRoom,
         newTime: data.newTime,
@@ -586,13 +564,9 @@ export const replaceClassNoticeAtomic = async (
       },
     });
   });
-};
 
-export const deactivateClassNoticeInHub = async (
-  hubId: string,
-  noticeId: string,
-) => {
-  return await prisma.classNotice.updateMany({
+export const deactivateClassNoticeInHub = (hubId: string, noticeId: string) =>
+  prisma.classNotice.updateMany({
     where: {
       id: noticeId,
       hubId,
@@ -600,4 +574,3 @@ export const deactivateClassNoticeInHub = async (
     },
     data: { isActive: false },
   });
-};

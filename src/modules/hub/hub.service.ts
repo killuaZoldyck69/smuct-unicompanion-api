@@ -4,32 +4,46 @@ import * as hubRepository from "./hub.repository";
 import {
   CreateHubPayload,
   UpdateHubPayload,
-  UpdateMemberRolePayload,
   CreateClassNoticePayload,
 } from "./hub.schema";
 import {
+  formatDhakaNoticeDayPhrase,
   getDhakaDayBoundsUtc,
+  getDhakaWeekdayFromBounds,
   isEffectiveDateWithinAllowedWindow,
   resolveEffectiveHubRole,
   sanitizeClassNoticeFields,
 } from "./class-routine.domain";
 import { appCache } from "../../lib/cache";
 import { createHubNotifications } from "../notification/notification.service";
-import {
-  updateMemberRoleService as memberUpdateRoleService,
-  removeMemberService as memberRemoveService,
-} from "./members/members.service";
 
-// 🛡️ Centralized Authorization Helper
+export type AllowedHubRole = HubRole | "ADMIN";
+
+export interface VerifiedHubAccess {
+  userId: string;
+  hubId: string;
+  role: AllowedHubRole;
+}
+
+const assertActiveHub = async (hubId: string, archivedMessage: string) => {
+  const hub = await hubRepository.findHubStatusById(hubId);
+  if (!hub) {
+    throw new AppError("Course Hub not found.", 404);
+  }
+  if (hub.isArchived) {
+    throw new AppError(archivedMessage, 400);
+  }
+};
+
 export const verifyHubRole = async (
   userId: string,
   hubId: string,
-  allowedRoles: string[],
-) => {
+  allowedRoles: ReadonlyArray<AllowedHubRole>,
+): Promise<VerifiedHubAccess> => {
   const user = await hubRepository.findUserWithStudentProfile(userId);
   if (user?.role === "ADMIN") {
     if (allowedRoles.includes("ADMIN")) {
-      return { userId, hubId, role: "ADMIN" as any, joinedAt: new Date() };
+      return { userId, hubId, role: "ADMIN" };
     }
     throw new AppError(
       "Administrators have read-only audit access and cannot modify course hubs.",
@@ -45,7 +59,7 @@ export const verifyHubRole = async (
     );
   }
 
-  const effectiveRole = resolveEffectiveHubRole(member.role, user);
+  const effectiveRole = resolveEffectiveHubRole(member.role, user) as HubRole;
 
   if (!allowedRoles.includes(effectiveRole)) {
     throw new AppError(
@@ -53,22 +67,24 @@ export const verifyHubRole = async (
       403,
     );
   }
-  return { ...member, role: effectiveRole as HubRole };
+
+  return { userId, hubId, role: effectiveRole };
 };
 
-export const getUserHubRole = async (userId: string, hubId: string) => {
+export const getUserHubRole = async (
+  userId: string,
+  hubId: string,
+): Promise<AllowedHubRole | null> => {
   const user = await hubRepository.findUserWithStudentProfile(userId);
   if (user?.role === "ADMIN") return "ADMIN";
   const member = await hubRepository.findHubMember(userId, hubId);
   if (!member || !member.isActive) return null;
-  return resolveEffectiveHubRole(member.role, user);
+  return resolveEffectiveHubRole(member.role, user) as HubRole;
 };
 
-export const getAvailableTeachersService = async (
+export const getAvailableTeachersService = (
   query?: hubRepository.FindAvailableTeachersQuery,
-) => {
-  return await hubRepository.findAvailableTeachers(query);
-};
+) => hubRepository.findAvailableTeachers(query);
 
 const generateJoinCode = () =>
   Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -112,14 +128,12 @@ export const createHubService = async (
     );
   }
 
-  const joinCode = generateJoinCode();
-
   const created = await hubRepository.createHubWithMembers(
     userId,
     data,
     isTeacher,
     isCR,
-    joinCode,
+    generateJoinCode(),
   );
   invalidateHubCaches();
   return created;
@@ -161,7 +175,7 @@ export const getMyHubsService = async (
     if (view === "schedule") {
       return [];
     }
-    return await hubRepository.findAllHubsForAdmin(userId, view);
+    return hubRepository.findAllHubsForAdmin(userId, view);
   }
 
   const memberships = await hubRepository.findMyHubMemberships(userId, view);
@@ -171,8 +185,9 @@ export const getMyHubsService = async (
   }));
 };
 
-export const getHubDetailsService = async (hubId: string) => {
-  return await appCache.getOrSet(
+export const getHubDetailsService = async (userId: string, hubId: string) => {
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT", "ADMIN"]);
+  return appCache.getOrSet(
     `hub:${hubId}:details`,
     async () => {
       const hub = await hubRepository.findHubWithMembersAndDetails(hubId);
@@ -183,29 +198,13 @@ export const getHubDetailsService = async (hubId: string) => {
   );
 };
 
-export const updateMemberRoleService = async (
-  userId: string,
-  hubId: string,
-  memberId: string,
-  newRole: UpdateMemberRolePayload["role"],
-) => {
-  return await memberUpdateRoleService(userId, hubId, memberId, newRole);
-};
-
-export const removeMemberService = async (
-  userId: string,
-  hubId: string,
-  memberId: string,
-) => {
-  return await memberRemoveService(userId, hubId, memberId);
-};
-
 export const updateHubService = async (
   userId: string,
   hubId: string,
   data: UpdateHubPayload,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
+  await assertActiveHub(hubId, "Cannot update an archived course hub.");
   const updated = await hubRepository.updateHub(hubId, data);
   invalidateHubCaches(hubId);
   return updated;
@@ -229,6 +228,10 @@ export const toggleLiveClassService = async (
   meetUrl?: string | null,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
+  await assertActiveHub(
+    hubId,
+    "Cannot modify live status for an archived course hub.",
+  );
   const updated = await hubRepository.updateHubLiveClass(hubId, isClassLive, meetUrl);
   invalidateHubCaches(hubId);
   return updated;
@@ -259,7 +262,16 @@ export const createClassNoticeService = async (
     );
   }
 
-  const sanitized = sanitizeClassNoticeFields(data);
+  const effectiveWeekday = getDhakaWeekdayFromBounds(dhakaBounds);
+  if (effectiveWeekday !== data.targetDay) {
+    throw new AppError(
+      `Effective date falls on ${effectiveWeekday}, not ${data.targetDay}.`,
+      400,
+    );
+  }
+
+  const dayPhrase = formatDhakaNoticeDayPhrase(dhakaBounds, data.targetDay);
+  const sanitized = sanitizeClassNoticeFields(data, dayPhrase);
   const notice = await hubRepository.replaceClassNoticeAtomic(
     hubId,
     userId,
@@ -268,9 +280,14 @@ export const createClassNoticeService = async (
   );
   invalidateHubCaches(hubId);
 
+  const notificationTitle =
+    dayPhrase === "today"
+      ? "Class schedule update"
+      : `Class schedule update (${sanitized.targetDay})`;
+
   void createHubNotifications(hubId, userId, {
     type: "CLASS_NOTICE",
-    title: "Class schedule update",
+    title: notificationTitle,
     body: sanitized.message.slice(0, 180),
     route: "/(tabs)/my-schedule",
     dedupeKey: `class-notice:${notice.id}`,
@@ -295,17 +312,10 @@ export const deleteClassNoticeService = async (
   noticeId: string,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
-
-  const hub = await hubRepository.findHubStatusById(hubId);
-  if (!hub) {
-    throw new AppError("Course Hub not found.", 404);
-  }
-  if (hub.isArchived) {
-    throw new AppError(
-      "Cannot modify class notices for an archived course hub.",
-      400,
-    );
-  }
+  await assertActiveHub(
+    hubId,
+    "Cannot modify class notices for an archived course hub.",
+  );
 
   const result = await hubRepository.deactivateClassNoticeInHub(
     hubId,

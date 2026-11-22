@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { HUB_ROLE_VALUES } from "../../constants/enums";
 import {
   CLASS_NOTICE_LIMITS,
   CLASS_NOTICE_TYPES,
   normalizeClassNoticeTimeRange,
   normalizeSafeMeetUrl,
+  normalizeScheduleStartTime,
   normalizeWeekday,
   parseCalendarOrIsoDateToDhakaDay,
   parseTimeToMinutes,
@@ -91,13 +91,33 @@ export const joinHubSchema = z.object({
   }),
 });
 
-export const updateMemberRoleSchema = z.object({
-  body: z.object({
-    role: z.enum(HUB_ROLE_VALUES),
-  }),
-});
+const optionalSafeMeetUrlSchema = z
+  .string()
+  .trim()
+  .max(
+    CLASS_NOTICE_LIMITS.meetUrlMax,
+    `Meeting link must not exceed ${CLASS_NOTICE_LIMITS.meetUrlMax} characters`,
+  )
+  .nullable()
+  .optional()
+  .transform((val, ctx): string | null | undefined => {
+    if (val === undefined || val === null) return val;
+    if (val === "") return null;
+    const safe = normalizeSafeMeetUrl(val);
+    if (!safe) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Meeting URL must be a valid public http:// or https:// link.",
+      });
+      return z.NEVER;
+    }
+    return safe;
+  });
 
 export const updateHubSchema = z.object({
+  params: z.object({
+    id: z.string().uuid("Invalid course hub ID"),
+  }),
   body: z.object({
     courseCode: z.string().optional(),
     courseName: z.string().optional(),
@@ -127,15 +147,18 @@ export const updateHubSchema = z.object({
         }),
       )
       .optional(),
-    meetUrl: z.string().nullable().optional(),
+    meetUrl: optionalSafeMeetUrlSchema,
     isClassLive: z.boolean().optional(),
   }),
 });
 
 export const toggleLiveClassSchema = z.object({
+  params: z.object({
+    id: z.string().uuid("Invalid course hub ID"),
+  }),
   body: z.object({
     isClassLive: z.boolean(),
-    meetUrl: z.string().nullable().optional(),
+    meetUrl: optionalSafeMeetUrlSchema,
   }),
 });
 
@@ -168,6 +191,26 @@ export const createClassNoticeSchema = z.object({
         .optional()
         .default(""),
       targetDay: canonicalWeekdaySchema,
+      targetStartTime: z
+        .string()
+        .trim()
+        .max(
+          CLASS_NOTICE_LIMITS.targetStartTimeMax,
+          "Invalid target start time",
+        )
+        .optional()
+        .transform((val, ctx): string | undefined => {
+          if (!val) return undefined;
+          const normalized = normalizeScheduleStartTime(val);
+          if (!normalized) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Invalid target start time format.",
+            });
+            return z.NEVER;
+          }
+          return normalized;
+        }),
       effectiveDate: z
         .string()
         .trim()
@@ -250,9 +293,6 @@ export const deleteClassNoticeSchema = z.object({
 
 export type CreateHubPayload = z.infer<typeof createHubSchema>["body"];
 export type JoinHubPayload = z.infer<typeof joinHubSchema>["body"];
-export type UpdateMemberRolePayload = z.infer<
-  typeof updateMemberRoleSchema
->["body"];
 export type UpdateHubPayload = z.infer<typeof updateHubSchema>["body"];
 export type ToggleLiveClassPayload = z.infer<
   typeof toggleLiveClassSchema

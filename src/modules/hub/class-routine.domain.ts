@@ -24,6 +24,7 @@ export const CLASS_NOTICE_LIMITS = {
   messageMax: 500,
   roomMax: 60,
   timeMax: 60,
+  targetStartTimeMax: 20,
   meetUrlMax: 500,
   maxScheduleSlots: 21,
   advanceWindowDays: 7,
@@ -102,6 +103,43 @@ export function formatMinutes12h(minutes: number): string {
   const period = h24 >= 12 ? "PM" : "AM";
   const h12 = h24 % 12 || 12;
   return `${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+export function normalizeScheduleStartTime(raw: unknown): string | null {
+  const minutes = parseTimeToMinutes(raw);
+  return minutes === null ? null : formatMinutes12h(minutes);
+}
+
+export function findMatchingClassNotice<
+  T extends { targetDay: string; targetStartTime?: string | null },
+>(
+  notices: readonly T[],
+  slotDay: string,
+  slotStartTime?: string | null,
+): T | undefined {
+  const normalizedDay = normalizeWeekday(slotDay);
+  if (!normalizedDay) return undefined;
+
+  const dayNotices = notices.filter(
+    (n) => normalizeWeekday(n.targetDay) === normalizedDay,
+  );
+  if (dayNotices.length === 0) return undefined;
+
+  const normalizedSlotStart = normalizeScheduleStartTime(slotStartTime);
+  if (normalizedSlotStart) {
+    const exactMatch = dayNotices.find(
+      (n) => normalizeScheduleStartTime(n.targetStartTime) === normalizedSlotStart,
+    );
+    if (exactMatch) return exactMatch;
+  }
+
+  return dayNotices.find((n) => !n.targetStartTime?.trim());
+}
+
+export function parseNoticeStartMinutes(rawTime?: string | null): number | null {
+  if (!rawTime) return null;
+  const startSegment = rawTime.replace(/^Now\s*/i, "").trim().split(/\s*[–—-]\s*/)[0];
+  return parseTimeToMinutes(startSegment);
 }
 
 export function normalizeClassNoticeTimeRange(raw: string): string | null {
@@ -230,6 +268,35 @@ export function isEffectiveDateWithinAllowedWindow(
   return targetMs >= todayBounds.startUtc.getTime() && targetMs <= maxAllowedUtc;
 }
 
+export function getDhakaWeekdayFromBounds(
+  bounds: DhakaDayBounds,
+): CanonicalWeekday {
+  const utcDay = new Date(
+    Date.UTC(bounds.year, bounds.month - 1, bounds.day),
+  ).getUTCDay();
+  return CANONICAL_WEEKDAYS[utcDay];
+}
+
+export function formatDhakaNoticeDayPhrase(
+  bounds: DhakaDayBounds,
+  targetDay: CanonicalWeekday,
+  now: Date = new Date(),
+): string {
+  const todayBounds = getDhakaDayBoundsUtc(now);
+  if (
+    todayBounds &&
+    todayBounds.year === bounds.year &&
+    todayBounds.month === bounds.month &&
+    todayBounds.day === bounds.day
+  ) {
+    return "today";
+  }
+  const yyyy = String(bounds.year);
+  const mm = String(bounds.month).padStart(2, "0");
+  const dd = String(bounds.day).padStart(2, "0");
+  return `${targetDay} (${yyyy}-${mm}-${dd})`;
+}
+
 export function resolveEffectiveHubRole<T extends string>(
   memberRole: T,
   user?: {
@@ -252,47 +319,56 @@ export function resolveClassNoticeDefaultMessage(
   type: ClassNoticeKind,
   newRoom?: string,
   newTime?: string,
+  dayPhrase: string = "today",
 ): string {
   switch (type) {
     case "CANCELLED":
-      return "Class is cancelled for today.";
+      return `Class is cancelled for ${dayPhrase}.`;
     case "ROOM_CHANGE":
       return newRoom
-        ? `Class will be held in Room ${newRoom}.`
-        : "Classroom has been changed for today.";
+        ? `Class for ${dayPhrase} will be held in Room ${newRoom}.`
+        : `Classroom has been changed for ${dayPhrase}.`;
     case "ONLINE_CLASS":
-      return "Class will be held online today.";
+      return `Class will be held online for ${dayPhrase}.`;
     case "TIME_CHANGE":
       return newTime
-        ? `Class rescheduled to ${newTime}.`
-        : "Class time has been rescheduled.";
+        ? `Class for ${dayPhrase} rescheduled to ${newTime}.`
+        : `Class time for ${dayPhrase} has been rescheduled.`;
     default:
-      return "Class notice.";
+      return `Class notice for ${dayPhrase}.`;
   }
 }
 
 export interface SanitizedClassNoticeData {
   type: ClassNoticeKind;
   targetDay: CanonicalWeekday;
+  targetStartTime?: string;
   message: string;
   newRoom?: string;
   newTime?: string;
   meetUrl?: string;
 }
 
-export function sanitizeClassNoticeFields(input: {
-  type: ClassNoticeKind;
-  targetDay: string;
-  message?: string;
-  newRoom?: string;
-  newTime?: string;
-  meetUrl?: string;
-}): SanitizedClassNoticeData {
+export function sanitizeClassNoticeFields(
+  input: {
+    type: ClassNoticeKind;
+    targetDay: string;
+    targetStartTime?: string;
+    message?: string;
+    newRoom?: string;
+    newTime?: string;
+    meetUrl?: string;
+  },
+  dayPhrase: string = "today",
+): SanitizedClassNoticeData {
   const targetDay = normalizeWeekday(input.targetDay);
   if (!targetDay) {
     throw new Error(`Invalid target day: ${input.targetDay}`);
   }
 
+  const targetStartTime = input.targetStartTime
+    ? (normalizeScheduleStartTime(input.targetStartTime) ?? undefined)
+    : undefined;
   const newRoom =
     input.type === "ROOM_CHANGE" && input.newRoom?.trim()
       ? input.newRoom.trim()
@@ -310,11 +386,12 @@ export function sanitizeClassNoticeFields(input: {
   const message =
     trimmedMessage && trimmedMessage.length > 0
       ? trimmedMessage
-      : resolveClassNoticeDefaultMessage(input.type, newRoom, newTime);
+      : resolveClassNoticeDefaultMessage(input.type, newRoom, newTime, dayPhrase);
 
   return {
     type: input.type,
     targetDay,
+    targetStartTime,
     message,
     newRoom,
     newTime,

@@ -260,13 +260,14 @@ enum ClassNoticeType {
 }
 
 model ClassNotice {
-  id            String          @id @default(uuid())
-  hubId         String
-  authorId      String
-  type          ClassNoticeType
-  message       String
-  targetDay     String          // e.g. "Monday"
-  effectiveDate DateTime        // Specific date this notice applies to
+  id              String          @id @default(uuid())
+  hubId           String
+  authorId        String
+  type            ClassNoticeType
+  message         String
+  targetDay       String          // e.g. "Monday"
+  targetStartTime String?         // Optional canonical slot start time, e.g. "09:00 AM"
+  effectiveDate   DateTime        // Specific date this notice applies to
   newRoom       String?         // If ROOM_CHANGE
   newTime       String?         // If TIME_CHANGE
   meetUrl       String?         // If ONLINE_CLASS
