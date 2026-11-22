@@ -1,5 +1,9 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.middleware";
+import {
+  createUserKeyGenerator,
+  rateLimit,
+} from "../../middleware/rateLimit.middleware";
 import { validateRequest } from "../../middleware/validateRequest";
 import {
   createHubSchema,
@@ -7,7 +11,9 @@ import {
   archiveHubSchema,
   updateHubSchema,
   toggleLiveClassSchema,
+  getMyHubsQuerySchema,
   createClassNoticeSchema,
+  deleteClassNoticeSchema,
 } from "./hub.schema";
 import {
   createHub,
@@ -31,12 +37,28 @@ import { reviewRoutes } from "./reviews/reviews.routes";
 
 const router = Router();
 
+export const classNoticeWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  keyGenerator: createUserKeyGenerator("hub-class-notice"),
+  message: {
+    success: false,
+    message:
+      "Too many class notice updates. Please wait a few minutes before trying again.",
+  },
+});
+
 // --- Core Hub Routes ---
 router.post("/", requireAuth, validateRequest(createHubSchema), createHub);
 router.post("/join", requireAuth, validateRequest(joinHubSchema), joinHub);
 router.get("/teachers", requireAuth, getAvailableTeachers);
 router.get("/available-teachers", requireAuth, getAvailableTeachers);
-router.get("/my", requireAuth, getMyHubs);
+router.get(
+  "/my",
+  requireAuth,
+  validateRequest(getMyHubsQuerySchema),
+  getMyHubs,
+);
 router.get("/:id", requireAuth, getHubDetails);
 
 router.patch("/:id", requireAuth, validateRequest(updateHubSchema), updateHub);
@@ -59,12 +81,15 @@ router.patch(
 router.post(
   "/:id/class-notices",
   requireAuth,
+  classNoticeWriteLimiter,
   validateRequest(createClassNoticeSchema),
   createClassNotice,
 );
 router.delete(
   "/:id/class-notices/:noticeId",
   requireAuth,
+  classNoticeWriteLimiter,
+  validateRequest(deleteClassNoticeSchema),
   deleteClassNotice,
 );
 

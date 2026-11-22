@@ -1,7 +1,15 @@
 import { prisma } from "../../lib/prisma";
 import { HubRole } from "../../constants/enums";
 import { Prisma } from "../../../generated/prisma/client";
+import { AppError } from "../../utils/AppError";
 import { CreateHubPayload, UpdateHubPayload } from "./hub.schema";
+import {
+  CLASS_NOTICE_LIMITS,
+  DhakaDayBounds,
+  ONE_DAY_MS,
+  SanitizedClassNoticeData,
+  getDhakaDayBoundsUtc,
+} from "./class-routine.domain";
 
 const hubMemberUserSelect = {
   id: true,
@@ -235,10 +243,22 @@ export const createHubMember = async (
   });
 };
 
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const ONE_DAY_PLACEHOLDER = ONE_DAY_MS;
+void ONE_DAY_PLACEHOLDER;
 
-export const getActiveNoticeCutoff = (now: Date = new Date()): Date =>
-  new Date(now.getTime() - ONE_DAY_MS);
+export const getActiveNoticeCutoff = (now: Date = new Date()): Date => {
+  const dhakaToday = getDhakaDayBoundsUtc(now);
+  const startMs = dhakaToday ? dhakaToday.startUtc.getTime() : now.getTime();
+  return new Date(startMs - ONE_DAY_MS);
+};
+
+export const getActiveNoticeHorizon = (now: Date = new Date()): Date => {
+  const dhakaToday = getDhakaDayBoundsUtc(now);
+  const startMs = dhakaToday ? dhakaToday.startUtc.getTime() : now.getTime();
+  return new Date(
+    startMs + (CLASS_NOTICE_LIMITS.advanceWindowDays + 1) * ONE_DAY_MS,
+  );
+};
 
 /**
  * Shared CourseHub projection for /api/hubs/my.
@@ -250,6 +270,7 @@ export const buildMyHubSelect = (
   now: Date = new Date(),
 ) => {
   const noticeCutoff = getActiveNoticeCutoff(now);
+  const noticeHorizon = getActiveNoticeHorizon(now);
 
   const baseSelect = {
     id: true,
@@ -277,7 +298,10 @@ export const buildMyHubSelect = (
     classNotices: {
       where: {
         isActive: true,
-        effectiveDate: { gte: noticeCutoff },
+        effectiveDate: {
+          gte: noticeCutoff,
+          lte: noticeHorizon,
+        },
       },
       select: {
         id: true,
@@ -296,6 +320,7 @@ export const buildMyHubSelect = (
         },
       },
       orderBy: { createdAt: "desc" as const },
+      take: 30,
     },
   };
 
@@ -451,9 +476,18 @@ export const updateHub = async (
   hubId: string,
   data: UpdateHubPayload,
 ) => {
+  const { weeklyClassSchedule, termExams, ...rest } = data;
   return await prisma.courseHub.update({
     where: { id: hubId },
-    data,
+    data: {
+      ...rest,
+      ...(weeklyClassSchedule !== undefined && {
+        weeklyClassSchedule: weeklyClassSchedule as unknown as Prisma.InputJsonValue,
+      }),
+      ...(termExams !== undefined && {
+        termExams: termExams as unknown as Prisma.InputJsonValue,
+      }),
+    },
   });
 };
 
@@ -487,76 +521,83 @@ export const deleteHubById = async (hubId: string) => {
   });
 };
 
-export const createClassNotice = async (
+export const findHubStatusById = async (hubId: string) => {
+  return await prisma.courseHub.findUnique({
+    where: { id: hubId },
+    select: { id: true, isArchived: true },
+  });
+};
+
+export const replaceClassNoticeAtomic = async (
   hubId: string,
   authorId: string,
-  data: {
-    type: any;
-    message: string;
-    targetDay: string;
-    effectiveDate: Date;
-    newRoom?: string;
-    newTime?: string;
-    meetUrl?: string;
-  },
+  data: SanitizedClassNoticeData,
+  dhakaBounds: DhakaDayBounds,
 ) => {
-  return await prisma.classNotice.create({
-    data: {
-      hubId,
-      authorId,
-      type: data.type,
-      message: data.message,
-      targetDay: data.targetDay,
-      effectiveDate: data.effectiveDate,
-      newRoom: data.newRoom,
-      newTime: data.newTime,
-      meetUrl: data.meetUrl,
-    },
-    include: {
-      author: {
-        select: { id: true, name: true, image: true, role: true },
+  return await prisma.$transaction(async (tx) => {
+    const [lockedHub] = await tx.$queryRaw<
+      Array<{ id: string; isArchived: boolean }>
+    >`
+      SELECT id, "isArchived"
+      FROM "CourseHub"
+      WHERE id = ${hubId}
+      FOR UPDATE
+    `;
+
+    if (!lockedHub) {
+      throw new AppError("Course Hub not found.", 404);
+    }
+    if (lockedHub.isArchived) {
+      throw new AppError(
+        "Cannot publish class notices for an archived course hub.",
+        400,
+      );
+    }
+
+    await tx.classNotice.updateMany({
+      where: {
+        hubId,
+        targetDay: { equals: data.targetDay, mode: "insensitive" },
+        effectiveDate: {
+          gte: dhakaBounds.startUtc,
+          lte: dhakaBounds.endUtc,
+        },
+        isActive: true,
       },
-    },
+      data: { isActive: false },
+    });
+
+    return await tx.classNotice.create({
+      data: {
+        hubId,
+        authorId,
+        type: data.type,
+        message: data.message,
+        targetDay: data.targetDay,
+        effectiveDate: dhakaBounds.canonicalDate,
+        newRoom: data.newRoom,
+        newTime: data.newTime,
+        meetUrl: data.meetUrl,
+      },
+      include: {
+        author: {
+          select: { id: true, name: true, image: true, role: true },
+        },
+      },
+    });
   });
 };
 
-export const deactivatePreviousNotices = async (
+export const deactivateClassNoticeInHub = async (
   hubId: string,
-  targetDay: string,
-  effectiveDate: Date,
+  noticeId: string,
 ) => {
-  // Start and end of the effective date to match the day
-  const startOfDay = new Date(effectiveDate);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(effectiveDate);
-  endOfDay.setHours(23, 59, 59, 999);
-
   return await prisma.classNotice.updateMany({
     where: {
+      id: noticeId,
       hubId,
-      targetDay,
-      effectiveDate: {
-        gte: startOfDay,
-        lte: endOfDay,
-      },
       isActive: true,
     },
-    data: { isActive: false },
-  });
-};
-
-export const findClassNoticeById = async (noticeId: string) => {
-  return await prisma.classNotice.findUnique({
-    where: { id: noticeId },
-    include: {
-      author: { select: { id: true, name: true, role: true } },
-    },
-  });
-};
-
-export const deleteClassNoticeById = async (noticeId: string) => {
-  return await prisma.classNotice.update({
-    where: { id: noticeId },
     data: { isActive: false },
   });
 };

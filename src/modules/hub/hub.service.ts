@@ -7,6 +7,12 @@ import {
   UpdateMemberRolePayload,
   CreateClassNoticePayload,
 } from "./hub.schema";
+import {
+  getDhakaDayBoundsUtc,
+  isEffectiveDateWithinAllowedWindow,
+  resolveEffectiveHubRole,
+  sanitizeClassNoticeFields,
+} from "./class-routine.domain";
 import { appCache } from "../../lib/cache";
 import { createHubNotifications } from "../notification/notification.service";
 import {
@@ -32,21 +38,14 @@ export const verifyHubRole = async (
   }
 
   const member = await hubRepository.findHubMember(userId, hubId);
-  if (!member) {
+  if (!member || !member.isActive) {
     throw new AppError(
       "You do not have permission to perform this action in this hub.",
       403,
     );
   }
 
-  let effectiveRole: string = member.role;
-  if (effectiveRole === "STUDENT") {
-    if (user?.role === "TEACHER") {
-      effectiveRole = "TEACHER";
-    } else if (user?.studentProfile?.isCR) {
-      effectiveRole = "CR";
-    }
-  }
+  const effectiveRole = resolveEffectiveHubRole(member.role, user);
 
   if (!allowedRoles.includes(effectiveRole)) {
     throw new AppError(
@@ -54,14 +53,15 @@ export const verifyHubRole = async (
       403,
     );
   }
-  return { ...member, role: effectiveRole as any };
+  return { ...member, role: effectiveRole as HubRole };
 };
 
 export const getUserHubRole = async (userId: string, hubId: string) => {
   const user = await hubRepository.findUserWithStudentProfile(userId);
   if (user?.role === "ADMIN") return "ADMIN";
   const member = await hubRepository.findHubMember(userId, hubId);
-  return member?.role || null;
+  if (!member || !member.isActive) return null;
+  return resolveEffectiveHubRole(member.role, user);
 };
 
 export const getAvailableTeachersService = async (
@@ -158,9 +158,17 @@ export const getMyHubsService = async (
 ) => {
   const user = await hubRepository.findUserWithStudentProfile(userId);
   if (user?.role === "ADMIN") {
+    if (view === "schedule") {
+      return [];
+    }
     return await hubRepository.findAllHubsForAdmin(userId, view);
   }
-  return await hubRepository.findMyHubMemberships(userId, view);
+
+  const memberships = await hubRepository.findMyHubMemberships(userId, view);
+  return memberships.map((membership) => ({
+    ...membership,
+    role: resolveEffectiveHubRole(membership.role, user) as HubRole,
+  }));
 };
 
 export const getHubDetailsService = async (hubId: string) => {
@@ -238,52 +246,46 @@ export const createClassNoticeService = async (
   hubId: string,
   data: CreateClassNoticePayload,
 ) => {
-  // Only Teachers and CRs can post a notice for a class
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
 
-  const effectiveDate = new Date(data.effectiveDate);
-  if (isNaN(effectiveDate.getTime())) {
+  const dhakaBounds = getDhakaDayBoundsUtc(data.effectiveDate);
+  if (!dhakaBounds) {
     throw new AppError("Invalid effective date provided.", 400);
   }
-
-  // Deactivate any existing active notice for this day & date
-  await hubRepository.deactivatePreviousNotices(
-    hubId,
-    data.targetDay,
-    effectiveDate,
-  );
-
-  let resolvedMessage = data.message?.trim();
-  if (!resolvedMessage) {
-    if (data.type === "CANCELLED") {
-      resolvedMessage = "Class is cancelled for today.";
-    } else if (data.type === "ROOM_CHANGE") {
-      resolvedMessage = data.newRoom
-        ? `Class will be held in Room ${data.newRoom}.`
-        : "Classroom has been changed for today.";
-    } else if (data.type === "ONLINE_CLASS") {
-      resolvedMessage = "Class will be held online today.";
-    } else if (data.type === "TIME_CHANGE") {
-      resolvedMessage = data.newTime
-        ? `Class rescheduled to ${data.newTime}.`
-        : "Class time has been rescheduled.";
-    } else {
-      resolvedMessage = "Class notice.";
-    }
+  if (!isEffectiveDateWithinAllowedWindow(dhakaBounds.canonicalDate)) {
+    throw new AppError(
+      "Class notice date must be between today and the next 7 days.",
+      400,
+    );
   }
 
-  const notice = await hubRepository.createClassNotice(hubId, userId, {
-    ...data,
-    message: resolvedMessage,
-    effectiveDate,
-  });
-  await createHubNotifications(hubId, userId, {
+  const sanitized = sanitizeClassNoticeFields(data);
+  const notice = await hubRepository.replaceClassNoticeAtomic(
+    hubId,
+    userId,
+    sanitized,
+    dhakaBounds,
+  );
+  invalidateHubCaches(hubId);
+
+  void createHubNotifications(hubId, userId, {
     type: "CLASS_NOTICE",
     title: "Class schedule update",
-    body: resolvedMessage.slice(0, 180),
-    route: `/hub/${hubId}`,
+    body: sanitized.message.slice(0, 180),
+    route: "/(tabs)/my-schedule",
     dedupeKey: `class-notice:${notice.id}`,
+  }).catch((error: unknown) => {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        event: "hub.class_notice_notification_failed",
+        hubId,
+        noticeId: notice.id,
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
   });
+
   return notice;
 };
 
@@ -294,10 +296,25 @@ export const deleteClassNoticeService = async (
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
 
-  const notice = await hubRepository.findClassNoticeById(noticeId);
-  if (!notice) {
+  const hub = await hubRepository.findHubStatusById(hubId);
+  if (!hub) {
+    throw new AppError("Course Hub not found.", 404);
+  }
+  if (hub.isArchived) {
+    throw new AppError(
+      "Cannot modify class notices for an archived course hub.",
+      400,
+    );
+  }
+
+  const result = await hubRepository.deactivateClassNoticeInHub(
+    hubId,
+    noticeId,
+  );
+  if (result.count === 0) {
     throw new AppError("Class notice not found.", 404);
   }
 
-  return await hubRepository.deleteClassNoticeById(noticeId);
+  invalidateHubCaches(hubId);
+  return { id: noticeId, isActive: false };
 };
