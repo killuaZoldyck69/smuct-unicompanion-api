@@ -16,6 +16,7 @@ import {
   expandProgramAliases,
   expandFacultyAliases,
   getDhakaTodayStartUtc,
+  createCalendarService,
 } from "../calendar.service";
 import { formatClonedCalendarTitle } from "../calendar.repository";
 import {
@@ -45,7 +46,7 @@ function assertEquals(actual: any, expected: any, message: string) {
   }
 }
 
-export function runCalendarUnitTests() {
+export async function runCalendarUnitTests() {
   console.log("🧪 Running Calendar & CSV Unit Tests...\n");
 
   // 1. Test CSV Tokenizer
@@ -496,10 +497,62 @@ Mid-term Examination,Offline Mode,EXAM,2026-09-30,2026-10-15,8,false,true,Offlin
     "Dead export findCurrentPublishedCalendar must stay removed",
   );
 
-  console.log("\n✅ All 18 Calendar & CSV Unit Tests Passed Successfully!\n");
+  // 19. Test Pre-Production Fixes (weekNumber select, strict CSV weekNumber, empty-publish guard)
+  console.log("  [19/19] Testing Admin weekNumber Select, Strict weekNumber Parsing & Empty-Publish Guard...");
+  assert(
+    repoSrc.includes("weekNumber: true"),
+    "findAllCalendarsAdmin must select weekNumber for Admin List week totals",
+  );
+
+  const badWeekResult = validateAndParseCsv(
+    `title,description,category,startDate,endDate,weekNumber,isHoliday,isAllDay,remarks\nClasses,,CLASS,2026-08-22,,3abc,false,true,`,
+  );
+  assert(
+    badWeekResult.warnings.some((w) => w.field === "weekNumber"),
+    "Non-numeric trailing garbage like '3abc' in weekNumber must emit a warning",
+  );
+  assertEquals(
+    badWeekResult.parsedEvents[0]?.weekNumber ?? null,
+    null,
+    "Invalid weekNumber '3abc' must resolve to null instead of 3",
+  );
+
+  let publishGuardRejected = false;
+  try {
+    await createCalendarService(
+      {
+        title: "Empty Published",
+        semester: "Summer",
+        academicYear: 2026,
+        targetFaculties: [],
+        targetPrograms: [],
+        status: "PUBLISHED",
+        events: [],
+      },
+      "00000000-0000-4000-8000-000000000001",
+    );
+  } catch (err: unknown) {
+    if (
+      err &&
+      typeof err === "object" &&
+      "statusCode" in err &&
+      (err as { statusCode?: number }).statusCode === 400
+    ) {
+      publishGuardRejected = true;
+    }
+  }
+  assert(
+    publishGuardRejected,
+    "createCalendarService must reject creating a PUBLISHED calendar without events (400)",
+  );
+
+  console.log("\n✅ All 19 Calendar & CSV Unit Tests Passed Successfully!\n");
 }
 
 if (process.argv[1]?.includes("calendar.test.ts")) {
-  runCalendarUnitTests();
+  runCalendarUnitTests().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 }
 

@@ -52,6 +52,7 @@ export const findAllCalendarsAdmin = async (
             category: true,
             startDate: true,
             endDate: true,
+            weekNumber: true,
             isHoliday: true,
           },
           orderBy: { startDate: "asc" },

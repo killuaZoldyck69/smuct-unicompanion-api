@@ -462,7 +462,7 @@ export function validateAndParseCsv(
 
     let weekNumber: number | null = null;
     if (rawWeekNumber) {
-      const parsed = Number.parseInt(rawWeekNumber, 10);
+      const parsed = /^\d+$/.test(rawWeekNumber) ? Number(rawWeekNumber) : NaN;
       if (!Number.isInteger(parsed) || parsed < 1 || parsed > 52) {
         warnings.push({
           rowNumber,

@@ -197,6 +197,12 @@ export const createCalendarService = async (
   data: CreateCalendarPayload,
   userId: string,
 ) => {
+  if (data.status === "PUBLISHED" && (!data.events || data.events.length === 0)) {
+    throw new AppError(
+      "Cannot publish an academic calendar without any events. Please import or add events first.",
+      400,
+    );
+  }
   assertBatchHasProgram(data.targetBatch, data.targetPrograms);
   return calendarRepository.createAcademicCalendar(data, userId);
 };
