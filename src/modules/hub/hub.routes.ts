@@ -9,6 +9,7 @@ import {
   createHubSchema,
   joinHubSchema,
   archiveHubSchema,
+  hubIdParamSchema,
   updateHubSchema,
   toggleLiveClassSchema,
   getMyHubsQuerySchema,
@@ -37,6 +38,17 @@ import { reviewRoutes } from "./reviews/reviews.routes";
 
 const router = Router();
 
+export const hubWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  keyGenerator: createUserKeyGenerator("hub-write"),
+  message: {
+    success: false,
+    message:
+      "Too many course hub updates. Please wait a few minutes before trying again.",
+  },
+});
+
 export const classNoticeWriteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 20,
@@ -59,9 +71,20 @@ router.get(
   validateRequest(getMyHubsQuerySchema),
   getMyHubs,
 );
-router.get("/:id", requireAuth, getHubDetails);
+router.get(
+  "/:id",
+  requireAuth,
+  validateRequest(hubIdParamSchema),
+  getHubDetails,
+);
 
-router.patch("/:id", requireAuth, validateRequest(updateHubSchema), updateHub);
+router.patch(
+  "/:id",
+  requireAuth,
+  hubWriteLimiter,
+  validateRequest(updateHubSchema),
+  updateHub,
+);
 router.patch(
   "/:id/live-class",
   requireAuth,

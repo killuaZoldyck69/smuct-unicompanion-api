@@ -366,7 +366,7 @@ test("F1/F2/F4/F6/F11 source, projection & code-quality guards hold across hub &
   assert.match(hubServiceSrc, /invalidateHubCaches\(hubId\)/);
   assert.match(hubServiceSrc, /effectiveWeekday !== data\.targetDay/);
   assert.match(hubServiceSrc, /const assertActiveHub[\s\S]*findHubStatusById\(hubId\)/);
-  assert.match(hubServiceSrc, /updateHubService[\s\S]*assertActiveHub\(hubId/);
+  assert.match(hubServiceSrc, /updateHubService[\s\S]*updateHubAtomic\(/);
   assert.match(hubServiceSrc, /toggleLiveClassService[\s\S]*assertActiveHub\(\s*hubId/);
   assert.match(hubServiceSrc, /deleteClassNoticeService[\s\S]*assertActiveHub\(\s*hubId/);
   assert.equal(/\bas any\b/.test(hubServiceSrc), false);

@@ -290,12 +290,29 @@ const buildActiveClassNoticesQuery = (now: Date = new Date()) => {
 /**
  * Shared CourseHub projection for /api/hubs/my.
  * Excludes reviewQuestions and teacher email PII in both modes,
- * and omits assessments/termExams/joinCode when view is "schedule".
+ * omits assessments/termExams/joinCode when view is "schedule",
+ * and selects only exam routine metadata when view is "exams".
  */
 export const buildMyHubSelect = (
-  view: "default" | "schedule" = "default",
+  view: "default" | "schedule" | "exams" = "default",
   now: Date = new Date(),
 ) => {
+  if (view === "exams") {
+    return {
+      id: true,
+      courseCode: true,
+      courseName: true,
+      department: true,
+      batch: true,
+      section: true,
+      semesterNumber: true,
+      termOffer: true,
+      isArchived: true,
+      termExams: true,
+      createdAt: true,
+    };
+  }
+
   const baseSelect = {
     id: true,
     courseCode: true,
@@ -344,7 +361,7 @@ export const buildMyHubSelect = (
 
 export const findMyHubMemberships = (
   userId: string,
-  view: "default" | "schedule" = "default",
+  view: "default" | "schedule" | "exams" = "default",
 ) => {
   const hubSelect = buildMyHubSelect(view);
 
@@ -352,7 +369,9 @@ export const findMyHubMemberships = (
     where: {
       userId,
       isActive: true,
-      ...(view === "schedule" ? { hub: { isArchived: false } } : {}),
+      ...(view === "schedule" || view === "exams"
+        ? { hub: { isArchived: false } }
+        : {}),
     },
     select: {
       id: true,
@@ -373,12 +392,14 @@ export const findMyHubMemberships = (
  */
 export const findAllHubsForAdmin = async (
   adminUserId: string,
-  view: "default" | "schedule" = "default",
+  view: "default" | "schedule" | "exams" = "default",
 ) => {
   const hubSelect = buildMyHubSelect(view);
 
   const hubs = await prisma.courseHub.findMany({
-    ...(view === "schedule" ? { where: { isArchived: false } } : {}),
+    ...(view === "schedule" || view === "exams"
+      ? { where: { isArchived: false } }
+      : {}),
     orderBy: { createdAt: "desc" },
     select: hubSelect,
   });
@@ -456,21 +477,51 @@ export const deleteHubMemberById = (memberId: string) =>
     where: { id: memberId },
   });
 
-export const updateHub = (hubId: string, data: UpdateHubPayload) => {
-  const { weeklyClassSchedule, termExams, ...rest } = data;
-  return prisma.courseHub.update({
-    where: { id: hubId },
-    data: {
-      ...rest,
-      ...(weeklyClassSchedule !== undefined && {
-        weeklyClassSchedule: weeklyClassSchedule as unknown as Prisma.InputJsonValue,
-      }),
-      ...(termExams !== undefined && {
-        termExams: termExams as unknown as Prisma.InputJsonValue,
-      }),
-    },
+const toPrismaJson = (value: unknown): Prisma.InputJsonValue =>
+  value as Prisma.InputJsonValue;
+
+export const updateHubAtomic = (
+  hubId: string,
+  data: UpdateHubPayload,
+  archivedMessage: string,
+) =>
+  prisma.$transaction(async (tx) => {
+    const [lockedHub] = await tx.$queryRaw<
+      Array<{
+        id: string;
+        isArchived: boolean;
+        termExams: Prisma.JsonValue | null;
+      }>
+    >`
+      SELECT id, "isArchived", "termExams"
+      FROM "CourseHub"
+      WHERE id = ${hubId}
+      FOR UPDATE
+    `;
+
+    if (!lockedHub) {
+      throw new AppError("Course Hub not found.", 404);
+    }
+    if (lockedHub.isArchived) {
+      throw new AppError(archivedMessage, 400);
+    }
+
+    const { weeklyClassSchedule, termExams, ...rest } = data;
+    const updated = await tx.courseHub.update({
+      where: { id: hubId },
+      data: {
+        ...rest,
+        ...(weeklyClassSchedule !== undefined && {
+          weeklyClassSchedule: toPrismaJson(weeklyClassSchedule),
+        }),
+        ...(termExams !== undefined && {
+          termExams: toPrismaJson(termExams),
+        }),
+      },
+    });
+
+    return { previousTermExams: lockedHub.termExams, updated };
   });
-};
 
 export const updateHubArchiveStatus = (hubId: string, isArchived: boolean) =>
   prisma.courseHub.update({
@@ -499,7 +550,7 @@ export const deleteHubById = (hubId: string) =>
 export const findHubStatusById = (hubId: string) =>
   prisma.courseHub.findUnique({
     where: { id: hubId },
-    select: { id: true, isArchived: true },
+    select: { id: true, isArchived: true, termExams: true },
   });
 
 export const replaceClassNoticeAtomic = (

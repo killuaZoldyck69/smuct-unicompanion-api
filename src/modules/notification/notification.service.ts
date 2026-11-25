@@ -43,7 +43,7 @@ const findCourseHubContext = (hubId: string) =>
 
 export const createNotificationsForRecipients = async (
   notifications: RecipientNotification[],
-) => {
+): Promise<boolean> => {
   const notificationsByRecipientAndKey = new Map<string, RecipientNotification>();
   for (const notification of notifications) {
     if (!notification.userId) continue;
@@ -53,7 +53,7 @@ export const createNotificationsForRecipients = async (
     );
   }
   const uniqueNotifications = [...notificationsByRecipientAndKey.values()];
-  if (!uniqueNotifications.length) return;
+  if (!uniqueNotifications.length) return true;
 
   let insertedNotifications: Array<{
     userId: string;
@@ -82,10 +82,10 @@ export const createNotificationsForRecipients = async (
         errorType: error instanceof Error ? error.name : "UnknownError",
       }),
     );
-    return;
+    return false;
   }
 
-  if (!insertedNotifications.length) return;
+  if (!insertedNotifications.length) return true;
 
   // Dispatch push notifications to registered devices (non-blocking)
   try {
@@ -126,6 +126,8 @@ export const createNotificationsForRecipients = async (
       }),
     );
   }
+
+  return true;
 };
 
 export const createNotifications = async (

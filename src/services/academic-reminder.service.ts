@@ -7,25 +7,38 @@ import {
   parseNoticeStartMinutes,
   parseTimeToMinutes,
 } from "../modules/hub/class-routine.domain";
+import {
+  formatYmdParts,
+  normalizeLegacyTermExamType,
+  normalizeTermExamDateYmd,
+  normalizeTermExamTime,
+} from "../modules/hub/exam-schedule.domain";
 
 const TIME_ZONE = "Asia/Dhaka";
 const MINUTE_MS = 60_000;
 const CLASS_REMINDER_MIN_LEAD_MINUTES = 10;
 const CLASS_REMINDER_MAX_LEAD_MINUTES = 16;
+export const EXAM_REMINDER_WINDOW_START_HOUR = 8;
+export const EXAM_REMINDER_WINDOW_END_HOUR = 22;
 
-const partsAt = (date: Date) => {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date);
-  return Object.fromEntries(parts.map(({ type, value }) => [type, value]));
-};
+const DHAKA_PARTS_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  weekday: "long",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+const partsAt = (date: Date) =>
+  Object.fromEntries(
+    DHAKA_PARTS_FORMATTER.formatToParts(date).map(({ type, value }) => [
+      type,
+      value,
+    ]),
+  );
 
 const safeArray = (
   value: unknown,
@@ -75,6 +88,7 @@ export interface ReminderHubRecord {
 
 export interface PendingHubReminder {
   hubId: string;
+  recipientScope?: "ALL" | "STUDENTS_ONLY";
   payload: Parameters<typeof createNotifications>[1];
 }
 
@@ -149,17 +163,45 @@ export const buildUpcomingClassReminders = (
   return pending;
 };
 
-const collectExamReminders = (
+const addRecipient = (
+  map: Map<string, Set<string>>,
+  hubId: string,
+  userId: string,
+) => {
+  let set = map.get(hubId);
+  if (!set) {
+    set = new Set<string>();
+    map.set(hubId, set);
+  }
+  set.add(userId);
+};
+
+export const buildUpcomingExamReminders = (
   hubs: ReminderHubRecord[],
-  now: Date,
+  now: Date = new Date(),
 ): PendingHubReminder[] => {
-  const target = partsAt(new Date(now.getTime() + 15 * MINUTE_MS));
-  if (target.hour !== "09" || target.minute !== "15") {
+  const nowParts = partsAt(now);
+  const hour = Number(nowParts.hour);
+  const year = Number(nowParts.year);
+  const month = Number(nowParts.month);
+  const day = Number(nowParts.day);
+  if (
+    Number.isNaN(hour) ||
+    Number.isNaN(year) ||
+    Number.isNaN(month) ||
+    Number.isNaN(day) ||
+    hour < EXAM_REMINDER_WINDOW_START_HOUR ||
+    hour >= EXAM_REMINDER_WINDOW_END_HOUR
+  ) {
     return [];
   }
 
-  const tomorrow = partsAt(new Date(now.getTime() + 24 * 60 * MINUTE_MS));
-  const tomorrowKey = `${tomorrow.year}-${tomorrow.month}-${tomorrow.day}`;
+  const tomorrowProbe = new Date(Date.UTC(year, month - 1, day + 1));
+  const tomorrowKey = formatYmdParts(
+    tomorrowProbe.getUTCFullYear(),
+    tomorrowProbe.getUTCMonth() + 1,
+    tomorrowProbe.getUTCDate(),
+  );
   const pending: PendingHubReminder[] = [];
 
   for (const hub of hubs) {
@@ -167,17 +209,25 @@ const collectExamReminders = (
       hubId: hub.id,
       field: "termExams",
     })) {
-      if (typeof exam.date !== "string" || typeof exam.type !== "string") continue;
-      const examDay = exam.date.slice(0, 10);
-      if (examDay !== tomorrowKey) continue;
+      const examDay = normalizeTermExamDateYmd(exam.date);
+      const examType = normalizeLegacyTermExamType(exam.type);
+      if (!examDay || !examType || examDay !== tomorrowKey) continue;
+
+      const examTime = normalizeTermExamTime(exam.time);
+      const examRoom =
+        typeof exam.room === "string" && exam.room.trim()
+          ? exam.room.trim()
+          : undefined;
+
       pending.push({
         hubId: hub.id,
+        recipientScope: "STUDENTS_ONLY",
         payload: {
           type: "EXAM_REMINDER",
-          title: "Exam tomorrow",
-          body: `${exam.type} for ${hub.courseCode} is scheduled for tomorrow${typeof exam.time === "string" ? ` at ${exam.time}` : ""}.`,
-          route: `/hub/${hub.id}`,
-          dedupeKey: `exam-reminder:${hub.id}:${examDay}:${exam.type}`,
+          title: `Exam tomorrow (${hub.courseCode})`,
+          body: `${examType} for ${hub.courseCode} · ${hub.courseName} is scheduled for tomorrow${examTime ? ` at ${examTime}` : ""}${examRoom ? ` (${examRoom})` : ""}.`,
+          route: "/(tabs)/exams",
+          dedupeKey: `exam-reminder:${hub.id}:${examDay}:${examType.toLowerCase()}`,
         },
       });
     }
@@ -214,7 +264,44 @@ const dispatchEventReminders = async (now: Date) => {
   }
 };
 
+let dispatchedExamDayKey: string | null = null;
+const dispatchedExamReminderKeys = new Set<string>();
+
+function syncExamReminderCacheDay(now: Date): string {
+  const parts = partsAt(now);
+  const todayKey = `${parts.year}-${parts.month}-${parts.day}`;
+  if (dispatchedExamDayKey !== todayKey) {
+    dispatchedExamDayKey = todayKey;
+    dispatchedExamReminderKeys.clear();
+  }
+  return todayKey;
+}
+
+export const filterUndispatchedExamReminders = (
+  reminders: PendingHubReminder[],
+  now: Date = new Date(),
+): PendingHubReminder[] => {
+  syncExamReminderCacheDay(now);
+  return reminders.filter(
+    (r) => !dispatchedExamReminderKeys.has(r.payload.dedupeKey),
+  );
+};
+
+export const markExamReminderDispatched = (
+  dedupeKey: string,
+  now: Date = new Date(),
+): void => {
+  syncExamReminderCacheDay(now);
+  dispatchedExamReminderKeys.add(dedupeKey);
+};
+
+export const resetDispatchedExamReminderCache = (): void => {
+  dispatchedExamDayKey = null;
+  dispatchedExamReminderKeys.clear();
+};
+
 const dispatchHubReminders = async (now: Date) => {
+  const startedAt = Date.now();
   const dhakaToday = getDhakaDayBoundsUtc(now);
   const hubs = await prisma.courseHub.findMany({
     where: { isArchived: false },
@@ -249,33 +336,55 @@ const dispatchHubReminders = async (now: Date) => {
     },
   });
 
+  const pendingClassReminders = buildUpcomingClassReminders(hubs, now);
+  const pendingExamReminders = filterUndispatchedExamReminders(
+    buildUpcomingExamReminders(hubs, now),
+    now,
+  );
   const pendingReminders = [
-    ...buildUpcomingClassReminders(hubs, now),
-    ...collectExamReminders(hubs, now),
+    ...pendingClassReminders,
+    ...pendingExamReminders,
   ];
   if (pendingReminders.length === 0) return;
 
   const matchedHubIds = [...new Set(pendingReminders.map((r) => r.hubId))];
   const members = await prisma.hubMember.findMany({
     where: { hubId: { in: matchedHubIds }, isActive: true },
-    select: { hubId: true, userId: true },
+    select: { hubId: true, userId: true, role: true },
   });
 
-  const recipientsByHub = new Map<string, Set<string>>();
-  for (const { hubId, userId } of members) {
-    let set = recipientsByHub.get(hubId);
-    if (!set) {
-      set = new Set<string>();
-      recipientsByHub.set(hubId, set);
+  const allRecipientsByHub = new Map<string, Set<string>>();
+  const studentRecipientsByHub = new Map<string, Set<string>>();
+  for (const { hubId, userId, role } of members) {
+    addRecipient(allRecipientsByHub, hubId, userId);
+    if (role !== "TEACHER") {
+      addRecipient(studentRecipientsByHub, hubId, userId);
     }
-    set.add(userId);
   }
 
   for (const reminder of pendingReminders) {
-    const recipients = recipientsByHub.get(reminder.hubId);
+    const map =
+      reminder.recipientScope === "STUDENTS_ONLY"
+        ? studentRecipientsByHub
+        : allRecipientsByHub;
+    const recipients = map.get(reminder.hubId);
     if (!recipients?.size) continue;
-    await createNotifications([...recipients], reminder.payload);
+    const persisted = await createNotifications([...recipients], reminder.payload);
+    if (persisted && reminder.payload.type === "EXAM_REMINDER") {
+      markExamReminderDispatched(reminder.payload.dedupeKey, now);
+    }
   }
+
+  console.info(
+    JSON.stringify({
+      level: "info",
+      event: "academic_reminders.hub_pass_completed",
+      hubsScanned: hubs.length,
+      remindersQueued: pendingReminders.length,
+      examReminders: pendingExamReminders.length,
+      durationMs: Date.now() - startedAt,
+    }),
+  );
 };
 
 export const runAcademicReminderPass = async (now = new Date()) => {

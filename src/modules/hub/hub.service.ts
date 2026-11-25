@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { AppError } from "../../utils/AppError";
 import { HubRole } from "../../constants/enums";
 import * as hubRepository from "./hub.repository";
@@ -14,6 +15,7 @@ import {
   resolveEffectiveHubRole,
   sanitizeClassNoticeFields,
 } from "./class-routine.domain";
+import { resolveTermExamUpdateSummary } from "./exam-schedule.domain";
 import { appCache } from "../../lib/cache";
 import { createHubNotifications } from "../notification/notification.service";
 
@@ -33,6 +35,7 @@ const assertActiveHub = async (hubId: string, archivedMessage: string) => {
   if (hub.isArchived) {
     throw new AppError(archivedMessage, 400);
   }
+  return hub;
 };
 
 export const verifyHubRole = async (
@@ -164,13 +167,16 @@ export const joinHubService = async (userId: string, joinCode: string) => {
   return membership;
 };
 
-export type MyHubsView = "default" | "schedule";
+export type MyHubsView = "default" | "schedule" | "exams";
 
 export const getMyHubsService = async (
   userId: string,
   view: MyHubsView = "default",
 ) => {
   const user = await hubRepository.findUserWithStudentProfile(userId);
+  if (view === "exams" && (user?.role === "ADMIN" || user?.role === "TEACHER")) {
+    return [];
+  }
   if (user?.role === "ADMIN") {
     if (view === "schedule") {
       return [];
@@ -204,9 +210,48 @@ export const updateHubService = async (
   data: UpdateHubPayload,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
-  await assertActiveHub(hubId, "Cannot update an archived course hub.");
-  const updated = await hubRepository.updateHub(hubId, data);
+  const { previousTermExams, updated } = await hubRepository.updateHubAtomic(
+    hubId,
+    data,
+    "Cannot update an archived course hub.",
+  );
   invalidateHubCaches(hubId);
+
+  const examUpdate =
+    data.termExams !== undefined
+      ? resolveTermExamUpdateSummary(previousTermExams, data.termExams)
+      : null;
+
+  if (examUpdate) {
+    const sigHash = crypto
+      .createHash("sha256")
+      .update(examUpdate.signature)
+      .digest("hex")
+      .slice(0, 16);
+
+    void createHubNotifications(
+      hubId,
+      userId,
+      {
+        type: "EXAM_SCHEDULE_UPDATE",
+        title: "Exam schedule updated",
+        body: examUpdate.body,
+        route: "/(tabs)/exams",
+        dedupeKey: `exam-update:${hubId}:${Math.floor(Date.now() / 10_000)}:${sigHash}`,
+      },
+      ["STUDENT", "CR"],
+    ).catch((error: unknown) => {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          event: "hub.exam_schedule_notification_failed",
+          hubId,
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        }),
+      );
+    });
+  }
+
   return updated;
 };
 

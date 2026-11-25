@@ -11,18 +11,54 @@ export interface SendPushOptions {
   data?: Record<string, unknown>;
 }
 
-/**
- * Dispatches push notifications to target user devices via Expo Push Service.
- * Runs non-blocking (fire-and-forget) to ensure API endpoints return instantly
- * without being held up by external network latency or Expo service response times.
- */
+type PushTokenWhere = NonNullable<
+  Parameters<typeof prisma.pushToken.deleteMany>[0]
+>["where"];
+
+export const extractDeadTokensForChunk = (
+  chunk: readonly ExpoPushMessage[],
+  ticketChunk: readonly ExpoPushTicket[],
+): string[] => {
+  const dead: string[] = [];
+  ticketChunk.forEach((ticket, idx) => {
+    if (
+      ticket.status === "error" &&
+      ticket.details?.error === "DeviceNotRegistered"
+    ) {
+      const recipientToken = chunk[idx]?.to;
+      if (typeof recipientToken === "string") {
+        dead.push(recipientToken);
+      }
+    }
+  });
+  return dead;
+};
+
+async function prunePushTokens(
+  where: PushTokenWhere,
+  reason: string,
+): Promise<void> {
+  try {
+    await prisma.pushToken.deleteMany({ where });
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        event: "push.token_prune_failed",
+        reason,
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
+  }
+}
+
 export const sendPushNotifications = (options: SendPushOptions): void => {
   const { userIds, title, body, route, data = {} } = options;
   if (!userIds || !userIds.length) return;
 
+  // Detached dispatch keeps request latency isolated from Expo push network round-trips.
   setImmediate(async () => {
     try {
-      // 1. Fetch tokens for all target recipients in a single indexed query
       const tokenRecords = await prisma.pushToken.findMany({
         where: { userId: { in: userIds } },
         select: { id: true, token: true },
@@ -50,23 +86,22 @@ export const sendPushNotifications = (options: SendPushOptions): void => {
         });
       }
 
-      // Cleanup any locally detected malformed tokens immediately
       if (malformedTokenIds.length > 0) {
-        await prisma.pushToken.deleteMany({
-          where: { id: { in: malformedTokenIds } },
-        }).catch(() => {});
+        await prunePushTokens(
+          { id: { in: malformedTokenIds } },
+          "malformed_token",
+        );
       }
 
       if (!messages.length) return;
 
-      // 2. Chunk into batches of up to 100 as required by Expo
       const chunks = expo.chunkPushNotifications(messages);
-      const tickets: ExpoPushTicket[] = [];
+      const deadTokens: string[] = [];
 
       for (const chunk of chunks) {
         try {
           const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
-          tickets.push(...ticketChunk);
+          deadTokens.push(...extractDeadTokensForChunk(chunk, ticketChunk));
         } catch (error) {
           console.error(
             JSON.stringify({
@@ -80,24 +115,11 @@ export const sendPushNotifications = (options: SendPushOptions): void => {
         }
       }
 
-      // 3. Inspect tickets for DeviceNotRegistered (uninstalled or expired) and prune them
-      const deadTokens: string[] = [];
-      tickets.forEach((ticket, idx) => {
-        if (
-          ticket.status === "error" &&
-          ticket.details?.error === "DeviceNotRegistered"
-        ) {
-          const recipientToken = messages[idx]?.to;
-          if (typeof recipientToken === "string") {
-            deadTokens.push(recipientToken);
-          }
-        }
-      });
-
       if (deadTokens.length > 0) {
-        await prisma.pushToken.deleteMany({
-          where: { token: { in: deadTokens } },
-        }).catch(() => {});
+        await prunePushTokens(
+          { token: { in: deadTokens } },
+          "device_not_registered",
+        );
       }
     } catch (error) {
       console.error(

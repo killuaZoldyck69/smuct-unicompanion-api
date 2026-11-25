@@ -9,6 +9,12 @@ import {
   parseCalendarOrIsoDateToDhakaDay,
   parseTimeToMinutes,
 } from "./class-routine.domain";
+import {
+  TERM_EXAM_LIMITS,
+  normalizeTermExamDateYmd,
+  normalizeTermExamTime,
+  normalizeTermExamType,
+} from "./exam-schedule.domain";
 
 const canonicalWeekdaySchema = z
   .string()
@@ -114,6 +120,75 @@ const optionalSafeMeetUrlSchema = z
     return safe;
   });
 
+const termExamItemSchema = z.object({
+  type: z
+    .string()
+    .trim()
+    .min(1, "Exam type is required (Midterm or Final)")
+    .transform((val, ctx) => {
+      const normalized = normalizeTermExamType(val);
+      if (!normalized) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Exam type must be Midterm or Final.",
+        });
+        return z.NEVER;
+      }
+      return normalized;
+    }),
+  date: z
+    .string()
+    .trim()
+    .min(1, "Valid exam date (YYYY-MM-DD) is required.")
+    .transform((val, ctx) => {
+      const normalized = normalizeTermExamDateYmd(val);
+      if (!normalized) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Valid exam date (YYYY-MM-DD) is required.",
+        });
+        return z.NEVER;
+      }
+      return normalized;
+    }),
+  time: z
+    .string()
+    .trim()
+    .max(
+      TERM_EXAM_LIMITS.timeMax,
+      `Exam time must not exceed ${TERM_EXAM_LIMITS.timeMax} characters`,
+    )
+    .nullable()
+    .optional()
+    .transform((val, ctx): string | undefined => {
+      const normalized = normalizeTermExamTime(val);
+      if (normalized === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Invalid exam time format. Use e.g. 10:00 AM.",
+        });
+        return z.NEVER;
+      }
+      return normalized;
+    }),
+  room: z
+    .string()
+    .trim()
+    .max(
+      TERM_EXAM_LIMITS.roomMax,
+      `Exam room must not exceed ${TERM_EXAM_LIMITS.roomMax} characters`,
+    )
+    .nullable()
+    .optional()
+    .transform((val): string | undefined => (val ? val : undefined)),
+});
+
+export const hubIdParamSchema = z.object({
+  params: z.object({
+    id: z.string().uuid("Invalid course hub ID"),
+  }),
+});
+
 export const updateHubSchema = z.object({
   params: z.object({
     id: z.string().uuid("Invalid course hub ID"),
@@ -136,17 +211,27 @@ export const updateHubSchema = z.object({
       .optional(),
     isReviewOpen: z.boolean().optional(),
     termExams: z
-      .array(
-        z.object({
-          type: z
-            .string()
-            .min(1, "Exam type is required (e.g., Midterm, Final)"),
-          date: z.string().optional(),
-          time: z.string().optional(),
-          room: z.string().optional(),
-        }),
+      .array(termExamItemSchema)
+      .max(
+        TERM_EXAM_LIMITS.maxEntries,
+        `At most ${TERM_EXAM_LIMITS.maxEntries} term exams (Midterm and Final) are allowed.`,
       )
-      .optional(),
+      .superRefine((items, ctx) => {
+        const seen = new Set<string>();
+        items.forEach((item, index) => {
+          if (seen.has(item.type)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [index, "type"],
+              message: `Duplicate ${item.type} exam entry is not allowed.`,
+            });
+          }
+          seen.add(item.type);
+        });
+      })
+      .nullable()
+      .optional()
+      .transform((val) => (val === null ? [] : val)),
     meetUrl: optionalSafeMeetUrlSchema,
     isClassLive: z.boolean().optional(),
   }),
@@ -170,7 +255,7 @@ export const archiveHubSchema = z.object({
 
 export const getMyHubsQuerySchema = z.object({
   query: z.object({
-    view: z.enum(["default", "schedule"]).optional(),
+    view: z.enum(["default", "schedule", "exams"]).optional(),
   }),
 });
 
