@@ -253,9 +253,12 @@ export const archiveHubSchema = z.object({
   }),
 });
 
+export const MY_HUBS_VIEWS = ["default", "schedule", "exams", "cgpa"] as const;
+export type MyHubsView = (typeof MY_HUBS_VIEWS)[number];
+
 export const getMyHubsQuerySchema = z.object({
   query: z.object({
-    view: z.enum(["default", "schedule", "exams"]).optional(),
+    view: z.enum(MY_HUBS_VIEWS).optional(),
   }),
 });
 

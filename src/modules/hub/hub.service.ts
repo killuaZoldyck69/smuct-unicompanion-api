@@ -6,6 +6,7 @@ import {
   CreateHubPayload,
   UpdateHubPayload,
   CreateClassNoticePayload,
+  type MyHubsView,
 } from "./hub.schema";
 import {
   formatDhakaNoticeDayPhrase,
@@ -167,14 +168,17 @@ export const joinHubService = async (userId: string, joinCode: string) => {
   return membership;
 };
 
-export type MyHubsView = "default" | "schedule" | "exams";
+export type { MyHubsView };
 
 export const getMyHubsService = async (
   userId: string,
   view: MyHubsView = "default",
 ) => {
-  const user = await hubRepository.findUserWithStudentProfile(userId);
+  const user = await hubRepository.findUserRoleAndCrStatus(userId);
   if (view === "exams" && (user?.role === "ADMIN" || user?.role === "TEACHER")) {
+    return [];
+  }
+  if (view === "cgpa" && user?.role !== "STUDENT") {
     return [];
   }
   if (user?.role === "ADMIN") {

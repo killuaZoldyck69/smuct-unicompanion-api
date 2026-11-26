@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../../utils/catchAsync";
+import { MY_HUBS_VIEWS, type MyHubsView } from "./hub.schema";
 import * as hubService from "./hub.service";
 
 export const createHub = catchAsync(async (req: Request, res: Response) => {
@@ -31,12 +32,12 @@ export const joinHub = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getMyHubs = catchAsync(async (req: Request, res: Response) => {
-  const view =
-    req.query.view === "schedule"
-      ? "schedule"
-      : req.query.view === "exams"
-        ? "exams"
-        : "default";
+  const rawView = req.query.view;
+  const view: MyHubsView =
+    typeof rawView === "string" &&
+    (MY_HUBS_VIEWS as readonly string[]).includes(rawView)
+      ? (rawView as MyHubsView)
+      : "default";
   const hubs = await hubService.getMyHubsService(req.user.id, view);
   res.status(200).json({ success: true, data: hubs });
 });

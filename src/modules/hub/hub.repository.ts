@@ -2,7 +2,11 @@ import { prisma } from "../../lib/prisma";
 import { HubRole } from "../../constants/enums";
 import { Prisma } from "../../../generated/prisma/client";
 import { AppError } from "../../utils/AppError";
-import { CreateHubPayload, UpdateHubPayload } from "./hub.schema";
+import {
+  CreateHubPayload,
+  UpdateHubPayload,
+  type MyHubsView,
+} from "./hub.schema";
 import {
   CLASS_NOTICE_LIMITS,
   DhakaDayBounds,
@@ -183,10 +187,23 @@ export const findAvailableTeachers = async (
   };
 };
 
+export const MAX_CGPA_HUB_MEMBERSHIPS = 50;
+
 export const findUserWithStudentProfile = (userId: string) =>
   prisma.user.findUnique({
     where: { id: userId },
     include: { studentProfile: true },
+  });
+
+export const findUserRoleAndCrStatus = (userId: string) =>
+  prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      role: true,
+      studentProfile: {
+        select: { isCR: true },
+      },
+    },
   });
 
 export const createHubWithMembers = (
@@ -288,15 +305,27 @@ const buildActiveClassNoticesQuery = (now: Date = new Date()) => {
 };
 
 /**
- * Shared CourseHub projection for /api/hubs/my.
- * Excludes reviewQuestions and teacher email PII in both modes,
- * omits assessments/termExams/joinCode when view is "schedule",
- * and selects only exam routine metadata when view is "exams".
+ * Shared CourseHub projection for /api/hubs/my across all views:
+ * "cgpa" (minimal course/credit fields), "exams" (term exam metadata),
+ * "schedule" (routine + active notices), and "default" (full hub card).
  */
 export const buildMyHubSelect = (
-  view: "default" | "schedule" | "exams" = "default",
+  view: MyHubsView = "default",
   now: Date = new Date(),
 ) => {
+  if (view === "cgpa") {
+    return {
+      id: true,
+      courseCode: true,
+      courseName: true,
+      credit: true,
+      semesterNumber: true,
+      termOffer: true,
+      isArchived: true,
+      createdAt: true,
+    };
+  }
+
   if (view === "exams") {
     return {
       id: true,
@@ -361,7 +390,7 @@ export const buildMyHubSelect = (
 
 export const findMyHubMemberships = (
   userId: string,
-  view: "default" | "schedule" | "exams" = "default",
+  view: MyHubsView = "default",
 ) => {
   const hubSelect = buildMyHubSelect(view);
 
@@ -369,10 +398,14 @@ export const findMyHubMemberships = (
     where: {
       userId,
       isActive: true,
-      ...(view === "schedule" || view === "exams"
-        ? { hub: { isArchived: false } }
-        : {}),
+      ...(view !== "default" ? { hub: { isArchived: false } } : {}),
     },
+    ...(view === "cgpa"
+      ? {
+          orderBy: { hub: { createdAt: "asc" as const } },
+          take: MAX_CGPA_HUB_MEMBERSHIPS,
+        }
+      : {}),
     select: {
       id: true,
       userId: true,
@@ -392,14 +425,12 @@ export const findMyHubMemberships = (
  */
 export const findAllHubsForAdmin = async (
   adminUserId: string,
-  view: "default" | "schedule" | "exams" = "default",
+  view: MyHubsView = "default",
 ) => {
   const hubSelect = buildMyHubSelect(view);
 
   const hubs = await prisma.courseHub.findMany({
-    ...(view === "schedule" || view === "exams"
-      ? { where: { isArchived: false } }
-      : {}),
+    ...(view !== "default" ? { where: { isArchived: false } } : {}),
     orderBy: { createdAt: "desc" },
     select: hubSelect,
   });
