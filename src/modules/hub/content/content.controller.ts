@@ -2,21 +2,8 @@ import { Request, Response } from "express";
 import { catchAsync } from "../../../utils/catchAsync";
 import * as contentService from "./content.service";
 
-export const createAnnouncementComment = catchAsync(
-  async (req: Request, res: Response) => {
-    const data = await contentService.createAnnouncementComment(
-      req.user.id,
-      req.params.id as string,
-      req.params.announcementId as string,
-      req.body.content,
-    );
-    res.status(201).json({ success: true, message: "Comment posted", data });
-  },
-);
-
 export const createAnnouncement = catchAsync(
   async (req: Request, res: Response) => {
-    // Passes the user ID, Hub ID, and the entire body (content + optional links)
     const data = await contentService.createAnnouncement(
       req.user.id,
       req.params.id as string,
@@ -30,13 +17,24 @@ export const createAnnouncement = catchAsync(
 
 export const getAnnouncements = catchAsync(
   async (req: Request, res: Response) => {
-    const page = req.query.page ? Number(req.query.page) : undefined;
-    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const page =
+      typeof req.query.page === "number"
+        ? req.query.page
+        : req.query.page
+          ? Number(req.query.page)
+          : undefined;
+    const limit =
+      typeof req.query.limit === "number"
+        ? req.query.limit
+        : req.query.limit
+          ? Number(req.query.limit)
+          : undefined;
+
     const result = await contentService.getAnnouncements(
+      req.user.id,
       req.params.id as string,
       { page, limit },
     );
-    // Backward compatibility: if not paginated, result.announcements is returned, else both data & meta
     res.status(200).json({
       success: true,
       data: result.announcements,
@@ -100,7 +98,10 @@ export const replyDiscussion = catchAsync(
 
 export const getDiscussions = catchAsync(
   async (req: Request, res: Response) => {
-    const data = await contentService.getDiscussions(req.params.id as string);
+    const data = await contentService.getDiscussions(
+      req.user.id,
+      req.params.id as string,
+    );
     res.status(200).json({ success: true, data });
   },
 );

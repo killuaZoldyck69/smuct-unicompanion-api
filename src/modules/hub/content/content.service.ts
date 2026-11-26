@@ -1,4 +1,8 @@
-import { verifyHubRole } from "../hub.service";
+import {
+  assertActiveHub,
+  invalidateHubCaches,
+  verifyHubRole,
+} from "../hub.service";
 import { AppError } from "../../../utils/AppError";
 import * as contentRepository from "./content.repository";
 import {
@@ -6,7 +10,14 @@ import {
   UpdateAnnouncementPayload,
   CreateDiscussionPayload,
 } from "./content.schema";
-import { appCache } from "../../../lib/cache";
+import {
+  MAX_COMMENT_LENGTH,
+  MAX_DISCUSSION_CONTENT_LENGTH,
+  MAX_DISCUSSION_REPLY_LENGTH,
+  MAX_DISCUSSION_TITLE_LENGTH,
+  sanitizePlainTextInput,
+  validateAndSanitizeAnnouncementContent,
+} from "./content.domain";
 import { assertNoNewCloudinaryAttachments } from "../hub-attachments";
 import { createHubNotifications } from "../../notification/notification.service";
 
@@ -16,19 +27,42 @@ export const createAnnouncement = async (
   data: CreateAnnouncementPayload,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
+  await assertActiveHub(
+    hubId,
+    "Archived Course Hubs are read-only and cannot receive new announcements.",
+  );
+
+  const sanitized = validateAndSanitizeAnnouncementContent(data.content);
+  if (sanitized.error || !sanitized.cleanHtml || !sanitized.plainText) {
+    throw new AppError(
+      sanitized.error || "Announcement content cannot be empty.",
+      400,
+    );
+  }
+
   assertNoNewCloudinaryAttachments(data.attachments);
+
   const announcement = await contentRepository.createHubAnnouncement(
     userId,
     hubId,
-    data,
+    {
+      ...data,
+      content: sanitized.cleanHtml,
+      attachedLinkUrl: data.attachedLinkUrl?.trim() || null,
+      attachedLinkTitle: data.attachedLinkTitle?.trim() || null,
+    },
   );
+
+  invalidateHubCaches(hubId);
+
   await createHubNotifications(hubId, userId, {
     type: "HUB_ANNOUNCEMENT",
     title: "New course hub announcement",
-    body: announcement.content.replace(/<[^>]*>/g, " ").trim().slice(0, 180),
+    body: sanitized.plainText.slice(0, 180),
     route: `/hub/${hubId}`,
     dedupeKey: `hub-announcement:${announcement.id}`,
   });
+
   return announcement;
 };
 
@@ -38,14 +72,14 @@ export const updateAnnouncement = async (
   announcementId: string,
   data: UpdateAnnouncementPayload,
 ) => {
-  const member = await verifyHubRole(userId, hubId, [
-    "TEACHER",
-    "CR",
-    "STUDENT",
-  ]);
-  const announcement = await contentRepository.findAnnouncementById(
-    announcementId,
+  const member = await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
+  await assertActiveHub(
+    hubId,
+    "Archived Course Hubs are read-only and announcements cannot be edited.",
   );
+
+  const announcement =
+    await contentRepository.findAnnouncementById(announcementId);
   if (!announcement || announcement.hubId !== hubId) {
     throw new AppError("Announcement not found", 404);
   }
@@ -56,11 +90,40 @@ export const updateAnnouncement = async (
     throw new AppError("You can only edit your own announcements", 403);
   }
 
+  let nextContent = data.content;
+  if (data.content !== undefined) {
+    const sanitized = validateAndSanitizeAnnouncementContent(data.content);
+    if (sanitized.error || !sanitized.cleanHtml) {
+      throw new AppError(
+        sanitized.error || "Announcement content cannot be empty.",
+        400,
+      );
+    }
+    nextContent = sanitized.cleanHtml;
+  }
+
   assertNoNewCloudinaryAttachments(
     data.attachments,
     announcement.attachments as { url?: string }[] | null,
   );
-  return await contentRepository.updateHubAnnouncement(announcementId, data);
+
+  const updated = await contentRepository.updateHubAnnouncement(
+    hubId,
+    announcementId,
+    {
+      ...data,
+      ...(nextContent !== undefined && { content: nextContent }),
+      ...(data.attachedLinkUrl !== undefined && {
+        attachedLinkUrl: data.attachedLinkUrl?.trim() || null,
+      }),
+      ...(data.attachedLinkTitle !== undefined && {
+        attachedLinkTitle: data.attachedLinkTitle?.trim() || null,
+      }),
+    },
+  );
+
+  invalidateHubCaches(hubId);
+  return updated;
 };
 
 export const deleteAnnouncement = async (
@@ -68,14 +131,14 @@ export const deleteAnnouncement = async (
   hubId: string,
   announcementId: string,
 ) => {
-  const member = await verifyHubRole(userId, hubId, [
-    "TEACHER",
-    "CR",
-    "STUDENT",
-  ]);
-  const announcement = await contentRepository.findAnnouncementById(
-    announcementId,
+  const member = await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
+  await assertActiveHub(
+    hubId,
+    "Archived Course Hubs are read-only and announcements cannot be deleted.",
   );
+
+  const announcement =
+    await contentRepository.findAnnouncementById(announcementId);
   if (!announcement || announcement.hubId !== hubId) {
     throw new AppError("Announcement not found", 404);
   }
@@ -89,28 +152,19 @@ export const deleteAnnouncement = async (
     );
   }
 
-  return await contentRepository.deleteHubAnnouncement(announcementId);
+  const deleted =
+    await contentRepository.deleteHubAnnouncement(announcementId);
+  invalidateHubCaches(hubId);
+  return deleted;
 };
 
 export const getAnnouncements = async (
+  userId: string,
   hubId: string,
   pagination?: { page?: number; limit?: number },
 ) => {
-  return await contentRepository.findAnnouncementsByHubId(hubId, pagination);
-};
-
-export const createAnnouncementComment = async (
-  userId: string,
-  hubId: string,
-  announcementId: string,
-  content: string,
-) => {
-  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT"]);
-  return await contentRepository.createAnnouncementComment(
-    userId,
-    announcementId,
-    content,
-  );
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT", "ADMIN"]);
+  return contentRepository.findAnnouncementsByHubId(hubId, pagination);
 };
 
 export const createDiscussion = async (
@@ -119,7 +173,38 @@ export const createDiscussion = async (
   data: CreateDiscussionPayload,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT"]);
-  return await contentRepository.createHubDiscussion(userId, hubId, data);
+  await assertActiveHub(
+    hubId,
+    "Archived Course Hubs are read-only and discussions are disabled.",
+  );
+
+  const cleanTitle = sanitizePlainTextInput(
+    data.title,
+    MAX_DISCUSSION_TITLE_LENGTH,
+    "Discussion title",
+  );
+  if (cleanTitle.error || !cleanTitle.cleanText) {
+    throw new AppError(cleanTitle.error || "Discussion title is required.", 400);
+  }
+
+  const cleanContent = sanitizePlainTextInput(
+    data.content,
+    MAX_DISCUSSION_CONTENT_LENGTH,
+    "Discussion content",
+  );
+  if (cleanContent.error || !cleanContent.cleanText) {
+    throw new AppError(
+      cleanContent.error || "Discussion content cannot be empty.",
+      400,
+    );
+  }
+
+  const created = await contentRepository.createHubDiscussion(userId, hubId, {
+    title: cleanTitle.cleanText,
+    content: cleanContent.cleanText,
+  });
+  invalidateHubCaches(hubId);
+  return created;
 };
 
 export const replyToDiscussion = async (
@@ -129,15 +214,40 @@ export const replyToDiscussion = async (
   content: string,
 ) => {
   await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT"]);
-  return await contentRepository.createDiscussionReply(
+  await assertActiveHub(
+    hubId,
+    "Archived Course Hubs are read-only and replies are disabled.",
+  );
+
+  const discussion = await contentRepository.findDiscussionById(discussionId);
+  if (!discussion || discussion.hubId !== hubId) {
+    throw new AppError("Discussion not found in this Course Hub.", 404);
+  }
+
+  const cleanReply = sanitizePlainTextInput(
+    content,
+    MAX_DISCUSSION_REPLY_LENGTH,
+    "Reply content",
+  );
+  if (cleanReply.error || !cleanReply.cleanText) {
+    throw new AppError(
+      cleanReply.error || "Reply content cannot be empty.",
+      400,
+    );
+  }
+
+  const created = await contentRepository.createDiscussionReply(
     userId,
     discussionId,
-    content,
+    cleanReply.cleanText,
   );
+  invalidateHubCaches(hubId);
+  return created;
 };
 
-export const getDiscussions = async (hubId: string) => {
-  return await contentRepository.findDiscussionsByHubId(hubId);
+export const getDiscussions = async (userId: string, hubId: string) => {
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT", "ADMIN"]);
+  return contentRepository.findDiscussionsByHubId(hubId);
 };
 
 export const commentOnAnnouncement = async (
@@ -149,7 +259,34 @@ export const commentOnAnnouncement = async (
 ) => {
   if (parentId) {
     await verifyHubRole(userId, hubId, ["TEACHER", "CR"]);
+  } else {
+    await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT"]);
+  }
 
+  await assertActiveHub(
+    hubId,
+    "Archived Course Hubs are read-only and comments are disabled.",
+  );
+
+  const announcement =
+    await contentRepository.findAnnouncementById(announcementId);
+  if (!announcement || announcement.hubId !== hubId) {
+    throw new AppError("Announcement not found in this Course Hub.", 404);
+  }
+
+  const cleanComment = sanitizePlainTextInput(
+    content,
+    MAX_COMMENT_LENGTH,
+    "Comment",
+  );
+  if (cleanComment.error || !cleanComment.cleanText) {
+    throw new AppError(
+      cleanComment.error || "Comment content cannot be empty.",
+      400,
+    );
+  }
+
+  if (parentId) {
     const parentComment = await contentRepository.findCommentById(parentId);
     if (!parentComment || parentComment.announcementId !== announcementId) {
       throw new AppError("Parent comment not found for this announcement", 404);
@@ -158,19 +295,17 @@ export const commentOnAnnouncement = async (
     if (parentComment.parentId) {
       throw new AppError("Replies can only be made to top-level comments", 400);
     }
-  } else {
-    await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT"]);
   }
 
   const comment = await contentRepository.createAnnouncementComment(
     userId,
+    hubId,
     announcementId,
-    content,
+    cleanComment.cleanText,
     parentId,
   );
 
-  appCache.delPattern(new RegExp(`^hub:${hubId}`));
-
+  invalidateHubCaches(hubId);
   return comment;
 };
 
@@ -181,6 +316,18 @@ export const editAnnouncementComment = async (
   commentId: string,
   content: string,
 ) => {
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT"]);
+  await assertActiveHub(
+    hubId,
+    "Archived Course Hubs are read-only and comments cannot be edited.",
+  );
+
+  const announcement =
+    await contentRepository.findAnnouncementById(announcementId);
+  if (!announcement || announcement.hubId !== hubId) {
+    throw new AppError("Announcement not found in this Course Hub.", 404);
+  }
+
   const comment = await contentRepository.findCommentById(commentId);
   if (!comment || comment.announcementId !== announcementId) {
     throw new AppError("Comment not found for this announcement", 404);
@@ -190,13 +337,25 @@ export const editAnnouncementComment = async (
     throw new AppError("You can only edit your own comments", 403);
   }
 
-  const updated = await contentRepository.updateAnnouncementComment(
-    commentId,
+  const cleanComment = sanitizePlainTextInput(
     content,
+    MAX_COMMENT_LENGTH,
+    "Comment",
+  );
+  if (cleanComment.error || !cleanComment.cleanText) {
+    throw new AppError(
+      cleanComment.error || "Comment content cannot be empty.",
+      400,
+    );
+  }
+
+  const updated = await contentRepository.updateAnnouncementComment(
+    hubId,
+    commentId,
+    cleanComment.cleanText,
   );
 
-  appCache.delPattern(new RegExp(`^hub:${hubId}`));
-
+  invalidateHubCaches(hubId);
   return updated;
 };
 
@@ -206,20 +365,31 @@ export const removeAnnouncementComment = async (
   announcementId: string,
   commentId: string,
 ) => {
+  const member = await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT"]);
+  await assertActiveHub(
+    hubId,
+    "Archived Course Hubs are read-only and comments cannot be deleted.",
+  );
+
+  const announcement =
+    await contentRepository.findAnnouncementById(announcementId);
+  if (!announcement || announcement.hubId !== hubId) {
+    throw new AppError("Announcement not found in this Course Hub.", 404);
+  }
+
   const comment = await contentRepository.findCommentById(commentId);
   if (!comment || comment.announcementId !== announcementId) {
     throw new AppError("Comment not found for this announcement", 404);
   }
 
   const isAuthor = comment.authorId === userId;
-  if (!isAuthor) {
-    // Hub teachers can moderate and delete any comment
-    await verifyHubRole(userId, hubId, ["TEACHER"]);
+  const isTeacher = member.role === "TEACHER";
+  if (!isAuthor && !isTeacher) {
+    throw new AppError("You can only delete your own comments", 403);
   }
 
   await contentRepository.deleteAnnouncementComment(commentId);
 
-  appCache.delPattern(new RegExp(`^hub:${hubId}`));
-
+  invalidateHubCaches(hubId);
   return { success: true };
 };

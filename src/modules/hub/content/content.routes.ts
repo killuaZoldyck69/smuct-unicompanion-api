@@ -1,13 +1,21 @@
 import { Router } from "express";
 import { requireAuth } from "../../../middleware/auth.middleware";
+import {
+  createUserKeyGenerator,
+  rateLimit,
+} from "../../../middleware/rateLimit.middleware";
 import { validateRequest } from "../../../middleware/validateRequest";
 import {
+  announcementParamSchema,
   commentAnnouncementSchema,
-  updateAnnouncementCommentSchema,
+  commentParamSchema,
   createAnnouncementSchema,
-  updateAnnouncementSchema,
   createDiscussionSchema,
+  getAnnouncementsQuerySchema,
+  hubContentParamSchema,
   replyDiscussionSchema,
+  updateAnnouncementCommentSchema,
+  updateAnnouncementSchema,
 } from "./content.schema";
 import {
   createAnnouncement,
@@ -24,85 +32,98 @@ import {
 
 const router = Router({ mergeParams: true });
 
-// Support both canonical /:id/announcements and legacy /:id/content/announcements
+// Dedicated per-user limiters protect notification fan-out & prevent spam.
+export const announcementWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  keyGenerator: createUserKeyGenerator("hub-announcement-write"),
+  message: {
+    success: false,
+    message:
+      "Too many announcement updates. Please wait a few minutes before trying again.",
+  },
+});
+
+export const contentInteractionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 40,
+  keyGenerator: createUserKeyGenerator("hub-content-interaction"),
+  message: {
+    success: false,
+    message:
+      "Too many comments or discussion posts. Please wait a few minutes before trying again.",
+  },
+});
+
 router.post(
-  ["/:id/announcements", "/:id/content/announcements"],
+  "/:id/announcements",
   requireAuth,
+  announcementWriteLimiter,
   validateRequest(createAnnouncementSchema),
   createAnnouncement,
 );
 router.patch(
-  [
-    "/:id/announcements/:announcementId",
-    "/:id/content/announcements/:announcementId",
-  ],
+  "/:id/announcements/:announcementId",
   requireAuth,
+  announcementWriteLimiter,
   validateRequest(updateAnnouncementSchema),
   updateAnnouncement,
 );
 router.delete(
-  [
-    "/:id/announcements/:announcementId",
-    "/:id/content/announcements/:announcementId",
-  ],
+  "/:id/announcements/:announcementId",
   requireAuth,
+  announcementWriteLimiter,
+  validateRequest(announcementParamSchema),
   deleteAnnouncement,
 );
 router.get(
-  ["/:id/announcements", "/:id/content/announcements"],
+  "/:id/announcements",
   requireAuth,
+  validateRequest(getAnnouncementsQuerySchema),
   getAnnouncements,
 );
 
 router.post(
-  ["/:id/discussions", "/:id/content/discussions"],
+  "/:id/announcements/:announcementId/comments",
   requireAuth,
+  contentInteractionLimiter,
+  validateRequest(commentAnnouncementSchema),
+  commentAnnouncement,
+);
+router.patch(
+  "/:id/announcements/:announcementId/comments/:commentId",
+  requireAuth,
+  contentInteractionLimiter,
+  validateRequest(updateAnnouncementCommentSchema),
+  updateAnnouncementComment,
+);
+router.delete(
+  "/:id/announcements/:announcementId/comments/:commentId",
+  requireAuth,
+  contentInteractionLimiter,
+  validateRequest(commentParamSchema),
+  deleteAnnouncementComment,
+);
+
+router.post(
+  "/:id/discussions",
+  requireAuth,
+  contentInteractionLimiter,
   validateRequest(createDiscussionSchema),
   createDiscussion,
 );
 router.get(
-  ["/:id/discussions", "/:id/content/discussions"],
+  "/:id/discussions",
   requireAuth,
+  validateRequest(hubContentParamSchema),
   getDiscussions,
 );
-
 router.post(
-  [
-    "/:id/discussions/:discussionId/reply",
-    "/:id/content/discussions/:discussionId/reply",
-  ],
+  "/:id/discussions/:discussionId/reply",
   requireAuth,
+  contentInteractionLimiter,
   validateRequest(replyDiscussionSchema),
   replyDiscussion,
-);
-
-router.post(
-  [
-    "/:id/announcements/:announcementId/comments",
-    "/:id/content/announcements/:announcementId/comments",
-  ],
-  requireAuth,
-  validateRequest(commentAnnouncementSchema),
-  commentAnnouncement,
-);
-
-router.patch(
-  [
-    "/:id/announcements/:announcementId/comments/:commentId",
-    "/:id/content/announcements/:announcementId/comments/:commentId",
-  ],
-  requireAuth,
-  validateRequest(updateAnnouncementCommentSchema),
-  updateAnnouncementComment,
-);
-
-router.delete(
-  [
-    "/:id/announcements/:announcementId/comments/:commentId",
-    "/:id/content/announcements/:announcementId/comments/:commentId",
-  ],
-  requireAuth,
-  deleteAnnouncementComment,
 );
 
 export const contentRoutes = router;

@@ -96,6 +96,7 @@ model HubAnnouncement {
   comments AnnouncementComment[]
 
   @@index([hubId])
+  @@index([hubId, createdAt])
 }
 
 model AnnouncementComment {
@@ -129,6 +130,7 @@ model HubDiscussion {
   replies HubDiscussionReply[]
 
   @@index([hubId])
+  @@index([hubId, createdAt])
 }
 
 model HubDiscussionReply {

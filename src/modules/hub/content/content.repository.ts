@@ -1,12 +1,32 @@
+import { Prisma } from "../../../../generated/prisma/client";
 import { prisma } from "../../../lib/prisma";
+import {
+  DEFAULT_ANNOUNCEMENTS_LIMIT,
+  MAX_ANNOUNCEMENTS_LIMIT,
+  MAX_COMMENTS_PER_ANNOUNCEMENT,
+  MAX_DISCUSSION_REPLIES,
+  MAX_DISCUSSIONS_LIMIT,
+} from "./content.domain";
 import {
   CreateAnnouncementPayload,
   UpdateAnnouncementPayload,
   CreateDiscussionPayload,
 } from "./content.schema";
 
+const getAnnouncementCreatorSelect = (hubId: string) => ({
+  id: true,
+  name: true,
+  image: true,
+  role: true,
+  hubs: {
+    where: { hubId, isActive: true },
+    select: { role: true },
+  },
+});
+
 const getCommentsInclude = (hubId: string) => ({
   where: { parentId: null },
+  take: MAX_COMMENTS_PER_ANNOUNCEMENT,
   include: {
     author: {
       select: {
@@ -15,12 +35,13 @@ const getCommentsInclude = (hubId: string) => ({
         image: true,
         role: true,
         hubs: {
-          where: { hubId },
+          where: { hubId, isActive: true },
           select: { role: true },
         },
       },
     },
     replies: {
+      take: 50,
       include: {
         author: {
           select: {
@@ -29,7 +50,7 @@ const getCommentsInclude = (hubId: string) => ({
             image: true,
             role: true,
             hubs: {
-              where: { hubId },
+              where: { hubId, isActive: true },
               select: { role: true },
             },
           },
@@ -41,118 +62,102 @@ const getCommentsInclude = (hubId: string) => ({
   orderBy: { createdAt: "asc" as const },
 });
 
-export const createHubAnnouncement = async (
+export const createHubAnnouncement = (
   userId: string,
   hubId: string,
   data: CreateAnnouncementPayload,
-) => {
-  return await prisma.hubAnnouncement.create({
+) =>
+  prisma.hubAnnouncement.create({
     data: {
       hubId,
       creatorId: userId,
       content: data.content,
-      attachedLinkUrl: data.attachedLinkUrl,
-      attachedLinkTitle: data.attachedLinkTitle,
-      attachments: data.attachments ? (data.attachments as any) : undefined,
-      links: data.links ? (data.links as any) : undefined,
+      attachedLinkUrl: data.attachedLinkUrl || null,
+      attachedLinkTitle: data.attachedLinkTitle || null,
+      attachments: data.attachments
+        ? (data.attachments as Prisma.InputJsonValue)
+        : undefined,
+      links: data.links ? (data.links as Prisma.InputJsonValue) : undefined,
     },
     include: {
       creator: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-          role: true,
-          hubs: {
-            where: { hubId },
-            select: { role: true },
-          },
-        },
+        select: getAnnouncementCreatorSelect(hubId),
       },
       comments: getCommentsInclude(hubId),
     },
   });
-};
 
-export const findAnnouncementById = async (announcementId: string) => {
-  return await prisma.hubAnnouncement.findUnique({
+export const findAnnouncementById = (announcementId: string) =>
+  prisma.hubAnnouncement.findUnique({
     where: { id: announcementId },
     include: {
       creator: { select: { id: true, name: true, image: true, role: true } },
     },
   });
-};
 
-export const updateHubAnnouncement = async (
+export const updateHubAnnouncement = (
+  hubId: string,
   announcementId: string,
   data: UpdateAnnouncementPayload,
-) => {
-  const existing = await prisma.hubAnnouncement.findUnique({
-    where: { id: announcementId },
-    select: { hubId: true },
-  });
-
-  const hubId = existing?.hubId || "";
-
-  return await prisma.hubAnnouncement.update({
+) =>
+  prisma.hubAnnouncement.update({
     where: { id: announcementId },
     data: {
       ...(data.content !== undefined && { content: data.content }),
       ...(data.attachedLinkUrl !== undefined && {
-        attachedLinkUrl: data.attachedLinkUrl,
+        attachedLinkUrl: data.attachedLinkUrl || null,
       }),
       ...(data.attachedLinkTitle !== undefined && {
-        attachedLinkTitle: data.attachedLinkTitle,
+        attachedLinkTitle: data.attachedLinkTitle || null,
       }),
       ...(data.attachments !== undefined && {
-        attachments: data.attachments as any,
+        attachments:
+          data.attachments === null
+            ? Prisma.JsonNull
+            : (data.attachments as Prisma.InputJsonValue),
       }),
-      ...(data.links !== undefined && { links: data.links as any }),
+      ...(data.links !== undefined && {
+        links:
+          data.links === null
+            ? Prisma.JsonNull
+            : (data.links as Prisma.InputJsonValue),
+      }),
     },
     include: {
-      creator: { select: { id: true, name: true, image: true } },
+      creator: {
+        select: getAnnouncementCreatorSelect(hubId),
+      },
       comments: getCommentsInclude(hubId),
     },
   });
-};
 
-export const deleteHubAnnouncement = async (announcementId: string) => {
-  return await prisma.hubAnnouncement.delete({
+export const deleteHubAnnouncement = (announcementId: string) =>
+  prisma.hubAnnouncement.delete({
     where: { id: announcementId },
   });
-};
 
 export const findAnnouncementsByHubId = async (
   hubId: string,
   pagination?: { page?: number; limit?: number },
 ) => {
-  const page = pagination?.page ? Math.max(1, pagination.page) : undefined;
   const limit = pagination?.limit
-    ? Math.max(1, Math.min(100, pagination.limit))
-    : undefined;
-  const skip = page && limit ? (page - 1) * limit : undefined;
+    ? Math.max(1, Math.min(MAX_ANNOUNCEMENTS_LIMIT, pagination.limit))
+    : DEFAULT_ANNOUNCEMENTS_LIMIT;
+  const page = pagination?.page ? Math.max(1, pagination.page) : 1;
+  const skip = (page - 1) * limit;
 
   const [announcements, total] = await Promise.all([
     prisma.hubAnnouncement.findMany({
       where: { hubId },
       include: {
         creator: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-            role: true,
-            hubs: {
-              where: { hubId },
-              select: { role: true },
-            },
-          },
+          select: getAnnouncementCreatorSelect(hubId),
         },
         comments: getCommentsInclude(hubId),
       },
       orderBy: { createdAt: "desc" },
-      ...(skip !== undefined && { skip }),
-      ...(limit !== undefined && { take: limit }),
+      skip,
+      take: limit,
     }),
     prisma.hubAnnouncement.count({ where: { hubId } }),
   ]);
@@ -160,19 +165,20 @@ export const findAnnouncementsByHubId = async (
   return {
     announcements,
     total,
-    page: page || 1,
-    limit: limit || announcements.length,
-    totalPages: limit ? Math.ceil(total / limit) : 1,
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
   };
 };
 
-export const createAnnouncementComment = async (
+export const createAnnouncementComment = (
   userId: string,
+  hubId: string,
   announcementId: string,
   content: string,
   parentId?: string | null,
-) => {
-  return await prisma.announcementComment.create({
+) =>
+  prisma.announcementComment.create({
     data: {
       announcementId,
       authorId: userId,
@@ -181,55 +187,42 @@ export const createAnnouncementComment = async (
     },
     include: {
       author: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-          role: true,
-        },
+        select: getAnnouncementCreatorSelect(hubId),
       },
     },
   });
-};
 
-export const findCommentById = async (commentId: string) => {
-  return await prisma.announcementComment.findUnique({
+export const findCommentById = (commentId: string) =>
+  prisma.announcementComment.findUnique({
     where: { id: commentId },
   });
-};
 
-export const updateAnnouncementComment = async (
+export const updateAnnouncementComment = (
+  hubId: string,
   commentId: string,
   content: string,
-) => {
-  return await prisma.announcementComment.update({
+) =>
+  prisma.announcementComment.update({
     where: { id: commentId },
     data: { content },
     include: {
       author: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-          role: true,
-        },
+        select: getAnnouncementCreatorSelect(hubId),
       },
     },
   });
-};
 
-export const deleteAnnouncementComment = async (commentId: string) => {
-  return await prisma.announcementComment.delete({
+export const deleteAnnouncementComment = (commentId: string) =>
+  prisma.announcementComment.delete({
     where: { id: commentId },
   });
-};
 
-export const createHubDiscussion = async (
+export const createHubDiscussion = (
   userId: string,
   hubId: string,
   data: CreateDiscussionPayload,
-) => {
-  return await prisma.hubDiscussion.create({
+) =>
+  prisma.hubDiscussion.create({
     data: {
       hubId,
       authorId: userId,
@@ -237,23 +230,29 @@ export const createHubDiscussion = async (
       content: data.content,
     },
   });
-};
 
-export const createDiscussionReply = async (
+export const findDiscussionById = (discussionId: string) =>
+  prisma.hubDiscussion.findUnique({
+    where: { id: discussionId },
+    select: { id: true, hubId: true },
+  });
+
+export const createDiscussionReply = (
   userId: string,
   discussionId: string,
   content: string,
-) => {
-  return await prisma.hubDiscussionReply.create({
+) =>
+  prisma.hubDiscussionReply.create({
     data: { discussionId, authorId: userId, content },
   });
-};
 
-export const findDiscussionsByHubId = async (hubId: string) => {
-  return await prisma.hubDiscussion.findMany({
+export const findDiscussionsByHubId = (hubId: string) =>
+  prisma.hubDiscussion.findMany({
     where: { hubId },
+    take: MAX_DISCUSSIONS_LIMIT,
     include: {
       replies: {
+        take: MAX_DISCUSSION_REPLIES,
         include: { author: { select: { id: true, name: true, image: true } } },
         orderBy: { createdAt: "asc" },
       },
@@ -261,4 +260,3 @@ export const findDiscussionsByHubId = async (hubId: string) => {
     },
     orderBy: { createdAt: "desc" },
   });
-};
