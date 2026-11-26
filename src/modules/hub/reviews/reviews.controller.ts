@@ -30,7 +30,9 @@ export const editReview = catchAsync(async (req: Request, res: Response) => {
     req.params.id as string,
     req.body,
   );
-  res.status(200).json({ success: true, message: "Review updated successfully.", data });
+  res
+    .status(200)
+    .json({ success: true, message: "Review updated successfully.", data });
 });
 
 export const deleteReview = catchAsync(async (req: Request, res: Response) => {
@@ -38,14 +40,15 @@ export const deleteReview = catchAsync(async (req: Request, res: Response) => {
     req.user.id,
     req.params.id as string,
   );
-  res.status(200).json({ success: true, message: "Review deleted successfully.", data });
+  res
+    .status(200)
+    .json({ success: true, message: "Review deleted successfully.", data });
 });
 
 export const getReviews = catchAsync(async (req: Request, res: Response) => {
   const data = await reviewService.getReviews(
+    req.user.id,
     req.params.id as string,
-    req.user?.id,
   );
   res.status(200).json({ success: true, data });
 });
-

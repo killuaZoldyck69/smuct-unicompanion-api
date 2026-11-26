@@ -49,6 +49,16 @@ const ugcTermsLimiter = rateLimit({
   },
 });
 
+export const googleDriveStatusLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  keyGenerator: createUserKeyGenerator("user-google-drive-status"),
+  message: {
+    success: false,
+    message: "Too many Google Drive status updates. Please wait a few minutes.",
+  },
+});
+
 // POST /api/users/maintenance/cleanup - Trigger unverified accounts & expired tokens cleanup (Admin Only)
 router.post(
   "/maintenance/cleanup",
@@ -78,6 +88,7 @@ router.patch(
 router.patch(
   "/me/google-drive-status",
   requireAuth,
+  googleDriveStatusLimiter,
   validateRequest(updateGoogleDriveStatusSchema),
   updateGoogleDriveConnectionStatus,
 );

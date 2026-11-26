@@ -2,6 +2,7 @@ import { AppError } from "../../utils/AppError";
 import {
   uploadBufferToCloudinary,
   uploadBase64ToCloudinary,
+  deleteFileFromCloudinary,
   UploadResult,
   PROJECT_ROOT_FOLDER,
 } from "../../lib/cloudinary";
@@ -324,18 +325,18 @@ export function validateGenericFile(file: MulterFile): void {
   }
 }
 
+export type UploadedGenericFileResult = UploadResult & {
+  originalName: string;
+  size: number;
+  mimeType: string;
+  format?: string;
+};
+
 export async function uploadSingleFileService(
   file?: MulterFile,
   folder: string = PROJECT_ROOT_FOLDER,
   isAdmin: boolean = false,
-): Promise<
-  UploadResult & {
-    originalName: string;
-    size: number;
-    mimeType: string;
-    format?: string;
-  }
-> {
+): Promise<UploadedGenericFileResult> {
   assertUploadFolderIsEnabled(folder, isAdmin);
   if (!file) {
     throw new AppError("No file provided", 400);
@@ -363,36 +364,57 @@ export async function uploadMultipleFilesService(
   files: MulterFile[] = [],
   folder: string = PROJECT_ROOT_FOLDER,
   isAdmin: boolean = false,
-): Promise<
-  (UploadResult & {
-    originalName: string;
-    size: number;
-    mimeType: string;
-    format?: string;
-  })[]
-> {
+): Promise<UploadedGenericFileResult[]> {
   assertUploadFolderIsEnabled(folder, isAdmin);
   if (!files || files.length === 0) {
     throw new AppError("No files provided for upload", 400);
   }
 
-  const uploadPromises = files.map(async (file) => {
-    validateGenericFile(file);
-    const isImage = ALLOWED_MIME_TYPES.has(file.mimetype.toLowerCase());
-    const res = await uploadBufferToCloudinary(
-      file.buffer,
-      folder,
-      file.originalname,
-      isImage ? "image" : "auto",
-    );
-    return {
-      ...res,
-      originalName: file.originalname,
-      size: file.size,
-      mimeType: file.mimetype,
-      format: res.format || file.originalname.split(".").pop()?.toLowerCase(),
-    };
-  });
+  const uploadPromises: Promise<UploadedGenericFileResult>[] = files.map(
+    async (file): Promise<UploadedGenericFileResult> => {
+      validateGenericFile(file);
+      const isImage = ALLOWED_MIME_TYPES.has(file.mimetype.toLowerCase());
+      const res = await uploadBufferToCloudinary(
+        file.buffer,
+        folder,
+        file.originalname,
+        isImage ? "image" : "auto",
+      );
+      return {
+        ...res,
+        originalName: file.originalname,
+        size: file.size,
+        mimeType: file.mimetype,
+        format: res.format || file.originalname.split(".").pop()?.toLowerCase(),
+      };
+    },
+  );
 
-  return Promise.all(uploadPromises);
+  const settled = await Promise.allSettled(uploadPromises);
+  const succeeded: UploadedGenericFileResult[] = [];
+  let firstRejected: unknown = null;
+
+  for (const result of settled) {
+    if (result.status === "fulfilled") {
+      succeeded.push(result.value);
+    } else if (firstRejected === null) {
+      firstRejected = result.reason;
+    }
+  }
+
+  if (firstRejected !== null) {
+    if (succeeded.length > 0) {
+      await Promise.allSettled(
+        succeeded.map((item) =>
+          deleteFileFromCloudinary(
+            item.publicId || item.secureUrl,
+            item.resourceType === "raw" ? "raw" : "image",
+          ),
+        ),
+      );
+    }
+    throw firstRejected;
+  }
+
+  return succeeded;
 }

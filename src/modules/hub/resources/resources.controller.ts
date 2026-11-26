@@ -18,9 +18,11 @@ export const getResources = catchAsync(async (req: Request, res: Response) => {
     req.query.isStudentNote !== undefined
       ? req.query.isStudentNote === "true"
       : undefined;
-  const category = req.query.category as string | undefined;
+  const category =
+    typeof req.query.category === "string" ? req.query.category : undefined;
 
   const data = await resourceService.getResourcesService(
+    req.user.id,
     req.params.id as string,
     { isStudentNote, category },
   );

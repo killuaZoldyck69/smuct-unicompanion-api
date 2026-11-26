@@ -225,6 +225,7 @@ model Resource {
   updatedAt DateTime   @default(now()) @updatedAt
 
   @@index([hubId])
+  @@index([hubId, createdAt])
 }
 
 // ==============================

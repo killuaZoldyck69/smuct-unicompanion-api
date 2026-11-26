@@ -11,6 +11,8 @@ import {
 import {
   uploadSingleImageService,
   uploadMultipleImagesService,
+  uploadSingleFileService,
+  uploadMultipleFilesService,
   MulterFile,
 } from "./upload.service";
 
@@ -74,7 +76,6 @@ export const uploadSingleFile = catchAsync(
     const folder = (req.body?.folder as string) || PROJECT_ROOT_FOLDER;
     const isAdmin = req.user?.role === "ADMIN";
 
-    const { uploadSingleFileService } = await import("./upload.service");
     const result = await uploadSingleFileService(file, folder, isAdmin);
 
     res.status(200).json({
@@ -98,7 +99,6 @@ export const uploadMultipleFiles = catchAsync(
     const folder = (req.body?.folder as string) || PROJECT_ROOT_FOLDER;
     const isAdmin = req.user?.role === "ADMIN";
 
-    const { uploadMultipleFilesService } = await import("./upload.service");
     const results = await uploadMultipleFilesService(files, folder, isAdmin);
 
     res.status(200).json({

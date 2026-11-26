@@ -1,93 +1,131 @@
+import { Prisma } from "../../../../generated/prisma/client";
 import { prisma } from "../../../lib/prisma";
-import {
-  SubmitReviewPayload,
-  UpdateReviewSettingsPayload,
-  EditReviewPayload,
-} from "./reviews.schema";
+import { MAX_HUB_REVIEWS_LIST } from "./reviews.domain";
 
-export const updateHubReviewSettings = async (
+export const updateHubReviewSettings = (
   hubId: string,
-  data: UpdateReviewSettingsPayload,
-) => {
-  return await prisma.courseHub.update({
+  data: { isReviewOpen: boolean; reviewQuestions: string[] },
+) =>
+  prisma.courseHub.update({
     where: { id: hubId },
     data: {
       isReviewOpen: data.isReviewOpen,
       reviewQuestions: data.reviewQuestions,
     },
+    select: {
+      id: true,
+      isReviewOpen: true,
+      reviewQuestions: true,
+      isArchived: true,
+    },
   });
-};
 
-export const findHubById = async (hubId: string) => {
-  return await prisma.courseHub.findUnique({
+export const findHubById = (hubId: string) =>
+  prisma.courseHub.findUnique({
     where: { id: hubId },
+    select: {
+      id: true,
+      isReviewOpen: true,
+      reviewQuestions: true,
+      isArchived: true,
+    },
   });
-};
 
-export const findExistingReview = async (
-  hubId: string,
-  studentId: string,
-) => {
-  return await prisma.courseReview.findUnique({
+export const findExistingReview = (hubId: string, studentId: string) =>
+  prisma.courseReview.findUnique({
     where: { hubId_studentId: { hubId, studentId } },
+    select: {
+      id: true,
+      rating: true,
+      comment: true,
+      isAnonymous: true,
+      answers: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
-};
 
-export const createCourseReview = async (
+export const createCourseReview = (
   hubId: string,
   studentId: string,
-  data: SubmitReviewPayload,
-) => {
-  return await prisma.courseReview.create({
+  data: {
+    rating: number;
+    comment: string | null;
+    answers: Record<string, string> | null;
+  },
+) =>
+  prisma.courseReview.create({
     data: {
       hubId,
       studentId,
       rating: data.rating,
       comment: data.comment,
-      isAnonymous: data.isAnonymous,
-      answers: data.answers,
+      isAnonymous: true,
+      answers: data.answers === null ? Prisma.JsonNull : (data.answers as Prisma.InputJsonValue),
+    },
+    select: {
+      id: true,
+      rating: true,
+      comment: true,
+      isAnonymous: true,
+      answers: true,
+      createdAt: true,
+      updatedAt: true,
     },
   });
-};
 
-export const updateCourseReview = async (
+export const updateCourseReview = (
   hubId: string,
   studentId: string,
-  data: EditReviewPayload,
-) => {
-  return await prisma.courseReview.update({
+  data: {
+    rating?: number;
+    comment?: string | null;
+    answers?: Record<string, string> | null;
+  },
+) =>
+  prisma.courseReview.update({
     where: { hubId_studentId: { hubId, studentId } },
     data: {
       ...(data.rating !== undefined ? { rating: data.rating } : {}),
       ...(data.comment !== undefined ? { comment: data.comment } : {}),
-      ...(data.answers !== undefined ? { answers: data.answers } : {}),
+      ...(data.answers !== undefined
+        ? {
+            answers:
+              data.answers === null
+                ? Prisma.JsonNull
+                : (data.answers as Prisma.InputJsonValue),
+          }
+        : {}),
+      isAnonymous: true,
+    },
+    select: {
+      id: true,
+      rating: true,
+      comment: true,
+      isAnonymous: true,
+      answers: true,
+      createdAt: true,
+      updatedAt: true,
     },
   });
-};
 
-export const deleteCourseReview = async (
-  hubId: string,
-  studentId: string,
-) => {
-  return await prisma.courseReview.delete({
+export const deleteCourseReview = (hubId: string, studentId: string) =>
+  prisma.courseReview.delete({
     where: { hubId_studentId: { hubId, studentId } },
   });
-};
 
-export const findReviewsByHubId = async (hubId: string) => {
-  return await prisma.courseReview.findMany({
+// Strictly omit student/author PII so identity never leaves Postgres on public review reads.
+export const findReviewsByHubId = (hubId: string) =>
+  prisma.courseReview.findMany({
     where: { hubId },
-    include: {
-      student: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-          email: true,
-          studentProfile: { select: { studentId: true } },
-        },
-      },
+    select: {
+      id: true,
+      rating: true,
+      comment: true,
+      isAnonymous: true,
+      answers: true,
+      createdAt: true,
     },
+    orderBy: { createdAt: "desc" },
+    take: MAX_HUB_REVIEWS_LIST,
   });
-};
-

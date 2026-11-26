@@ -1,15 +1,36 @@
+import { Prisma } from "../../../../generated/prisma/client";
+import { AssessmentType } from "../../../constants/enums";
 import { prisma } from "../../../lib/prisma";
+import {
+  MAX_ASSESSMENT_SUBMISSIONS_LIST,
+  MAX_HUB_ASSESSMENTS_LIST,
+} from "./assessments.domain";
 import {
   CreateAssessmentPayload,
   UpdateAssessmentPayload,
 } from "./assessments.schema";
 
-export const createAssessment = async (
+const submissionInclude = {
+  student: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      image: true,
+      studentProfile: true,
+    },
+  },
+  gradedBy: {
+    select: { id: true, name: true },
+  },
+} satisfies Prisma.SubmissionInclude;
+
+export const createAssessment = (
   userId: string,
   hubId: string,
   data: CreateAssessmentPayload,
-) => {
-  return await prisma.assessment.create({
+) =>
+  prisma.assessment.create({
     data: {
       hubId,
       creatorId: userId,
@@ -22,66 +43,51 @@ export const createAssessment = async (
       startDate: data.startDate,
       totalMarks: data.totalMarks,
       allowLateSubmission: data.allowLateSubmission ?? false,
-      attachments: data.attachments ? (data.attachments as any) : undefined,
-      links: data.links ? (data.links as any) : undefined,
+      attachments:
+        data.attachments !== undefined
+          ? data.attachments === null
+            ? Prisma.JsonNull
+            : (data.attachments as Prisma.InputJsonValue)
+          : undefined,
+      links:
+        data.links !== undefined
+          ? data.links === null
+            ? Prisma.JsonNull
+            : (data.links as Prisma.InputJsonValue)
+          : undefined,
     },
     include: {
       creator: { select: { id: true, name: true, image: true, role: true } },
     },
   });
-};
 
 export const findAssessmentsByHubId = async (
   hubId: string,
   filters?: { type?: string; status?: string },
   studentIdForFilter?: string | null,
 ) => {
-  const where: any = { hubId };
-  if (filters?.type && filters.type !== "ALL") {
-    where.type = filters.type;
+  const where: Prisma.AssessmentWhereInput = { hubId };
+  if (filters?.type) {
+    where.type = filters.type as AssessmentType;
   }
-  if (filters?.status && filters.status !== "ALL") {
+  if (filters?.status) {
     where.status = filters.status;
   }
 
   const items = await prisma.assessment.findMany({
     where,
     orderBy: { deadline: "asc" },
+    take: MAX_HUB_ASSESSMENTS_LIST,
     include: {
       creator: { select: { id: true, name: true, image: true, role: true } },
       submissions: studentIdForFilter
         ? {
             where: { studentId: studentIdForFilter },
-            include: {
-              student: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  image: true,
-                  studentProfile: true,
-                },
-              },
-              gradedBy: {
-                select: { id: true, name: true },
-              },
-            },
+            include: submissionInclude,
           }
         : {
-            include: {
-              student: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  image: true,
-                  studentProfile: true,
-                },
-              },
-              gradedBy: {
-                select: { id: true, name: true },
-              },
-            },
+            include: submissionInclude,
+            take: MAX_ASSESSMENT_SUBMISSIONS_LIST,
           },
       _count: {
         select: { submissions: true },
@@ -95,8 +101,10 @@ export const findAssessmentsByHubId = async (
       (s) => s.marks !== null && s.marks !== undefined,
     ).length;
     const pendingCount = studentIdForFilter
-      ? item.submissions.filter((s) => s.marks === null || s.marks === undefined).length
-      : totalSubmissions - gradedCount;
+      ? item.submissions.filter(
+          (s) => s.marks === null || s.marks === undefined,
+        ).length
+      : Math.max(0, totalSubmissions - gradedCount);
 
     return {
       ...item,
@@ -109,54 +117,67 @@ export const findAssessmentsByHubId = async (
   });
 };
 
-export const findAssessmentById = async (
+export const findAssessmentMetaById = (assessmentId: string) =>
+  prisma.assessment.findUnique({
+    where: { id: assessmentId },
+    select: {
+      id: true,
+      hubId: true,
+      creatorId: true,
+      title: true,
+      status: true,
+      submissionType: true,
+      deadline: true,
+      startDate: true,
+      totalMarks: true,
+      allowLateSubmission: true,
+      attachments: true,
+    },
+  });
+
+export const findAssessmentById = (
   assessmentId: string,
   studentIdForFilter?: string | null,
-) => {
-  return await prisma.assessment.findUnique({
+) =>
+  prisma.assessment.findUnique({
     where: { id: assessmentId },
     include: {
       creator: { select: { id: true, name: true, image: true, role: true } },
       submissions: studentIdForFilter
         ? {
             where: { studentId: studentIdForFilter },
-            include: {
-              student: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  image: true,
-                  studentProfile: true,
-                },
-              },
-              gradedBy: {
-                select: { id: true, name: true },
-              },
-            },
+            include: submissionInclude,
           }
         : {
-            include: {
-              student: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  image: true,
-                  studentProfile: true,
-                },
-              },
-              gradedBy: {
-                select: { id: true, name: true },
-              },
-            },
+            include: submissionInclude,
+            take: MAX_ASSESSMENT_SUBMISSIONS_LIST,
           },
       _count: {
         select: { submissions: true },
       },
     },
   });
+
+export const findMaxGradedMarksForAssessment = async (
+  assessmentId: string,
+): Promise<number | null> => {
+  const aggregate = await prisma.submission.aggregate({
+    where: { assessmentId, marks: { not: null } },
+    _max: { marks: true },
+  });
+  return aggregate._max.marks ?? null;
 };
+
+export const findSubmissionSnapshotsForAssessment = (assessmentId: string) =>
+  prisma.submission.findMany({
+    where: { assessmentId },
+    select: {
+      id: true,
+      studentId: true,
+      marks: true,
+      feedback: true,
+    },
+  });
 
 export const findActiveHubStudentIds = async (
   hubId: string,
@@ -174,10 +195,99 @@ export const findActiveHubStudentIds = async (
   return new Set(members.map((member) => member.userId));
 };
 
-export const findAssessmentSubmissions = async (assessmentId: string) => {
-  return await prisma.submission.findMany({
+export const findAssessmentSubmissions = (assessmentId: string) =>
+  prisma.submission.findMany({
     where: { assessmentId },
+    include: submissionInclude,
+    orderBy: { createdAt: "desc" },
+    take: MAX_ASSESSMENT_SUBMISSIONS_LIST,
+  });
+
+export const upsertSubmission = (
+  assessmentId: string,
+  studentId: string,
+  payload: {
+    submittedUrl?: string | null;
+    content?: string | null;
+    attachments?: Prisma.InputJsonValue | typeof Prisma.JsonNull | null;
+    links?: Prisma.InputJsonValue | typeof Prisma.JsonNull | null;
+    isLate?: boolean;
+    status?: string;
+  },
+) => {
+  const attachmentsValue =
+    payload.attachments === undefined
+      ? undefined
+      : payload.attachments === null
+        ? Prisma.JsonNull
+        : payload.attachments;
+  const linksValue =
+    payload.links === undefined
+      ? undefined
+      : payload.links === null
+        ? Prisma.JsonNull
+        : payload.links;
+
+  return prisma.submission.upsert({
+    where: { assessmentId_studentId: { assessmentId, studentId } },
+    update: {
+      submittedUrl: payload.submittedUrl ?? null,
+      content: payload.content ?? null,
+      attachments: attachmentsValue ?? Prisma.JsonNull,
+      links: linksValue ?? Prisma.JsonNull,
+      isLate: payload.isLate ?? false,
+      status: payload.status ?? "SUBMITTED",
+    },
+    create: {
+      assessmentId,
+      studentId,
+      submittedUrl: payload.submittedUrl ?? null,
+      content: payload.content ?? null,
+      attachments: attachmentsValue ?? Prisma.JsonNull,
+      links: linksValue ?? Prisma.JsonNull,
+      isLate: payload.isLate ?? false,
+      status: payload.status ?? "SUBMITTED",
+    },
     include: {
+      student: {
+        select: { id: true, name: true, image: true, studentProfile: true },
+      },
+    },
+  });
+};
+
+export const upsertOfflineOrMissingSubmissionGrade = (
+  assessmentId: string,
+  studentId: string,
+  data: { marks: number; feedback?: string | null; gradedById: string },
+) =>
+  prisma.submission.upsert({
+    where: { assessmentId_studentId: { assessmentId, studentId } },
+    update: {
+      marks: data.marks,
+      feedback: data.feedback,
+      gradedById: data.gradedById,
+      status: "GRADED",
+    },
+    create: {
+      assessmentId,
+      studentId,
+      marks: data.marks,
+      feedback: data.feedback,
+      gradedById: data.gradedById,
+      status: "GRADED",
+    },
+    include: {
+      student: { select: { id: true, name: true, image: true } },
+      gradedBy: { select: { id: true, name: true } },
+    },
+  });
+
+export const findSubmissionById = (submissionId: string) =>
+  prisma.submission.findUnique({
+    where: { id: submissionId },
+    include: {
+      assessment: true,
       student: {
         select: {
           id: true,
@@ -191,83 +301,27 @@ export const findAssessmentSubmissions = async (assessmentId: string) => {
         select: { id: true, name: true },
       },
     },
-    orderBy: { createdAt: "desc" },
   });
-};
 
-export const upsertSubmission = async (
+export const findStudentSubmission = (
   assessmentId: string,
   studentId: string,
-  payload: {
-    submittedUrl?: string | null;
-    content?: string | null;
-    attachments?: any;
-    links?: any;
-    isLate?: boolean;
-    status?: string;
-  },
-) => {
-  return await prisma.submission.upsert({
+) =>
+  prisma.submission.findUnique({
     where: { assessmentId_studentId: { assessmentId, studentId } },
-    update: {
-      submittedUrl: payload.submittedUrl,
-      content: payload.content,
-      attachments: payload.attachments,
-      links: payload.links,
-      isLate: payload.isLate ?? false,
-      status: payload.status ?? "SUBMITTED",
-    },
-    create: {
-      assessmentId,
-      studentId,
-      submittedUrl: payload.submittedUrl,
-      content: payload.content,
-      attachments: payload.attachments,
-      links: payload.links,
-      isLate: payload.isLate ?? false,
-      status: payload.status ?? "SUBMITTED",
-    },
-    include: {
-      student: {
-        select: { id: true, name: true, image: true, studentProfile: true },
-      },
-    },
   });
-};
 
-export const findSubmissionById = async (submissionId: string) => {
-  return await prisma.submission.findUnique({
-    where: { id: submissionId },
-    include: {
-      assessment: true,
-      student: {
-        select: { id: true, name: true, email: true, image: true, studentProfile: true },
-      },
-      gradedBy: {
-        select: { id: true, name: true },
-      },
-    },
-  });
-};
-
-export const findStudentSubmission = async (
-  assessmentId: string,
-  studentId: string,
-) => prisma.submission.findUnique({
-  where: { assessmentId_studentId: { assessmentId, studentId } },
-});
-
-export const markSubmissionUnsubmitted = async (submissionId: string) =>
+export const markSubmissionUnsubmitted = (submissionId: string) =>
   prisma.submission.update({
     where: { id: submissionId },
     data: { status: "UNSUBMITTED", isLate: false },
   });
 
-export const updateSubmissionGrade = async (
+export const updateSubmissionGrade = (
   submissionId: string,
   data: { marks: number; feedback?: string | null; gradedById: string },
-) => {
-  return await prisma.submission.update({
+) =>
+  prisma.submission.update({
     where: { id: submissionId },
     data: {
       marks: data.marks,
@@ -280,14 +334,13 @@ export const updateSubmissionGrade = async (
       gradedBy: { select: { id: true, name: true } },
     },
   });
-};
 
-export const bulkUpsertGrades = async (
+export const bulkUpsertGrades = (
   assessmentId: string,
   gradedById: string,
   grades: { studentId: string; marks: number; feedback?: string | null }[],
-) => {
-  return await prisma.$transaction(
+) =>
+  prisma.$transaction(
     grades.map((grade) =>
       prisma.submission.upsert({
         where: {
@@ -310,13 +363,12 @@ export const bulkUpsertGrades = async (
       }),
     ),
   );
-};
 
-export const updateAssessment = async (
+export const updateAssessment = (
   assessmentId: string,
   data: UpdateAssessmentPayload,
-) => {
-  return await prisma.assessment.update({
+) =>
+  prisma.assessment.update({
     where: { id: assessmentId },
     data: {
       ...(data.title !== undefined && { title: data.title }),
@@ -333,18 +385,24 @@ export const updateAssessment = async (
         allowLateSubmission: data.allowLateSubmission,
       }),
       ...(data.attachments !== undefined && {
-        attachments: data.attachments as any,
+        attachments:
+          data.attachments === null
+            ? Prisma.JsonNull
+            : (data.attachments as Prisma.InputJsonValue),
       }),
-      ...(data.links !== undefined && { links: data.links as any }),
+      ...(data.links !== undefined && {
+        links:
+          data.links === null
+            ? Prisma.JsonNull
+            : (data.links as Prisma.InputJsonValue),
+      }),
     },
     include: {
       creator: { select: { id: true, name: true, image: true, role: true } },
     },
   });
-};
 
-export const deleteAssessment = async (assessmentId: string) => {
-  return await prisma.assessment.delete({
+export const deleteAssessment = (assessmentId: string) =>
+  prisma.assessment.delete({
     where: { id: assessmentId },
   });
-};

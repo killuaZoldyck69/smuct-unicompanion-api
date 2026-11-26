@@ -1,12 +1,23 @@
+import { Prisma } from "../../../../generated/prisma/client";
 import { prisma } from "../../../lib/prisma";
+import { MAX_HUB_RESOURCES_LIST } from "./resources.domain";
 import { CreateResourcePayload } from "./resources.schema";
 
-export const createResource = async (
+const resourceUploaderSelect = {
+  id: true,
+  name: true,
+  image: true,
+  role: true,
+  studentProfile: { select: { studentId: true, department: true } },
+  teacherProfile: { select: { designation: true, department: true } },
+} satisfies Prisma.UserSelect;
+
+export const createResource = (
   userId: string,
   hubId: string,
   data: CreateResourcePayload,
-) => {
-  return await prisma.resource.create({
+) =>
+  prisma.resource.create({
     data: {
       hubId,
       uploaderId: userId,
@@ -17,44 +28,36 @@ export const createResource = async (
       fileType: data.fileType,
       fileSize: data.fileSize,
       isStudentNote: data.isStudentNote || false,
-      attachments: data.attachments ? (data.attachments as any) : undefined,
-      links: data.links ? (data.links as any) : undefined,
+      attachments: data.attachments
+        ? (data.attachments as Prisma.InputJsonValue)
+        : undefined,
+      links: data.links ? (data.links as Prisma.InputJsonValue) : undefined,
     },
     include: {
       uploader: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-          role: true,
-          studentProfile: { select: { studentId: true, department: true } },
-          teacherProfile: { select: { designation: true, department: true } },
-        },
+        select: resourceUploaderSelect,
       },
     },
   });
-};
 
-export const findResourceById = async (resourceId: string) => {
-  return await prisma.resource.findUnique({
+export const findResourceById = (resourceId: string) =>
+  prisma.resource.findUnique({
     where: { id: resourceId },
     include: {
       uploader: { select: { id: true, name: true, role: true } },
     },
   });
-};
 
-export const deleteResourceById = async (resourceId: string) => {
-  return await prisma.resource.delete({
+export const deleteResourceById = (resourceId: string) =>
+  prisma.resource.delete({
     where: { id: resourceId },
   });
-};
 
-export const findResourcesByHubId = async (
+export const findResourcesByHubId = (
   hubId: string,
   filters?: { isStudentNote?: boolean; category?: string },
 ) => {
-  const where: any = { hubId };
+  const where: Prisma.ResourceWhereInput = { hubId };
   if (filters?.isStudentNote !== undefined) {
     where.isStudentNote = filters.isStudentNote;
   }
@@ -62,18 +65,12 @@ export const findResourcesByHubId = async (
     where.category = filters.category;
   }
 
-  return await prisma.resource.findMany({
+  return prisma.resource.findMany({
     where,
+    take: MAX_HUB_RESOURCES_LIST,
     include: {
       uploader: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-          role: true,
-          studentProfile: { select: { studentId: true, department: true } },
-          teacherProfile: { select: { designation: true, department: true } },
-        },
+        select: resourceUploaderSelect,
       },
     },
     orderBy: { createdAt: "desc" },

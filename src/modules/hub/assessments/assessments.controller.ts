@@ -34,6 +34,7 @@ export const getAssessmentById = catchAsync(
   async (req: Request, res: Response) => {
     const data = await assessmentService.getAssessmentById(
       req.user.id,
+      req.params.id as string,
       req.params.assessmentId as string,
     );
     res.status(200).json({ success: true, data });
@@ -44,6 +45,7 @@ export const submitAssessment = catchAsync(
   async (req: Request, res: Response) => {
     const data = await assessmentService.submitAssessment(
       req.user.id,
+      req.params.id as string,
       req.params.assessmentId as string,
       req.body,
     );
@@ -57,9 +59,12 @@ export const unsubmitAssessment = catchAsync(
   async (req: Request, res: Response) => {
     const data = await assessmentService.unsubmitAssessment(
       req.user.id,
+      req.params.id as string,
       req.params.assessmentId as string,
     );
-    res.status(200).json({ success: true, message: "Coursework unsubmitted", data });
+    res
+      .status(200)
+      .json({ success: true, message: "Coursework unsubmitted", data });
   },
 );
 
@@ -67,6 +72,7 @@ export const gradeSubmission = catchAsync(
   async (req: Request, res: Response) => {
     const data = await assessmentService.gradeSubmission(
       req.user.id,
+      req.params.id as string,
       req.params.submissionId as string,
       req.body,
     );
@@ -78,6 +84,7 @@ export const getAssessmentSubmissions = catchAsync(
   async (req: Request, res: Response) => {
     const data = await assessmentService.getAssessmentSubmissions(
       req.user.id,
+      req.params.id as string,
       req.params.assessmentId as string,
     );
     res.status(200).json({ success: true, data });
@@ -87,6 +94,7 @@ export const getAssessmentSubmissions = catchAsync(
 export const bulkGrade = catchAsync(async (req: Request, res: Response) => {
   const data = await assessmentService.bulkGrade(
     req.user.id,
+    req.params.id as string,
     req.params.assessmentId as string,
     req.body,
   );
@@ -99,6 +107,7 @@ export const updateAssessment = catchAsync(
   async (req: Request, res: Response) => {
     const data = await assessmentService.updateAssessment(
       req.user.id,
+      req.params.id as string,
       req.params.assessmentId as string,
       req.body,
     );
@@ -112,6 +121,7 @@ export const deleteAssessment = catchAsync(
   async (req: Request, res: Response) => {
     await assessmentService.deleteAssessment(
       req.user.id,
+      req.params.id as string,
       req.params.assessmentId as string,
     );
     res

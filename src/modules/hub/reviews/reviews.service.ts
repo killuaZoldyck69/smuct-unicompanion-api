@@ -1,32 +1,60 @@
-import { verifyHubRole } from "../hub.service";
+import { Prisma } from "../../../../generated/prisma/client";
 import { AppError } from "../../../utils/AppError";
+import { createHubNotifications } from "../../notification/notification.service";
+import {
+  assertActiveHub,
+  invalidateHubCaches,
+  verifyHubRole,
+} from "../hub.service";
+import {
+  computeReviewStats,
+  sanitizeReviewAnswers,
+  sanitizeReviewQuestions,
+  shuffleArray,
+  toAnonymousReviewPublicItem,
+} from "./reviews.domain";
 import * as reviewsRepository from "./reviews.repository";
 import {
+  EditReviewPayload,
   SubmitReviewPayload,
   UpdateReviewSettingsPayload,
-  EditReviewPayload,
 } from "./reviews.schema";
-import { createHubNotifications } from "../../notification/notification.service";
 
 export const updateReviewSettings = async (
   userId: string,
   hubId: string,
   data: UpdateReviewSettingsPayload,
 ) => {
-  // Only TEACHER can active reviews and add optional questions
   await verifyHubRole(userId, hubId, ["TEACHER"]);
+  await assertActiveHub(
+    hubId,
+    "Archived Course Hubs are read-only and review settings cannot be changed.",
+  );
+
   const existingHub = await reviewsRepository.findHubById(hubId);
   if (!existingHub) throw new AppError("Course hub not found", 404);
 
-  const updatedHub = await reviewsRepository.updateHubReviewSettings(hubId, data);
+  const cleanQuestions = sanitizeReviewQuestions(data.reviewQuestions);
+  const updatedHub = await reviewsRepository.updateHubReviewSettings(hubId, {
+    isReviewOpen: data.isReviewOpen,
+    reviewQuestions: cleanQuestions,
+  });
+  invalidateHubCaches(hubId);
+
   if (!existingHub.isReviewOpen && updatedHub.isReviewOpen) {
-    await createHubNotifications(hubId, userId, {
-      type: "REVIEW_OPEN",
-      title: "Course review is open",
-      body: "The review period is open. Share your feedback for this course.",
-      route: `/hub/${hubId}?tab=review`,
-      dedupeKey: `review-open:${hubId}:${Date.now()}`,
-    }, ["STUDENT", "CR"]);
+    const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
+    await createHubNotifications(
+      hubId,
+      userId,
+      {
+        type: "REVIEW_OPEN",
+        title: "Course review is open",
+        body: "The review period is open. Share your feedback for this course.",
+        route: `/hub/${hubId}?tab=review`,
+        dedupeKey: `review-open:${hubId}:${hourBucket}`,
+      },
+      ["STUDENT", "CR"],
+    );
   }
   return updatedHub;
 };
@@ -37,23 +65,24 @@ export const submitReview = async (
   data: SubmitReviewPayload,
 ) => {
   await verifyHubRole(userId, hubId, ["STUDENT", "CR"]);
+  await assertActiveHub(
+    hubId,
+    "Archived Course Hubs are read-only and cannot accept reviews.",
+  );
 
   const hub = await reviewsRepository.findHubById(hubId);
-
-  // Validate that reviews are enabled for this hub
-  if (!hub || !hub.isReviewOpen) {
+  if (!hub) throw new AppError("Course hub not found", 404);
+  if (!hub.isReviewOpen) {
     throw new AppError(
       "Review submission is currently closed for this hub.",
       403,
     );
   }
 
-  // Validate that student has not already submitted a review
   const existingReview = await reviewsRepository.findExistingReview(
     hubId,
     userId,
   );
-
   if (existingReview) {
     throw new AppError(
       "You have already submitted a review for this course.",
@@ -61,10 +90,22 @@ export const submitReview = async (
     );
   }
 
+  const comment = data.comment?.trim() || null;
+  const answers = sanitizeReviewAnswers(data.answers);
+
   try {
-    return await reviewsRepository.createCourseReview(hubId, userId, data);
-  } catch (error: any) {
-    if (error.code === "P2002") {
+    const created = await reviewsRepository.createCourseReview(hubId, userId, {
+      rating: data.rating,
+      comment,
+      answers,
+    });
+    invalidateHubCaches(hubId);
+    return created;
+  } catch (error: unknown) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
       throw new AppError(
         "You have already submitted a review for this course.",
         409,
@@ -80,101 +121,105 @@ export const editReview = async (
   data: EditReviewPayload,
 ) => {
   await verifyHubRole(userId, hubId, ["STUDENT", "CR"]);
-
-  const existingReview = await reviewsRepository.findExistingReview(
+  await assertActiveHub(
     hubId,
-    userId,
+    "Archived Course Hubs are read-only and reviews cannot be edited.",
   );
 
-  if (!existingReview) {
-    throw new AppError("Review not found or you have not submitted a review yet.", 404);
+  const hub = await reviewsRepository.findHubById(hubId);
+  if (!hub) throw new AppError("Course hub not found", 404);
+  if (!hub.isReviewOpen) {
+    throw new AppError(
+      "Review editing is closed because evaluations are no longer open for this hub.",
+      403,
+    );
   }
 
-  return await reviewsRepository.updateCourseReview(hubId, userId, data);
+  const existingReview = await reviewsRepository.findExistingReview(
+    hubId,
+    userId,
+  );
+  if (!existingReview) {
+    throw new AppError(
+      "Review not found or you have not submitted a review yet.",
+      404,
+    );
+  }
+
+  const updated = await reviewsRepository.updateCourseReview(hubId, userId, {
+    ...(data.rating !== undefined ? { rating: data.rating } : {}),
+    ...(data.comment !== undefined
+      ? { comment: data.comment?.trim() || null }
+      : {}),
+    ...(data.answers !== undefined
+      ? { answers: sanitizeReviewAnswers(data.answers) }
+      : {}),
+  });
+  invalidateHubCaches(hubId);
+  return updated;
 };
 
-export const deleteReview = async (
-  userId: string,
-  hubId: string,
-) => {
+export const deleteReview = async (userId: string, hubId: string) => {
   await verifyHubRole(userId, hubId, ["STUDENT", "CR"]);
+  await assertActiveHub(
+    hubId,
+    "Archived Course Hubs are read-only and reviews cannot be deleted.",
+  );
 
   const existingReview = await reviewsRepository.findExistingReview(
     hubId,
     userId,
   );
-
   if (!existingReview) {
     throw new AppError("Review not found.", 404);
   }
 
   await reviewsRepository.deleteCourseReview(hubId, userId);
+  invalidateHubCaches(hubId);
   return { success: true, message: "Review deleted successfully." };
 };
 
-export const getReviews = async (hubId: string, currentUserId?: string) => {
+export const getReviews = async (userId: string, hubId: string) => {
+  const member = await verifyHubRole(userId, hubId, [
+    "TEACHER",
+    "CR",
+    "STUDENT",
+    "ADMIN",
+  ]);
+
   const hub = await reviewsRepository.findHubById(hubId);
+  if (!hub) throw new AppError("Course hub not found", 404);
+
   const reviews = await reviewsRepository.findReviewsByHubId(hubId);
+  const { totalReviews, averageRating, ratingDistribution } = computeReviewStats(
+    reviews.map((r) => r.rating),
+  );
 
-  const totalReviews = reviews.length;
-  const averageRating =
-    totalReviews > 0
-      ? Number((reviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews).toFixed(1))
-      : 0;
-
-  const ratingDistribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  reviews.forEach((r) => {
-    if (r.rating >= 1 && r.rating <= 5) {
-      ratingDistribution[r.rating] = (ratingDistribution[r.rating] || 0) + 1;
-    }
-  });
-
-  const myReview = currentUserId
-    ? await reviewsRepository.findExistingReview(hubId, currentUserId)
+  const isStudentMember = member.role === "STUDENT" || member.role === "CR";
+  const myReview = isStudentMember
+    ? await reviewsRepository.findExistingReview(hubId, userId)
     : null;
-  const hasSubmitted = !!myReview;
+  const hasSubmitted = Boolean(myReview);
 
-  // Sanitize all reviews to be completely Anonymous for both teachers and peers
-  const sanitizedReviews = reviews.map((review) => {
-    return {
-      id: review.id,
-      rating: review.rating,
-      comment: review.comment,
-      isAnonymous: true,
-      answers: review.answers,
-      createdAt: review.createdAt,
-      studentId: undefined,
-      student: {
-        id: undefined,
-        name: "Anonymous Student",
-        email: undefined,
-        image: null,
-        studentProfile: null,
-      },
-    };
-  });
-
-  // Randomize reviews order (Fisher-Yates shuffle) so order is completely anonymous
-  const shuffledReviews = [...sanitizedReviews];
-  for (let i = shuffledReviews.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffledReviews[i], shuffledReviews[j]] = [shuffledReviews[j], shuffledReviews[i]];
-  }
+  const sanitizedReviews = reviews.map(toAnonymousReviewPublicItem);
+  const shuffledReviews = shuffleArray(sanitizedReviews);
 
   return {
     reviews: shuffledReviews,
     totalReviews,
     averageRating,
     ratingDistribution,
-    isReviewOpen: hub?.isReviewOpen || false,
-    reviewQuestions: (hub?.reviewQuestions as string[]) || [],
+    isReviewOpen: Boolean(hub.isReviewOpen),
+    reviewQuestions: Array.isArray(hub.reviewQuestions)
+      ? (hub.reviewQuestions as string[])
+      : [],
     hasSubmitted,
     myReview: myReview
       ? {
           id: myReview.id,
           rating: myReview.rating,
           comment: myReview.comment,
-          isAnonymous: myReview.isAnonymous,
+          isAnonymous: true,
           answers: myReview.answers,
           createdAt: myReview.createdAt,
           updatedAt: myReview.updatedAt,
@@ -182,4 +227,3 @@ export const getReviews = async (hubId: string, currentUserId?: string) => {
       : null,
   };
 };
-
