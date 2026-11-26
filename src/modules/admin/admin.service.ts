@@ -1,5 +1,7 @@
+import { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../lib/prisma";
 import { appCache } from "../../lib/cache";
+import { SMUCT_PROGRAM_CATALOG } from "../../constants/smuct-catalog";
 import { AdminCourseHubsQuery } from "./admin.schema";
 
 export interface ActivityItem {
@@ -203,130 +205,154 @@ export const getAdminDashboardStatsService = async (): Promise<AdminDashboardSta
   );
 };
 
-export const getAdminCourseHubsService = async (query: AdminCourseHubsQuery) => {
-  const page = query.page || 1;
-  const limit = query.limit || 15;
-  const skip = (page - 1) * limit;
+export const buildAdminCourseHubsWhere = (
+  query: AdminCourseHubsQuery,
+): Prisma.CourseHubWhereInput => {
+  const andConditions: Prisma.CourseHubWhereInput[] = [];
 
-  // Build secure Prisma where filter
-  const where: any = {};
-
-  // Status filter (ACTIVE | ARCHIVED | ALL)
   if (query.status === "ACTIVE") {
-    where.isArchived = false;
+    andConditions.push({ isArchived: false });
   } else if (query.status === "ARCHIVED") {
-    where.isArchived = true;
+    andConditions.push({ isArchived: true });
   }
 
-  // Department filter
-  if (
-    query.department &&
-    query.department.trim() !== "" &&
-    query.department.toUpperCase() !== "ALL"
-  ) {
-    const dept = query.department.trim();
-    if (dept.toUpperCase() === "CSE") {
-      where.OR = [
-        { department: { contains: "Computer Science", mode: "insensitive" } },
-        { department: { equals: "CSE", mode: "insensitive" } },
+  const rawDepartment = query.department?.trim();
+  if (rawDepartment && rawDepartment.toUpperCase() !== "ALL") {
+    const normalized = rawDepartment.toLowerCase();
+    const matchedCatalog = SMUCT_PROGRAM_CATALOG.find(
+      (entry) =>
+        entry.deptCode.toLowerCase() === normalized ||
+        entry.deptFull.toLowerCase() === normalized ||
+        entry.deptAliases?.some((alias) => alias.toLowerCase() === normalized),
+    );
+
+    if (matchedCatalog) {
+      const tokens = [
+        matchedCatalog.deptCode,
+        matchedCatalog.deptFull,
+        ...(matchedCatalog.deptAliases ?? []),
       ];
+      andConditions.push({
+        OR: tokens.map((token) => ({
+          department: { contains: token, mode: "insensitive" },
+        })),
+      });
     } else {
-      where.department = {
-        contains: dept,
-        mode: "insensitive",
-      };
+      andConditions.push({
+        department: { contains: rawDepartment, mode: "insensitive" },
+      });
     }
   }
 
-  // Search filter (matches courseName OR courseCode)
-  if (query.search && query.search.trim() !== "") {
-    const term = query.search.trim();
-    where.OR = [
-      { courseName: { contains: term, mode: "insensitive" } },
-      { courseCode: { contains: term, mode: "insensitive" } },
-    ];
+  const searchTerm = query.search?.trim();
+  if (searchTerm) {
+    andConditions.push({
+      OR: [
+        { courseName: { contains: searchTerm, mode: "insensitive" } },
+        { courseCode: { contains: searchTerm, mode: "insensitive" } },
+      ],
+    });
   }
 
-  // Cache key incorporating all normalized query params
-  const cacheKey = `admin:course-hubs:p=${page}:l=${limit}:s=${query.status}:d=${query.department || "ALL"}:q=${query.search || ""}`;
+  return andConditions.length > 0 ? { AND: andConditions } : {};
+};
 
-  return await appCache.getOrSet(
-    cacheKey,
-    async () => {
-      const [total, hubs, totalActive, totalArchived, departmentsList] =
-        await Promise.all([
-          prisma.courseHub.count({ where }),
-          prisma.courseHub.findMany({
-            where,
-            skip,
-            take: limit,
-            orderBy: [{ isArchived: "asc" }, { createdAt: "desc" }],
-            include: {
-              _count: {
-                select: { members: true, assessments: true, resources: true },
-              },
-              members: {
-                where: { role: "TEACHER" },
-                select: {
-                  id: true,
-                  role: true,
-                  user: {
-                    select: { id: true, name: true, image: true, email: true },
-                  },
-                },
-                take: 1,
-              },
-              assessments: {
-                where: { deadline: { gt: new Date() } },
-                orderBy: { deadline: "asc" },
-                take: 1,
-                select: { id: true, title: true, type: true, deadline: true },
-              },
-              classNotices: {
-                where: { isActive: true },
-                include: {
-                  author: {
-                    select: { id: true, name: true, image: true, role: true },
-                  },
-                },
-                orderBy: { createdAt: "desc" },
+export const getAdminCourseHubsService = async (
+  query: AdminCourseHubsQuery,
+) => {
+  const page = query.page || 1;
+  const limit = query.limit || 15;
+  const skip = (page - 1) * limit;
+  const where = buildAdminCourseHubsWhere(query);
+  const searchTerm = query.search?.trim() || "";
+
+  const fetchAdminCourseHubs = async () => {
+    const now = new Date();
+    const [total, hubs, totalActive, totalArchived, departmentsList] =
+      await Promise.all([
+        prisma.courseHub.count({ where }),
+        prisma.courseHub.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: [{ isArchived: "asc" }, { createdAt: "desc" }],
+          select: {
+            id: true,
+            courseCode: true,
+            courseName: true,
+            semesterNumber: true,
+            section: true,
+            department: true,
+            batch: true,
+            termOffer: true,
+            isArchived: true,
+            isClassLive: true,
+            createdAt: true,
+            _count: {
+              select: {
+                members: { where: { isActive: true } },
+                assessments: true,
+                resources: true,
               },
             },
-          }),
-          prisma.courseHub.count({ where: { isArchived: false } }),
-          prisma.courseHub.count({ where: { isArchived: true } }),
-          prisma.courseHub.findMany({
-            select: { department: true },
-            distinct: ["department"],
-            orderBy: { department: "asc" },
-          }),
-        ]);
+            members: {
+              where: { role: "TEACHER", isActive: true },
+              select: {
+                id: true,
+                role: true,
+                user: {
+                  select: { id: true, name: true, image: true },
+                },
+              },
+              take: 1,
+            },
+            assessments: {
+              where: { deadline: { gt: now } },
+              orderBy: { deadline: "asc" },
+              take: 1,
+              select: { id: true, title: true, type: true, deadline: true },
+            },
+          },
+        }),
+        prisma.courseHub.count({ where: { isArchived: false } }),
+        prisma.courseHub.count({ where: { isArchived: true } }),
+        prisma.courseHub.findMany({
+          select: { department: true },
+          distinct: ["department"],
+          orderBy: { department: "asc" },
+        }),
+      ]);
 
-      const totalPages = Math.ceil(total / limit) || 1;
-      const availableDepartments = departmentsList
-        .map((d) => d.department)
-        .filter((d): d is string => Boolean(d && d.trim()));
+    const totalPages = Math.ceil(total / limit) || 1;
+    const availableDepartments = departmentsList
+      .map((d) => d.department)
+      .filter((d): d is string => Boolean(d && d.trim()));
 
-      return {
-        hubs: hubs.map((hub) => ({
-          id: `admin-${hub.id}`,
-          role: "ADMIN" as any,
-          hub,
-        })),
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages,
-          hasMore: page < totalPages,
-        },
-        meta: {
-          totalActive,
-          totalArchived,
-          availableDepartments,
-        },
-      };
-    },
-    45,
-  );
+    return {
+      hubs: hubs.map((hub) => ({
+        id: `admin-${hub.id}`,
+        role: "ADMIN" as const,
+        hub,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasMore: page < totalPages,
+      },
+      meta: {
+        totalActive,
+        totalArchived,
+        availableDepartments,
+      },
+    };
+  };
+
+  if (searchTerm) {
+    return fetchAdminCourseHubs();
+  }
+
+  const cacheKey = `admin:course-hubs:p=${page}:l=${limit}:s=${query.status}:d=${query.department || "ALL"}`;
+  return appCache.getOrSet(cacheKey, fetchAdminCourseHubs, 45);
 };

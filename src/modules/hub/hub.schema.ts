@@ -70,10 +70,26 @@ export const weeklyClassScheduleItemSchema = z
 
 export const createHubSchema = z.object({
   body: z.object({
-    courseCode: z.string().min(1, "Course code is required"),
-    courseName: z.string().min(1, "Course name is required"),
-    credit: z.number().positive(),
-    termOffer: z.string().min(1, "Term offer is required"),
+    courseCode: z
+      .string()
+      .trim()
+      .min(1, "Course code is required")
+      .max(24, "Course code must not exceed 24 characters"),
+    courseName: z
+      .string()
+      .trim()
+      .min(1, "Course name is required")
+      .max(120, "Course name must not exceed 120 characters"),
+    credit: z
+      .number()
+      .finite()
+      .min(0.5, "Credit must be at least 0.5")
+      .max(20, "Credit must not exceed 20"),
+    termOffer: z
+      .string()
+      .trim()
+      .min(1, "Term offer is required")
+      .max(40, "Term offer must not exceed 40 characters"),
     weeklyClassSchedule: z
       .array(weeklyClassScheduleItemSchema)
       .min(1, "At least one class schedule is required")
@@ -81,11 +97,28 @@ export const createHubSchema = z.object({
         CLASS_NOTICE_LIMITS.maxScheduleSlots,
         `Cannot exceed ${CLASS_NOTICE_LIMITS.maxScheduleSlots} class slots`,
       ),
-    department: z.string().min(1, "Department is required"),
-    batch: z.string().min(1, "Batch is required"),
-    section: z.string().optional(),
-    semesterNumber: z.number().positive(),
-    teacherId: z.string().optional(),
+    department: z
+      .string()
+      .trim()
+      .min(1, "Department is required")
+      .max(120, "Department must not exceed 120 characters"),
+    batch: z
+      .string()
+      .trim()
+      .min(1, "Batch is required")
+      .max(20, "Batch must not exceed 20 characters"),
+    section: z
+      .string()
+      .trim()
+      .max(16, "Section must not exceed 16 characters")
+      .optional()
+      .transform((val) => (val ? val : undefined)),
+    semesterNumber: z
+      .number()
+      .int("Semester must be a whole number")
+      .min(1, "Semester must be at least 1")
+      .max(12, "Semester must not exceed 12"),
+    teacherId: z.string().trim().uuid("Invalid teacher ID").optional(),
   }),
 });
 
@@ -93,7 +126,11 @@ export const joinHubSchema = z.object({
   body: z.object({
     joinCode: z
       .string()
-      .length(6, { message: "Join code must be exactly 6 characters" }),
+      .trim()
+      .transform((val) => val.toUpperCase())
+      .refine((val) => /^[A-Z0-9]{6}$/.test(val), {
+        message: "Join code must be exactly 6 letters or numbers",
+      }),
   }),
 });
 
@@ -194,14 +231,55 @@ export const updateHubSchema = z.object({
     id: z.string().uuid("Invalid course hub ID"),
   }),
   body: z.object({
-    courseCode: z.string().optional(),
-    courseName: z.string().optional(),
-    credit: z.number().positive().optional(),
-    department: z.string().optional(),
-    batch: z.string().optional(),
-    section: z.string().optional(),
-    semesterNumber: z.number().int().positive().optional(),
-    termOffer: z.string().optional(),
+    courseCode: z
+      .string()
+      .trim()
+      .min(1, "Course code cannot be empty")
+      .max(24, "Course code must not exceed 24 characters")
+      .optional(),
+    courseName: z
+      .string()
+      .trim()
+      .min(1, "Course name cannot be empty")
+      .max(120, "Course name must not exceed 120 characters")
+      .optional(),
+    credit: z
+      .number()
+      .finite()
+      .min(0.5, "Credit must be at least 0.5")
+      .max(20, "Credit must not exceed 20")
+      .optional(),
+    department: z
+      .string()
+      .trim()
+      .min(1, "Department cannot be empty")
+      .max(120, "Department must not exceed 120 characters")
+      .optional(),
+    batch: z
+      .string()
+      .trim()
+      .min(1, "Batch cannot be empty")
+      .max(20, "Batch must not exceed 20 characters")
+      .optional(),
+    section: z
+      .string()
+      .trim()
+      .max(16, "Section must not exceed 16 characters")
+      .nullable()
+      .optional()
+      .transform((val) => (val === "" ? null : val)),
+    semesterNumber: z
+      .number()
+      .int("Semester must be a whole number")
+      .min(1, "Semester must be at least 1")
+      .max(12, "Semester must not exceed 12")
+      .optional(),
+    termOffer: z
+      .string()
+      .trim()
+      .min(1, "Term offer cannot be empty")
+      .max(40, "Term offer must not exceed 40 characters")
+      .optional(),
     weeklyClassSchedule: z
       .array(weeklyClassScheduleItemSchema)
       .max(
@@ -248,12 +326,24 @@ export const toggleLiveClassSchema = z.object({
 });
 
 export const archiveHubSchema = z.object({
+  params: z.object({
+    id: z.string().uuid("Invalid course hub ID"),
+  }),
   body: z.object({
     isArchived: z.boolean(),
   }),
 });
 
-export const MY_HUBS_VIEWS = ["default", "schedule", "exams", "cgpa"] as const;
+export const getAvailableTeachersQuerySchema = z.object({
+  query: z.object({
+    search: z.string().trim().max(100).optional(),
+    department: z.string().trim().max(100).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+  }),
+});
+
+export const MY_HUBS_VIEWS = ["default", "list", "schedule", "exams", "cgpa"] as const;
 export type MyHubsView = (typeof MY_HUBS_VIEWS)[number];
 
 export const getMyHubsQuerySchema = z.object({

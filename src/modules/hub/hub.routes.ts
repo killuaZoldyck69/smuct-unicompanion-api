@@ -13,6 +13,7 @@ import {
   updateHubSchema,
   toggleLiveClassSchema,
   getMyHubsQuerySchema,
+  getAvailableTeachersQuerySchema,
   createClassNoticeSchema,
   deleteClassNoticeSchema,
 } from "./hub.schema";
@@ -49,6 +50,17 @@ export const hubWriteLimiter = rateLimit({
   },
 });
 
+export const hubJoinLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
+  keyGenerator: createUserKeyGenerator("hub-join"),
+  message: {
+    success: false,
+    message:
+      "Too many join attempts. Please wait a few minutes before trying again.",
+  },
+});
+
 export const classNoticeWriteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 20,
@@ -61,10 +73,26 @@ export const classNoticeWriteLimiter = rateLimit({
 });
 
 // --- Core Hub Routes ---
-router.post("/", requireAuth, validateRequest(createHubSchema), createHub);
-router.post("/join", requireAuth, validateRequest(joinHubSchema), joinHub);
-router.get("/teachers", requireAuth, getAvailableTeachers);
-router.get("/available-teachers", requireAuth, getAvailableTeachers);
+router.post(
+  "/",
+  requireAuth,
+  hubWriteLimiter,
+  validateRequest(createHubSchema),
+  createHub,
+);
+router.post(
+  "/join",
+  requireAuth,
+  hubJoinLimiter,
+  validateRequest(joinHubSchema),
+  joinHub,
+);
+router.get(
+  "/teachers",
+  requireAuth,
+  validateRequest(getAvailableTeachersQuerySchema),
+  getAvailableTeachers,
+);
 router.get(
   "/my",
   requireAuth,
@@ -88,14 +116,22 @@ router.patch(
 router.patch(
   "/:id/live-class",
   requireAuth,
+  hubWriteLimiter,
   validateRequest(toggleLiveClassSchema),
   toggleLiveClass,
 );
-router.delete("/:id", requireAuth, deleteHub);
+router.delete(
+  "/:id",
+  requireAuth,
+  hubWriteLimiter,
+  validateRequest(hubIdParamSchema),
+  deleteHub,
+);
 
 router.patch(
   "/:id/archive",
   requireAuth,
+  hubWriteLimiter,
   validateRequest(archiveHubSchema),
   archiveHub,
 );

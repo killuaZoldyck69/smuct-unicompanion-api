@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { Prisma } from "../../../generated/prisma/client";
 import { AppError } from "../../utils/AppError";
 import { HubRole } from "../../constants/enums";
 import * as hubRepository from "./hub.repository";
@@ -28,7 +29,7 @@ export interface VerifiedHubAccess {
   role: AllowedHubRole;
 }
 
-const assertActiveHub = async (hubId: string, archivedMessage: string) => {
+export const assertActiveHub = async (hubId: string, archivedMessage: string) => {
   const hub = await hubRepository.findHubStatusById(hubId);
   if (!hub) {
     throw new AppError("Course Hub not found.", 404);
@@ -90,8 +91,27 @@ export const getAvailableTeachersService = (
   query?: hubRepository.FindAvailableTeachersQuery,
 ) => hubRepository.findAvailableTeachers(query);
 
-const generateJoinCode = () =>
-  Math.random().toString(36).substring(2, 8).toUpperCase();
+export const JOIN_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const JOIN_CODE_LENGTH = 6;
+const MAX_JOIN_CODE_ATTEMPTS = 5;
+
+export const generateJoinCode = (): string => {
+  let code = "";
+  for (let i = 0; i < JOIN_CODE_LENGTH; i += 1) {
+    code += JOIN_CODE_ALPHABET[crypto.randomInt(JOIN_CODE_ALPHABET.length)];
+  }
+  return code;
+};
+
+const isJoinCodeCollisionError = (error: unknown): boolean => {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (error.code !== "P2002") return false;
+  const target = error.meta?.target;
+  if (Array.isArray(target)) {
+    return target.includes("joinCode");
+  }
+  return typeof target === "string" && target.includes("joinCode");
+};
 
 export const invalidateHubCaches = (hubId?: string) => {
   if (hubId) {
@@ -110,13 +130,13 @@ export const createHubService = async (
 
   if (user.role === "ADMIN") {
     throw new AppError(
-      "Administrators have read-only access to course hubs and cannot create hubs.",
+      "Administrators cannot create course hubs directly.",
       403,
     );
   }
 
-  const isCR = user.studentProfile?.isCR === true;
   const isTeacher = user.role === "TEACHER";
+  const isCR = !isTeacher && user.studentProfile?.isCR === true;
 
   if (!isCR && !isTeacher) {
     throw new AppError(
@@ -125,20 +145,51 @@ export const createHubService = async (
     );
   }
 
-  if (isCR && !data.teacherId) {
-    throw new AppError(
-      "CR must assign a teacher (teacherId) when creating a hub.",
-      400,
+  if (isCR) {
+    if (!data.teacherId) {
+      throw new AppError(
+        "CR must assign a teacher (teacherId) when creating a hub.",
+        400,
+      );
+    }
+
+    const assignedTeacher = await hubRepository.findActiveTeacherById(
+      data.teacherId,
     );
+    if (!assignedTeacher) {
+      throw new AppError("Assigned instructor not found.", 404);
+    }
+    if (assignedTeacher.role !== "TEACHER" || assignedTeacher.isRestricted) {
+      throw new AppError(
+        "Assigned instructor must be an active faculty member.",
+        400,
+      );
+    }
   }
 
-  const created = await hubRepository.createHubWithMembers(
-    userId,
-    data,
-    isTeacher,
-    isCR,
-    generateJoinCode(),
-  );
+  let created: Awaited<ReturnType<typeof hubRepository.createHubWithMembers>> | null = null;
+  for (let attempt = 0; attempt < MAX_JOIN_CODE_ATTEMPTS; attempt += 1) {
+    try {
+      created = await hubRepository.createHubWithMembers(
+        userId,
+        data,
+        isTeacher,
+        isCR,
+        generateJoinCode(),
+      );
+      break;
+    } catch (error) {
+      if (isJoinCodeCollisionError(error) && attempt < MAX_JOIN_CODE_ATTEMPTS - 1) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (!created) {
+    throw new AppError("Could not generate a unique join code. Please retry.", 500);
+  }
+
   invalidateHubCaches();
   return created;
 };
@@ -153,8 +204,30 @@ export const joinHubService = async (userId: string, joinCode: string) => {
     );
   }
 
-  const hub = await hubRepository.findHubByJoinCode(joinCode);
+  const normalizedCode = joinCode.trim().toUpperCase();
+  const hub = await hubRepository.findHubByJoinCode(normalizedCode);
   if (!hub) throw new AppError("Invalid join code.", 404);
+
+  if (hub.isArchived) {
+    throw new AppError(
+      "This course hub is archived and no longer accepting new members.",
+      400,
+    );
+  }
+
+  const existingMember = await hubRepository.findHubMember(userId, hub.id);
+  if (existingMember) {
+    if (existingMember.isActive) {
+      throw new AppError(
+        "You are already a member of this course hub.",
+        409,
+      );
+    }
+    throw new AppError(
+      "Your membership in this course hub has been deactivated.",
+      403,
+    );
+  }
 
   let role: HubRole = "STUDENT";
   if (user?.role === "TEACHER") {
@@ -164,7 +237,7 @@ export const joinHubService = async (userId: string, joinCode: string) => {
   }
 
   const membership = await hubRepository.createHubMember(userId, hub.id, role);
-  appCache.delPattern(new RegExp(`^hub:${hub.id}`));
+  invalidateHubCaches(hub.id);
   return membership;
 };
 
@@ -183,6 +256,9 @@ export const getMyHubsService = async (
   }
   if (user?.role === "ADMIN") {
     if (view === "schedule") {
+      return [];
+    }
+    if (view === "list") {
       return [];
     }
     return hubRepository.findAllHubsForAdmin(userId, view);
@@ -281,13 +357,17 @@ export const toggleLiveClassService = async (
     hubId,
     "Cannot modify live status for an archived course hub.",
   );
-  const updated = await hubRepository.updateHubLiveClass(hubId, isClassLive, meetUrl);
+  const updated = await hubRepository.updateHubLiveClassAtomic(
+    hubId,
+    isClassLive,
+    meetUrl,
+  );
   invalidateHubCaches(hubId);
   return updated;
 };
 
 export const deleteHubService = async (userId: string, hubId: string) => {
-  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "ADMIN"]);
+  await verifyHubRole(userId, hubId, ["TEACHER", "ADMIN"]);
   const deleted = await hubRepository.deleteHubById(hubId);
   invalidateHubCaches(hubId);
   return deleted;

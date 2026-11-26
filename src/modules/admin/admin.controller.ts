@@ -4,8 +4,8 @@ import * as adminService from "./admin.service";
 import * as adminModerationService from "./admin-moderation.service";
 import * as systemDiagnosticsService from "./system-diagnostics.service";
 import {
+  AdminCourseHubsQuery,
   AdminForumReportsQuery,
-  adminCourseHubsQuerySchema,
 } from "./admin.schema";
 
 export const getDashboardStats = catchAsync(
@@ -47,8 +47,7 @@ export const getSystemDiagnostics = catchAsync(
 
 export const getAdminCourseHubs = catchAsync(
   async (req: Request, res: Response) => {
-    // Validate and sanitize query parameters via Zod
-    const query = adminCourseHubsQuerySchema.parse(req.query);
+    const query = req.query as unknown as AdminCourseHubsQuery;
 
     const result = await adminService.getAdminCourseHubsService(query);
 

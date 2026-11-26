@@ -3,6 +3,7 @@ import { requireAuth } from "../../middleware/auth.middleware";
 import { requireAdmin } from "../../middleware/role.middleware";
 import { validateRequest } from "../../middleware/validateRequest";
 import {
+  adminCourseHubsQuerySchema,
   adminForumReportsQuerySchema,
   adminResolveReportSchema,
 } from "./admin.schema";
@@ -28,7 +29,13 @@ router.get(
 );
 
 // GET /api/admin/course-hubs - Paginated, searchable, filterable directory of all course hubs (Admin Only)
-router.get("/course-hubs", requireAuth, requireAdmin, getAdminCourseHubs);
+router.get(
+  "/course-hubs",
+  requireAuth,
+  requireAdmin,
+  validateRequest(adminCourseHubsQuerySchema),
+  getAdminCourseHubs,
+);
 
 // GET /api/admin/forum/reports - Paginated Forum UGC Moderation Queue (Admin Only)
 router.get(

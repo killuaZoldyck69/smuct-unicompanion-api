@@ -1,64 +1,20 @@
 import { AppError } from "../../../utils/AppError";
 import { HubRole } from "../../../constants/enums";
-import * as membersRepo from "./members.repository";
 import { appCache } from "../../../lib/cache";
-import { prisma } from "../../../lib/prisma";
-
-export const verifyMembershipRole = async (
-  userId: string,
-  hubId: string,
-  allowedRoles: (HubRole | "ADMIN")[],
-) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true },
-  });
-
-  if (user?.role === "ADMIN") {
-    if (allowedRoles.includes("ADMIN" as any)) {
-      return {
-        id: `admin-${hubId}`,
-        userId,
-        hubId,
-        role: "ADMIN" as any,
-        joinedAt: new Date(),
-      };
-    }
-    throw new AppError(
-      "Administrators have read-only access and cannot modify course hub members.",
-      403,
-    );
-  }
-
-  const membership = await membersRepo.findHubMembership(userId, hubId);
-  if (!membership) {
-    throw new AppError("Access denied: You are not a member of this hub.", 403);
-  }
-
-  if (!allowedRoles.includes(membership.role as HubRole)) {
-    throw new AppError(
-      "Access denied: You do not have permission to perform this action.",
-      403,
-    );
-  }
-
-  return membership;
-};
+import {
+  assertActiveHub,
+  invalidateHubCaches,
+  verifyHubRole,
+} from "../hub.service";
+import * as membersRepo from "./members.repository";
 
 export const getHubMembersService = async (userId: string, hubId: string) => {
-  await verifyMembershipRole(userId, hubId, [
-    "TEACHER",
-    "CR",
-    "STUDENT",
-    "ADMIN" as any,
-  ]);
+  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT", "ADMIN"]);
 
   const cacheKey = `hub:${hubId}:members`;
-  return await appCache.getOrSet(
+  return appCache.getOrSet(
     cacheKey,
-    async () => {
-      return await membersRepo.findMembersByHubId(hubId);
-    },
+    () => membersRepo.findMembersByHubId(hubId),
     60,
   );
 };
@@ -69,14 +25,25 @@ export const updateMemberRoleService = async (
   memberId: string,
   newRole: HubRole,
 ) => {
-  const requester = await verifyMembershipRole(requesterUserId, hubId, [
+  const requester = await verifyHubRole(requesterUserId, hubId, [
     "TEACHER",
     "CR",
   ]);
+  await assertActiveHub(
+    hubId,
+    "Archived course hubs cannot modify member roles.",
+  );
 
-  const targetMember = await membersRepo.findMemberByHubAndId(hubId, memberId);
+  const targetMember = await membersRepo.findActiveMemberByHubAndId(
+    hubId,
+    memberId,
+  );
   if (!targetMember) {
     throw new AppError("Member not found in this course hub.", 404);
+  }
+
+  if (targetMember.userId === requesterUserId) {
+    throw new AppError("You cannot change your own role in this hub.", 403);
   }
 
   if (newRole === "TEACHER" && targetMember.user.role !== "TEACHER") {
@@ -86,33 +53,30 @@ export const updateMemberRoleService = async (
     );
   }
 
-  if (targetMember.user.role === "TEACHER" && newRole !== "TEACHER") {
+  if (targetMember.role === "TEACHER" || targetMember.user.role === "TEACHER") {
     throw new AppError(
       "A Teacher account must retain the course instructor role.",
       403,
     );
   }
 
-  const isRequesterLeadershipOnly = requester.role === "CR";
-
-  if (isRequesterLeadershipOnly && targetMember.role === "TEACHER") {
-    throw new AppError(
-      "Class Representatives cannot modify Teacher roles.",
-      403,
-    );
-  }
-
-  if (isRequesterLeadershipOnly && newRole === "TEACHER") {
-    throw new AppError(
-      "Class Representatives cannot assign Teacher roles.",
-      403,
-    );
+  if (requester.role === "CR") {
+    if (targetMember.role === "CR") {
+      throw new AppError(
+        "Class Representatives cannot modify another Class Representative.",
+        403,
+      );
+    }
+    if (newRole === "TEACHER") {
+      throw new AppError(
+        "Class Representatives cannot assign Teacher roles.",
+        403,
+      );
+    }
   }
 
   const updated = await membersRepo.updateRole(memberId, newRole);
-
-  appCache.delPattern(new RegExp(`^hub:${hubId}`));
-
+  invalidateHubCaches(hubId);
   return updated;
 };
 
@@ -121,29 +85,55 @@ export const removeMemberService = async (
   hubId: string,
   memberId: string,
 ) => {
-  const targetMember = await membersRepo.findMemberByHubAndId(hubId, memberId);
+  const requester = await verifyHubRole(requesterUserId, hubId, [
+    "TEACHER",
+    "CR",
+    "STUDENT",
+  ]);
+
+  const targetMember = await membersRepo.findActiveMemberByHubAndId(
+    hubId,
+    memberId,
+  );
   if (!targetMember) {
     throw new AppError("Member not found in this course hub.", 404);
   }
 
   const isSelf = targetMember.userId === requesterUserId;
-  if (!isSelf) {
-    const requester = await verifyMembershipRole(requesterUserId, hubId, [
-      "TEACHER",
-      "CR",
-    ]);
 
-    const isRequesterLeadershipOnly = requester.role === "CR";
-
-    if (isRequesterLeadershipOnly && targetMember.role === "TEACHER") {
-      throw new AppError(
-        "Class Representatives cannot remove Teachers from the hub.",
-        403,
-      );
-    }
+  if (isSelf) {
+    await membersRepo.leaveHubMemberAtomic(
+      hubId,
+      memberId,
+      targetMember.role === "TEACHER",
+    );
+    invalidateHubCaches(hubId);
+    return;
   }
 
-  await membersRepo.deleteMember(memberId);
+  if (requester.role !== "TEACHER" && requester.role !== "CR") {
+    throw new AppError(
+      "Access denied: You do not have permission to remove other members.",
+      403,
+    );
+  }
 
-  appCache.delPattern(new RegExp(`^hub:${hubId}`));
+  await assertActiveHub(hubId, "Archived course hubs cannot remove members.");
+
+  if (targetMember.role === "TEACHER" || targetMember.user.role === "TEACHER") {
+    throw new AppError(
+      "Course instructors cannot be removed by others; instructors can only leave voluntarily.",
+      403,
+    );
+  }
+
+  if (requester.role === "CR" && targetMember.role === "CR") {
+    throw new AppError(
+      "Class Representatives cannot remove another Class Representative.",
+      403,
+    );
+  }
+
+  await membersRepo.deactivateMember(memberId);
+  invalidateHubCaches(hubId);
 };

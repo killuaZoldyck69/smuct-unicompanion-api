@@ -86,10 +86,16 @@ export interface FindAvailableTeachersQuery {
   limit?: number | string;
 }
 
+export const DEFAULT_TEACHERS_PAGE_LIMIT = 20;
+export const MAX_TEACHERS_PAGE_LIMIT = 50;
+
 export const findAvailableTeachers = async (
   query?: FindAvailableTeachersQuery,
 ) => {
-  const where: Prisma.UserWhereInput = { role: "TEACHER" };
+  const where: Prisma.UserWhereInput = {
+    role: "TEACHER",
+    isRestricted: false,
+  };
 
   if (query?.department?.trim()) {
     where.teacherProfile = {
@@ -137,57 +143,54 @@ export const findAvailableTeachers = async (
     },
   };
 
-  const isPaginated = query?.page !== undefined || query?.limit !== undefined;
+  const page = Math.max(1, Number(query?.page) || 1);
+  const limit = Math.max(
+    1,
+    Math.min(
+      MAX_TEACHERS_PAGE_LIMIT,
+      Number(query?.limit) || DEFAULT_TEACHERS_PAGE_LIMIT,
+    ),
+  );
+  const skip = (page - 1) * limit;
 
-  if (isPaginated) {
-    const page = Math.max(1, Number(query?.page) || 1);
-    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 15));
-    const skip = (page - 1) * limit;
+  const [teachers, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      select,
+      skip,
+      take: limit,
+      orderBy: { name: "asc" },
+    }),
+    prisma.user.count({ where }),
+  ]);
 
-    const [teachers, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        select,
-        skip,
-        take: limit,
-        orderBy: { name: "asc" },
-      }),
-      prisma.user.count({ where }),
-    ]);
-
-    const totalPages = Math.ceil(total / limit);
-
-    return {
-      teachers,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages,
-        hasMore: page < totalPages,
-      },
-    };
-  }
-
-  const teachers = await prisma.user.findMany({
-    where,
-    select,
-    orderBy: { name: "asc" },
-  });
+  const totalPages = Math.ceil(total / limit);
 
   return {
     teachers,
     meta: {
-      page: 1,
-      limit: teachers.length,
-      total: teachers.length,
-      totalPages: 1,
-      hasMore: false,
+      page,
+      limit,
+      total,
+      totalPages,
+      hasMore: page < totalPages,
     },
   };
 };
 
 export const MAX_CGPA_HUB_MEMBERSHIPS = 50;
+export const MAX_HUB_LIST_MEMBERSHIPS = 100;
+export const MAX_ADMIN_DEFAULT_HUBS = 50;
+
+export const findActiveTeacherById = (teacherId: string) =>
+  prisma.user.findUnique({
+    where: { id: teacherId },
+    select: {
+      id: true,
+      role: true,
+      isRestricted: true,
+    },
+  });
 
 export const findUserWithStudentProfile = (userId: string) =>
   prisma.user.findUnique({
@@ -307,7 +310,8 @@ const buildActiveClassNoticesQuery = (now: Date = new Date()) => {
 /**
  * Shared CourseHub projection for /api/hubs/my across all views:
  * "cgpa" (minimal course/credit fields), "exams" (term exam metadata),
- * "schedule" (routine + active notices), and "default" (full hub card).
+ * "list" (Course Hubs tab card fields), "schedule" (routine + active notices),
+ * and "default" (full legacy hub card).
  */
 export const buildMyHubSelect = (
   view: MyHubsView = "default",
@@ -339,6 +343,39 @@ export const buildMyHubSelect = (
       isArchived: true,
       termExams: true,
       createdAt: true,
+    };
+  }
+
+  if (view === "list") {
+    return {
+      id: true,
+      courseCode: true,
+      courseName: true,
+      semesterNumber: true,
+      section: true,
+      isArchived: true,
+      isClassLive: true,
+      createdAt: true,
+      _count: {
+        select: {
+          members: { where: { isActive: true } },
+        },
+      },
+      members: {
+        where: { role: HubRole.TEACHER, isActive: true },
+        select: {
+          id: true,
+          role: true,
+          user: { select: { id: true, name: true, image: true } },
+        },
+        take: 1,
+      },
+      assessments: {
+        where: { deadline: { gt: now } },
+        orderBy: { deadline: "asc" as const },
+        take: 1,
+        select: { id: true, title: true, type: true, deadline: true },
+      },
     };
   }
 
@@ -378,7 +415,11 @@ export const buildMyHubSelect = (
     joinCode: true,
     isReviewOpen: true,
     termExams: true,
-    _count: { select: { members: true } },
+    _count: {
+      select: {
+        members: { where: { isActive: true } },
+      },
+    },
     assessments: {
       where: { deadline: { gt: now } },
       orderBy: { deadline: "asc" as const },
@@ -393,45 +434,59 @@ export const findMyHubMemberships = (
   view: MyHubsView = "default",
 ) => {
   const hubSelect = buildMyHubSelect(view);
+  const isActiveOnlyView = view !== "default" && view !== "list";
+
+  const memberHubSelect = {
+    id: true,
+    userId: true,
+    hubId: true,
+    role: true,
+    isActive: true,
+    hub: {
+      select: hubSelect,
+    },
+  };
+
+  if (view === "cgpa") {
+    return prisma.hubMember.findMany({
+      where: {
+        userId,
+        isActive: true,
+        hub: { isArchived: false },
+      },
+      orderBy: { hub: { createdAt: "asc" as const } },
+      take: MAX_CGPA_HUB_MEMBERSHIPS,
+      select: memberHubSelect,
+    });
+  }
 
   return prisma.hubMember.findMany({
     where: {
       userId,
       isActive: true,
-      ...(view !== "default" ? { hub: { isArchived: false } } : {}),
+      ...(isActiveOnlyView ? { hub: { isArchived: false } } : {}),
     },
-    ...(view === "cgpa"
-      ? {
-          orderBy: { hub: { createdAt: "asc" as const } },
-          take: MAX_CGPA_HUB_MEMBERSHIPS,
-        }
-      : {}),
-    select: {
-      id: true,
-      userId: true,
-      hubId: true,
-      role: true,
-      isActive: true,
-      hub: {
-        select: hubSelect,
-      },
-    },
+    orderBy: { hub: { createdAt: "desc" as const } },
+    take: MAX_HUB_LIST_MEMBERSHIPS,
+    select: memberHubSelect,
   });
 };
 
 /**
- * Returns all course hubs across the university for administrative overview.
- * Mapped to standard HubMember structure so clients consume it seamlessly in read-only mode.
+ * Returns course hubs across the university for administrative overview.
+ * Mapped to standard HubMember structure so clients consume it seamlessly.
  */
 export const findAllHubsForAdmin = async (
   adminUserId: string,
   view: MyHubsView = "default",
 ) => {
   const hubSelect = buildMyHubSelect(view);
+  const isActiveOnlyView = view !== "default" && view !== "list";
 
   const hubs = await prisma.courseHub.findMany({
-    ...(view !== "default" ? { where: { isArchived: false } } : {}),
+    ...(isActiveOnlyView ? { where: { isArchived: false } } : {}),
     orderBy: { createdAt: "desc" },
+    take: MAX_ADMIN_DEFAULT_HUBS,
     select: hubSelect,
   });
 
@@ -452,7 +507,10 @@ export const findHubWithMembersAndDetails = async (hubId: string) => {
       where: { id: hubId },
       include: {
         members: {
-          where: { role: { in: [HubRole.TEACHER, HubRole.CR, HubRole.STUDENT] } },
+          where: {
+            isActive: true,
+            role: { in: [HubRole.TEACHER, HubRole.CR, HubRole.STUDENT] },
+          },
           include: { user: { select: hubMemberUserSelect } },
         },
         classNotices: buildActiveClassNoticesQuery(),
@@ -468,7 +526,7 @@ export const findHubWithMembersAndDetails = async (hubId: string) => {
     >`
       SELECT id, "userId", "hubId", "isActive"
       FROM "HubMember"
-      WHERE "hubId" = ${hubId} AND "role"::text = 'TA'
+      WHERE "hubId" = ${hubId} AND "isActive" = true AND "role"::text = 'TA'
     `,
   ]);
 
@@ -491,22 +549,6 @@ export const findHubWithMembersAndDetails = async (hubId: string) => {
 
   return { ...hub, members: [...hub.members, ...migratedMembers] };
 };
-
-export const findHubMemberById = (memberId: string) =>
-  prisma.hubMember.findUnique({
-    where: { id: memberId },
-  });
-
-export const updateHubMemberRole = (memberId: string, role: HubRole) =>
-  prisma.hubMember.update({
-    where: { id: memberId },
-    data: { role },
-  });
-
-export const deleteHubMemberById = (memberId: string) =>
-  prisma.hubMember.delete({
-    where: { id: memberId },
-  });
 
 const toPrismaJson = (value: unknown): Prisma.InputJsonValue =>
   value as Prisma.InputJsonValue;
@@ -560,17 +602,47 @@ export const updateHubArchiveStatus = (hubId: string, isArchived: boolean) =>
     data: { isArchived },
   });
 
-export const updateHubLiveClass = (
+export const updateHubLiveClassAtomic = (
   hubId: string,
   isClassLive: boolean,
   meetUrl?: string | null,
 ) =>
-  prisma.courseHub.update({
-    where: { id: hubId },
-    data: {
-      isClassLive,
-      ...(meetUrl !== undefined && { meetUrl }),
-    },
+  prisma.$transaction(async (tx) => {
+    const [lockedHub] = await tx.$queryRaw<
+      Array<{ id: string; isArchived: boolean; meetUrl: string | null }>
+    >`
+      SELECT id, "isArchived", "meetUrl"
+      FROM "CourseHub"
+      WHERE id = ${hubId}
+      FOR UPDATE
+    `;
+
+    if (!lockedHub) {
+      throw new AppError("Course Hub not found.", 404);
+    }
+    if (lockedHub.isArchived) {
+      throw new AppError(
+        "Cannot modify live status for an archived course hub.",
+        400,
+      );
+    }
+
+    const effectiveMeetUrl =
+      meetUrl !== undefined ? meetUrl : lockedHub.meetUrl;
+    if (isClassLive && !effectiveMeetUrl) {
+      throw new AppError(
+        "Please configure an online class link before going live.",
+        400,
+      );
+    }
+
+    return tx.courseHub.update({
+      where: { id: hubId },
+      data: {
+        isClassLive,
+        ...(meetUrl !== undefined && { meetUrl }),
+      },
+    });
   });
 
 export const deleteHubById = (hubId: string) =>
@@ -581,7 +653,7 @@ export const deleteHubById = (hubId: string) =>
 export const findHubStatusById = (hubId: string) =>
   prisma.courseHub.findUnique({
     where: { id: hubId },
-    select: { id: true, isArchived: true, termExams: true },
+    select: { id: true, isArchived: true, meetUrl: true, termExams: true },
   });
 
 export const replaceClassNoticeAtomic = (
