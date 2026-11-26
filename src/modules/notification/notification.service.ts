@@ -180,6 +180,8 @@ export const createCourseNotificationsForRecipients = async (
   }
 };
 
+const MAX_HUB_NOTIFICATION_RECIPIENTS = 500;
+
 export const createHubNotifications = async (
   hubId: string,
   actorId: string,
@@ -196,6 +198,7 @@ export const createHubNotifications = async (
           ...(recipientRoles?.length ? { role: { in: recipientRoles } } : {}),
         },
         select: { userId: true },
+        take: MAX_HUB_NOTIFICATION_RECIPIENTS,
       }),
       findCourseHubContext(hubId).catch((error: unknown) => {
         console.error(

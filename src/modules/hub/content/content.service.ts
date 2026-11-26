@@ -1,5 +1,6 @@
 import {
   assertActiveHub,
+  dispatchHubNotification,
   invalidateHubCaches,
   verifyHubRole,
 } from "../hub.service";
@@ -55,13 +56,17 @@ export const createAnnouncement = async (
 
   invalidateHubCaches(hubId);
 
-  await createHubNotifications(hubId, userId, {
-    type: "HUB_ANNOUNCEMENT",
-    title: "New course hub announcement",
-    body: sanitized.plainText.slice(0, 180),
-    route: `/hub/${hubId}`,
-    dedupeKey: `hub-announcement:${announcement.id}`,
-  });
+  dispatchHubNotification(
+    createHubNotifications(hubId, userId, {
+      type: "HUB_ANNOUNCEMENT",
+      title: "New course hub announcement",
+      body: sanitized.plainText.slice(0, 180),
+      route: `/hub/${hubId}`,
+      dedupeKey: `hub-announcement:${announcement.id}`,
+    }),
+    "hub.announcement_notification_failed",
+    hubId,
+  );
 
   return announcement;
 };

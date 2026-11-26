@@ -118,6 +118,26 @@ export const invalidateHubCaches = (hubId?: string) => {
     appCache.delPattern(new RegExp(`^hub:${hubId}`));
   }
   appCache.delPattern(/^admin:course-hubs:/);
+  appCache.del("admin:dashboard-stats");
+};
+
+export const dispatchHubNotification = (
+  promise: Promise<unknown>,
+  event: string,
+  hubId: string,
+  extra?: Record<string, string>,
+): void => {
+  void promise.catch((error: unknown) => {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        event,
+        hubId,
+        ...(extra ?? {}),
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
+  });
 };
 
 export const createHubService = async (
@@ -236,7 +256,11 @@ export const joinHubService = async (userId: string, joinCode: string) => {
     role = "CR";
   }
 
-  const membership = await hubRepository.createHubMember(userId, hub.id, role);
+  const membership = await hubRepository.joinHubMemberAtomic(
+    userId,
+    hub.id,
+    role,
+  );
   invalidateHubCaches(hub.id);
   return membership;
 };
@@ -309,27 +333,22 @@ export const updateHubService = async (
       .digest("hex")
       .slice(0, 16);
 
-    void createHubNotifications(
+    dispatchHubNotification(
+      createHubNotifications(
+        hubId,
+        userId,
+        {
+          type: "EXAM_SCHEDULE_UPDATE",
+          title: "Exam schedule updated",
+          body: examUpdate.body,
+          route: "/(tabs)/exams",
+          dedupeKey: `exam-update:${hubId}:${Math.floor(Date.now() / 10_000)}:${sigHash}`,
+        },
+        ["STUDENT", "CR"],
+      ),
+      "hub.exam_schedule_notification_failed",
       hubId,
-      userId,
-      {
-        type: "EXAM_SCHEDULE_UPDATE",
-        title: "Exam schedule updated",
-        body: examUpdate.body,
-        route: "/(tabs)/exams",
-        dedupeKey: `exam-update:${hubId}:${Math.floor(Date.now() / 10_000)}:${sigHash}`,
-      },
-      ["STUDENT", "CR"],
-    ).catch((error: unknown) => {
-      console.error(
-        JSON.stringify({
-          level: "error",
-          event: "hub.exam_schedule_notification_failed",
-          hubId,
-          errorType: error instanceof Error ? error.name : "UnknownError",
-        }),
-      );
-    });
+    );
   }
 
   return updated;
@@ -414,23 +433,18 @@ export const createClassNoticeService = async (
       ? "Class schedule update"
       : `Class schedule update (${sanitized.targetDay})`;
 
-  void createHubNotifications(hubId, userId, {
-    type: "CLASS_NOTICE",
-    title: notificationTitle,
-    body: sanitized.message.slice(0, 180),
-    route: "/(tabs)/my-schedule",
-    dedupeKey: `class-notice:${notice.id}`,
-  }).catch((error: unknown) => {
-    console.error(
-      JSON.stringify({
-        level: "error",
-        event: "hub.class_notice_notification_failed",
-        hubId,
-        noticeId: notice.id,
-        errorType: error instanceof Error ? error.name : "UnknownError",
-      }),
-    );
-  });
+  dispatchHubNotification(
+    createHubNotifications(hubId, userId, {
+      type: "CLASS_NOTICE",
+      title: notificationTitle,
+      body: sanitized.message.slice(0, 180),
+      route: "/(tabs)/my-schedule",
+      dedupeKey: `class-notice:${notice.id}`,
+    }),
+    "hub.class_notice_notification_failed",
+    hubId,
+    { noticeId: notice.id },
+  );
 
   return notice;
 };

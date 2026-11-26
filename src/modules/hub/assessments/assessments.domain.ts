@@ -5,6 +5,8 @@
  * transitions, and aligned bounds shared across schemas, services, and tests.
  */
 
+import { isSafeHubHttpUrl } from "../hub-attachments";
+
 export const MAX_ASSESSMENT_TITLE_LENGTH = 200;
 export const MAX_ASSESSMENT_DESCRIPTION_LENGTH = 5000;
 export const MAX_ASSESSMENT_TOTAL_MARKS = 10000;
@@ -38,24 +40,7 @@ export type AssessmentStatus = (typeof ASSESSMENT_STATUS_VALUES)[number];
 export type SubmissionRequestStatus =
   (typeof SUBMISSION_REQUEST_STATUS_VALUES)[number];
 
-/**
- * Validates that a URL uses strictly http: or https:, has a hostname, and has no whitespace.
- */
-export function isSafeAssessmentHttpUrl(raw?: string | null): boolean {
-  if (!raw || typeof raw !== "string") return false;
-  const trimmed = raw.trim();
-  if (!trimmed || trimmed.length > 2048 || /\s/.test(trimmed)) return false;
-
-  try {
-    const parsed = new URL(trimmed);
-    return (
-      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
-      Boolean(parsed.hostname)
-    );
-  } catch {
-    return false;
-  }
-}
+export const isSafeAssessmentHttpUrl = isSafeHubHttpUrl;
 
 /**
  * Option A Assessment Ownership Authorization:

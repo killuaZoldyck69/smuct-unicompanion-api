@@ -7,6 +7,7 @@ import {
 import { assertNoNewCloudinaryAttachments } from "../hub-attachments";
 import {
   assertActiveHub,
+  dispatchHubNotification,
   invalidateHubCaches,
   verifyHubRole,
 } from "../hub.service";
@@ -48,13 +49,17 @@ export const createAssessment = async (
   );
   invalidateHubCaches(hubId);
 
-  await createHubNotifications(hubId, userId, {
-    type: "ASSESSMENT",
-    title: "New coursework posted",
-    body: assessment.title,
-    route: `/hub/${hubId}?tab=classwork&assessmentId=${assessment.id}&fromNotification=true`,
-    dedupeKey: `assessment:${assessment.id}`,
-  });
+  dispatchHubNotification(
+    createHubNotifications(hubId, userId, {
+      type: "ASSESSMENT",
+      title: "New coursework posted",
+      body: assessment.title,
+      route: `/hub/${hubId}?tab=classwork&assessmentId=${assessment.id}&fromNotification=true`,
+      dedupeKey: `assessment:${assessment.id}`,
+    }),
+    "hub.assessment_notification_failed",
+    hubId,
+  );
   return assessment;
 };
 
@@ -178,19 +183,11 @@ export const submitAssessment = async (
     previousSubmission?.attachments as { url?: string }[] | null,
   );
 
-  const submission = await assessmentsRepository.upsertSubmission(
+  const submission = await assessmentsRepository.submitAssessmentAtomic(
+    hubId,
     assessmentId,
     userId,
-    {
-      submittedUrl: payload.submittedUrl || null,
-      content: payload.content || null,
-      attachments: (payload.attachments ?? null) as
-        | Prisma.InputJsonValue
-        | null,
-      links: (payload.links ?? null) as Prisma.InputJsonValue | null,
-      isLate: outcome.isLate,
-      status: outcome.status,
-    },
+    payload,
   );
   invalidateHubCaches(hubId);
   return submission;
@@ -248,8 +245,10 @@ export const unsubmitAssessment = async (
     throw new AppError("Graded coursework cannot be unsubmitted.", 400);
   }
 
-  const updated = await assessmentsRepository.markSubmissionUnsubmitted(
-    submission.id,
+  const updated = await assessmentsRepository.unsubmitAssessmentAtomic(
+    hubId,
+    assessmentId,
+    userId,
   );
   invalidateHubCaches(hubId);
   return updated;
@@ -304,28 +303,29 @@ export const gradeSubmission = async (
       );
     }
 
-    const gradedSubmission =
-      await assessmentsRepository.upsertOfflineOrMissingSubmissionGrade(
-        targetAssessmentId,
-        targetStudentId,
-        {
-          marks: data.marks,
-          feedback: data.feedback,
-          gradedById: userId,
-        },
+    const { gradedSubmission, assessmentTitle, assessmentId } =
+      await assessmentsRepository.gradeSubmissionAtomic(
+        userId,
+        hubId,
+        submissionId,
+        data,
       );
     invalidateHubCaches(hubId);
 
-    await createCourseNotificationsForRecipients(hubId, [
-      {
-        userId: targetStudentId,
-        type: "GRADE",
-        title: "Grade posted",
-        body: `Your grade for ${meta.title} is available.`,
-        route: `/hub/${hubId}?tab=classwork&assessmentId=${meta.id}&fromNotification=true`,
-        dedupeKey: `assessment-grade:${gradedSubmission.id}:${gradedSubmission.updatedAt.toISOString()}`,
-      },
-    ]);
+    dispatchHubNotification(
+      createCourseNotificationsForRecipients(hubId, [
+        {
+          userId: targetStudentId,
+          type: "GRADE",
+          title: "Grade posted",
+          body: `Your grade for ${assessmentTitle} is available.`,
+          route: `/hub/${hubId}?tab=classwork&assessmentId=${assessmentId}&fromNotification=true`,
+          dedupeKey: `assessment-grade:${gradedSubmission.id}:${gradedSubmission.updatedAt.toISOString()}`,
+        },
+      ]),
+      "hub.grade_notification_failed",
+      hubId,
+    );
     return gradedSubmission;
   }
 
@@ -343,33 +343,36 @@ export const gradeSubmission = async (
     );
   }
 
-  const feedbackAfterSave =
-    data.feedback === undefined ? submission.feedback : data.feedback;
-  const gradeChanged =
-    submission.marks !== data.marks ||
-    (submission.feedback ?? null) !== (feedbackAfterSave ?? null);
-
-  const gradedSubmission = await assessmentsRepository.updateSubmissionGrade(
+  const {
+    gradedSubmission,
+    gradeChanged,
+    isNewGrade,
+    studentId,
+    assessmentId,
+    assessmentTitle,
+  } = await assessmentsRepository.gradeSubmissionAtomic(
+    userId,
+    hubId,
     submissionId,
-    {
-      marks: data.marks,
-      feedback: data.feedback,
-      gradedById: userId,
-    },
+    data,
   );
   invalidateHubCaches(hubId);
 
   if (gradeChanged) {
-    await createCourseNotificationsForRecipients(hubId, [
-      {
-        userId: submission.studentId,
-        type: "GRADE",
-        title: submission.marks === null ? "Grade posted" : "Grade updated",
-        body: `Your grade for ${submission.assessment.title} is available.`,
-        route: `/hub/${hubId}?tab=classwork&assessmentId=${submission.assessment.id}&fromNotification=true`,
-        dedupeKey: `assessment-grade:${gradedSubmission.id}:${gradedSubmission.updatedAt.toISOString()}`,
-      },
-    ]);
+    dispatchHubNotification(
+      createCourseNotificationsForRecipients(hubId, [
+        {
+          userId: studentId,
+          type: "GRADE",
+          title: isNewGrade ? "Grade posted" : "Grade updated",
+          body: `Your grade for ${assessmentTitle} is available.`,
+          route: `/hub/${hubId}?tab=classwork&assessmentId=${assessmentId}&fromNotification=true`,
+          dedupeKey: `assessment-grade:${gradedSubmission.id}:${gradedSubmission.updatedAt.toISOString()}`,
+        },
+      ]),
+      "hub.grade_notification_failed",
+      hubId,
+    );
   }
   return gradedSubmission;
 };
@@ -428,20 +431,23 @@ export const bulkGrade = async (
     }
   }
 
-  const previousSnapshots =
-    await assessmentsRepository.findSubmissionSnapshotsForAssessment(
+  const { assessmentTitle, previousSnapshots, savedGrades } =
+    await assessmentsRepository.bulkUpsertGradesAtomic(
+      hubId,
       assessmentId,
+      userId,
+      grades,
     );
-  const previousSubmissionsByStudent = new Map(
+  invalidateHubCaches(hubId);
+
+  const previousByStudentAfterLock = new Map(
     previousSnapshots.map((submission) => [submission.studentId, submission]),
   );
-
-  const changedStudentIds = new Set(
+  const changedAfterLock = new Set(
     grades
       .filter((grade) => {
-        const previous = previousSubmissionsByStudent.get(grade.studentId);
+        const previous = previousByStudentAfterLock.get(grade.studentId);
         if (!previous) return true;
-
         const feedbackAfterSave =
           grade.feedback === undefined ? previous.feedback : grade.feedback;
         return (
@@ -452,17 +458,10 @@ export const bulkGrade = async (
       .map((grade) => grade.studentId),
   );
 
-  const savedGrades = await assessmentsRepository.bulkUpsertGrades(
-    assessmentId,
-    userId,
-    grades,
-  );
-  invalidateHubCaches(hubId);
-
   const gradeNotifications = savedGrades
-    .filter((submission) => changedStudentIds.has(submission.studentId))
+    .filter((submission) => changedAfterLock.has(submission.studentId))
     .map((submission) => {
-      const previous = previousSubmissionsByStudent.get(submission.studentId);
+      const previous = previousByStudentAfterLock.get(submission.studentId);
       return {
         userId: submission.studentId,
         type: "GRADE",
@@ -470,12 +469,16 @@ export const bulkGrade = async (
           !previous || previous.marks === null
             ? "Grade posted"
             : "Grade updated",
-        body: `Your grade for ${meta.title} is available.`,
+        body: `Your grade for ${assessmentTitle} is available.`,
         route: `/hub/${hubId}?tab=classwork&assessmentId=${meta.id}&fromNotification=true`,
         dedupeKey: `assessment-grade:${submission.id}:${submission.updatedAt.toISOString()}`,
       };
     });
-  await createCourseNotificationsForRecipients(hubId, gradeNotifications);
+  dispatchHubNotification(
+    createCourseNotificationsForRecipients(hubId, gradeNotifications),
+    "hub.bulk_grade_notification_failed",
+    hubId,
+  );
   return savedGrades;
 };
 
@@ -534,7 +537,8 @@ export const updateAssessment = async (
     data.attachments,
     meta.attachments as { url?: string }[] | null,
   );
-  const updated = await assessmentsRepository.updateAssessment(
+  const updated = await assessmentsRepository.updateAssessmentAtomic(
+    hubId,
     assessmentId,
     data,
   );

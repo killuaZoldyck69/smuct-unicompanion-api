@@ -223,8 +223,7 @@ export const createHubWithMembers = (
         courseName: data.courseName,
         credit: data.credit,
         termOffer: data.termOffer,
-        weeklyClassSchedule:
-          data.weeklyClassSchedule as unknown as Prisma.InputJsonValue,
+        weeklyClassSchedule: toPrismaJson(data.weeklyClassSchedule),
         department: data.department,
         batch: data.batch,
         section: data.section || null,
@@ -248,14 +247,66 @@ export const createHubWithMembers = (
 export const findHubByJoinCode = (joinCode: string) =>
   prisma.courseHub.findUnique({ where: { joinCode } });
 
-export const createHubMember = (
+export const joinHubMemberAtomic = (
   userId: string,
   hubId: string,
   role: HubRole = "STUDENT",
 ) =>
-  prisma.hubMember.create({
-    data: { userId, hubId, role },
-    include: { hub: true },
+  prisma.$transaction(async (tx) => {
+    const [lockedHub] = await tx.$queryRaw<
+      Array<{ id: string; isArchived: boolean }>
+    >`
+      SELECT id, "isArchived"
+      FROM "CourseHub"
+      WHERE id = ${hubId}
+      FOR UPDATE
+    `;
+
+    if (!lockedHub) {
+      throw new AppError("Invalid join code.", 404);
+    }
+    if (lockedHub.isArchived) {
+      throw new AppError(
+        "This course hub is archived and no longer accepting new members.",
+        400,
+      );
+    }
+
+    const existingMember = await tx.hubMember.findUnique({
+      where: { userId_hubId: { userId, hubId } },
+      select: { id: true, isActive: true },
+    });
+    if (existingMember) {
+      if (existingMember.isActive) {
+        throw new AppError(
+          "You are already a member of this course hub.",
+          409,
+        );
+      }
+      throw new AppError(
+        "Your membership in this course hub has been deactivated.",
+        403,
+      );
+    }
+
+    try {
+      const membership = await tx.hubMember.create({
+        data: { userId, hubId, role },
+        include: { hub: true },
+      });
+      return membership;
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        throw new AppError(
+          "You are already a member of this course hub.",
+          409,
+        );
+      }
+      throw error;
+    }
   });
 
 const getActiveNoticeWindow = (now: Date = new Date()) => {
@@ -511,6 +562,8 @@ export const findHubWithMembersAndDetails = async (hubId: string) => {
             isActive: true,
             role: { in: [HubRole.TEACHER, HubRole.CR, HubRole.STUDENT] },
           },
+          orderBy: { id: "asc" as const },
+          take: 300,
           include: { user: { select: hubMemberUserSelect } },
         },
         classNotices: buildActiveClassNoticesQuery(),
@@ -599,7 +652,9 @@ export const updateHubAtomic = (
 export const updateHubArchiveStatus = (hubId: string, isArchived: boolean) =>
   prisma.courseHub.update({
     where: { id: hubId },
-    data: { isArchived },
+    data: isArchived
+      ? { isArchived: true, isClassLive: false, isReviewOpen: false }
+      : { isArchived: false },
   });
 
 export const updateHubLiveClassAtomic = (

@@ -1,7 +1,12 @@
 import { AppError } from "../../../utils/AppError";
-import { deleteFileFromCloudinary } from "../../../lib/cloudinary";
+import {
+  PROJECT_ROOT_FOLDER,
+  deleteFileFromCloudinary,
+  extractPublicIdFromUrl,
+} from "../../../lib/cloudinary";
 import {
   assertActiveHub,
+  dispatchHubNotification,
   invalidateHubCaches,
   verifyHubRole,
 } from "../hub.service";
@@ -11,6 +16,7 @@ import { CreateResourcePayload } from "./resources.schema";
 import {
   assertNoNewCloudinaryAttachments,
   assertNoNewCloudinaryUrl,
+  isCloudinaryUrl,
 } from "../hub-attachments";
 import { createHubNotifications } from "../../notification/notification.service";
 
@@ -47,15 +53,19 @@ export const createResourceService = async (
   );
   invalidateHubCaches(hubId);
 
-  await createHubNotifications(hubId, userId, {
-    type: "MATERIAL",
-    title: data.isStudentNote
-      ? "New student-shared material"
-      : "New course material",
-    body: resource.title,
-    route: `/hub/${hubId}?tab=materials`,
-    dedupeKey: `resource:${resource.id}`,
-  });
+  dispatchHubNotification(
+    createHubNotifications(hubId, userId, {
+      type: "MATERIAL",
+      title: data.isStudentNote
+        ? "New student-shared material"
+        : "New course material",
+      body: resource.title,
+      route: `/hub/${hubId}?tab=materials`,
+      dedupeKey: `resource:${resource.id}`,
+    }),
+    "hub.resource_notification_failed",
+    hubId,
+  );
 
   return resource;
 };
@@ -103,22 +113,36 @@ export const deleteResourceService = async (
   const deleted = await resourcesRepository.deleteResourceById(resourceId);
   invalidateHubCaches(hubId);
 
-  // Best-effort cleanup of any legacy Cloudinary attachments after DB removal
-  const legacyUrls: string[] = [];
+  // Best-effort cleanup of any legacy Course Hub Cloudinary attachments after DB removal
+  const hubsPrefix = `${PROJECT_ROOT_FOLDER}/hubs/`;
+  const extractScopedHubPublicId = (url?: string | null): string | null => {
+    if (!url || !isCloudinaryUrl(url)) return null;
+    const publicId = extractPublicIdFromUrl(url);
+    if (!publicId || publicId.includes("..") || !publicId.startsWith(hubsPrefix)) {
+      return null;
+    }
+    return publicId;
+  };
+
+  const legacyPublicIds = new Set<string>();
   if (Array.isArray(resource.attachments)) {
     for (const att of resource.attachments as Array<{ url?: string }>) {
-      if (att?.url && att.url.includes("cloudinary.com")) {
-        legacyUrls.push(att.url);
+      const publicId = extractScopedHubPublicId(att?.url);
+      if (publicId) {
+        legacyPublicIds.add(publicId);
       }
     }
   }
-  if (resource.driveUrl && resource.driveUrl.includes("cloudinary.com")) {
-    legacyUrls.push(resource.driveUrl);
+  const drivePublicId = extractScopedHubPublicId(resource.driveUrl);
+  if (drivePublicId) {
+    legacyPublicIds.add(drivePublicId);
   }
 
-  if (legacyUrls.length > 0) {
+  if (legacyPublicIds.size > 0) {
     await Promise.allSettled(
-      legacyUrls.map((url) => deleteFileFromCloudinary(url)),
+      Array.from(legacyPublicIds).map((publicId) =>
+        deleteFileFromCloudinary(publicId),
+      ),
     );
   }
 

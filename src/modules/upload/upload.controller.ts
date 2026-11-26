@@ -124,8 +124,11 @@ export const deleteUploadedFile = catchAsync(
       throw new AppError("Invalid file identifier or URL provided", 400);
     }
 
+    const isWithinFolder = (candidate: string, folder: string) =>
+      candidate === folder || candidate.startsWith(`${folder}/`);
+
     // Security check: Must reside within the smuct-unicompanion project root namespace
-    if (!publicId.startsWith(PROJECT_ROOT_FOLDER)) {
+    if (!isWithinFolder(publicId, PROJECT_ROOT_FOLDER)) {
       throw new AppError(
         "Forbidden: Cannot delete resources outside of application namespace",
         403,
@@ -142,7 +145,7 @@ export const deleteUploadedFile = catchAsync(
         `${PROJECT_ROOT_FOLDER}/branding`,
         `${PROJECT_ROOT_FOLDER}/hubs`,
       ];
-      if (protectedAdminFolders.some((folder) => publicId.startsWith(folder))) {
+      if (protectedAdminFolders.some((folder) => isWithinFolder(publicId, folder))) {
         throw new AppError(
           "Forbidden: Only administrators can delete institutional assets",
           403,

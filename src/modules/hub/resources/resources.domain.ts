@@ -5,6 +5,8 @@
  * bounded list sizing, and the approved Resource Deletion Matrix.
  */
 
+import { isSafeHubHttpUrl } from "../hub-attachments";
+
 export const MAX_RESOURCE_TITLE_LENGTH = 200;
 export const MAX_RESOURCE_DESCRIPTION_LENGTH = 2000;
 export const MAX_RESOURCE_CATEGORY_LENGTH = 60;
@@ -14,24 +16,7 @@ export const MAX_RESOURCE_ATTACHMENTS = 10;
 export const MAX_RESOURCE_LINKS = 10;
 export const MAX_HUB_RESOURCES_LIST = 200;
 
-/**
- * Validates that a resource URL uses strictly http: or https: and parses cleanly.
- */
-export function isSafeResourceHttpUrl(raw?: string | null): boolean {
-  if (!raw || typeof raw !== "string") return false;
-  const trimmed = raw.trim();
-  if (!trimmed || trimmed.length > 2048 || /\s/.test(trimmed)) return false;
-
-  try {
-    const parsed = new URL(trimmed);
-    return (
-      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
-      Boolean(parsed.hostname)
-    );
-  } catch {
-    return false;
-  }
-}
+export const isSafeResourceHttpUrl = isSafeHubHttpUrl;
 
 /**
  * Resource Deletion Matrix (Option A):

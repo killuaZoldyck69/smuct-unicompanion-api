@@ -26,16 +26,64 @@ export const findActiveMemberByHubAndId = (
     },
   });
 
-export const updateRole = (memberId: string, role: HubRole) =>
-  prisma.hubMember.update({
-    where: { id: memberId },
-    data: { role },
+export const updateMemberRoleAtomic = (
+  hubId: string,
+  memberId: string,
+  role: HubRole,
+) =>
+  prisma.$transaction(async (tx) => {
+    const [lockedHub] = await tx.$queryRaw<
+      Array<{ id: string; isArchived: boolean }>
+    >`
+      SELECT id, "isArchived"
+      FROM "CourseHub"
+      WHERE id = ${hubId}
+      FOR UPDATE
+    `;
+
+    if (!lockedHub) {
+      throw new AppError("Course Hub not found.", 404);
+    }
+    if (lockedHub.isArchived) {
+      throw new AppError("Archived course hubs cannot modify member roles.", 400);
+    }
+
+    const result = await tx.hubMember.updateMany({
+      where: { id: memberId, hubId, isActive: true },
+      data: { role },
+    });
+    if (result.count === 0) {
+      throw new AppError("Member not found in this course hub.", 404);
+    }
+
+    return tx.hubMember.findUniqueOrThrow({ where: { id: memberId } });
   });
 
-export const deactivateMember = (memberId: string) =>
-  prisma.hubMember.update({
-    where: { id: memberId },
-    data: { isActive: false },
+export const deactivateMemberAtomic = (hubId: string, memberId: string) =>
+  prisma.$transaction(async (tx) => {
+    const [lockedHub] = await tx.$queryRaw<
+      Array<{ id: string; isArchived: boolean }>
+    >`
+      SELECT id, "isArchived"
+      FROM "CourseHub"
+      WHERE id = ${hubId}
+      FOR UPDATE
+    `;
+
+    if (!lockedHub) {
+      throw new AppError("Course Hub not found.", 404);
+    }
+    if (lockedHub.isArchived) {
+      throw new AppError("Archived course hubs cannot remove members.", 400);
+    }
+
+    const result = await tx.hubMember.updateMany({
+      where: { id: memberId, hubId, isActive: true },
+      data: { isActive: false },
+    });
+    if (result.count === 0) {
+      throw new AppError("Member not found in this course hub.", 404);
+    }
   });
 
 /**

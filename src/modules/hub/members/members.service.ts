@@ -6,10 +6,22 @@ import {
   invalidateHubCaches,
   verifyHubRole,
 } from "../hub.service";
+import * as hubRepo from "../hub.repository";
 import * as membersRepo from "./members.repository";
 
 export const getHubMembersService = async (userId: string, hubId: string) => {
-  await verifyHubRole(userId, hubId, ["TEACHER", "CR", "STUDENT", "ADMIN"]);
+  const access = await verifyHubRole(userId, hubId, [
+    "TEACHER",
+    "CR",
+    "STUDENT",
+    "ADMIN",
+  ]);
+  if (access.role === "ADMIN") {
+    const existingHub = await hubRepo.findHubStatusById(hubId);
+    if (!existingHub) {
+      throw new AppError("Course Hub not found.", 404);
+    }
+  }
 
   const cacheKey = `hub:${hubId}:members`;
   return appCache.getOrSet(
@@ -75,7 +87,11 @@ export const updateMemberRoleService = async (
     }
   }
 
-  const updated = await membersRepo.updateRole(memberId, newRole);
+  const updated = await membersRepo.updateMemberRoleAtomic(
+    hubId,
+    memberId,
+    newRole,
+  );
   invalidateHubCaches(hubId);
   return updated;
 };
@@ -134,6 +150,6 @@ export const removeMemberService = async (
     );
   }
 
-  await membersRepo.deactivateMember(memberId);
+  await membersRepo.deactivateMemberAtomic(hubId, memberId);
   invalidateHubCaches(hubId);
 };

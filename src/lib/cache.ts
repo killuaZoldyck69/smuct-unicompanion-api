@@ -3,8 +3,9 @@ interface CacheEntry<T> {
   expiresAt: number;
 }
 
-class MemoryCache {
+export class MemoryCache {
   private store = new Map<string, CacheEntry<unknown>>();
+  private inFlight = new Map<string, Promise<unknown>>();
   private maxEntries: number;
   private defaultTTL: number;
 
@@ -44,6 +45,7 @@ class MemoryCache {
 
   del(key: string): void {
     this.store.delete(key);
+    this.inFlight.delete(key);
   }
 
   delPattern(pattern: RegExp | string): void {
@@ -51,6 +53,11 @@ class MemoryCache {
     for (const key of this.store.keys()) {
       if (regex.test(key)) {
         this.store.delete(key);
+      }
+    }
+    for (const key of this.inFlight.keys()) {
+      if (regex.test(key)) {
+        this.inFlight.delete(key);
       }
     }
   }
@@ -65,13 +72,31 @@ class MemoryCache {
       return cached;
     }
 
-    const fresh = await fetchFn();
-    this.set(key, fresh, ttlSeconds);
-    return fresh;
+    const existing = this.inFlight.get(key) as Promise<T> | undefined;
+    if (existing) {
+      return existing;
+    }
+
+    const promise = fetchFn()
+      .then((fresh) => {
+        if (this.inFlight.get(key) === promise) {
+          this.set(key, fresh, ttlSeconds);
+        }
+        return fresh;
+      })
+      .finally(() => {
+        if (this.inFlight.get(key) === promise) {
+          this.inFlight.delete(key);
+        }
+      });
+
+    this.inFlight.set(key, promise);
+    return promise;
   }
 
   clear(): void {
     this.store.clear();
+    this.inFlight.clear();
   }
 
   private pruneExpired(): void {

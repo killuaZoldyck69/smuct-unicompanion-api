@@ -1,10 +1,26 @@
 import { AppError } from "../../utils/AppError";
 
+export function isSafeHubHttpUrl(raw?: string | null): boolean {
+  if (!raw || typeof raw !== "string") return false;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > 2048 || /\s/.test(trimmed)) return false;
+
+  try {
+    const parsed = new URL(trimmed);
+    return (
+      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+      Boolean(parsed.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 type AttachmentReference = {
   url?: string | null;
 };
 
-function isCloudinaryUrl(value: string): boolean {
+export function isCloudinaryUrl(value: string): boolean {
   try {
     const hostname = new URL(value).hostname.toLowerCase();
     return hostname === "cloudinary.com" || hostname.endsWith(".cloudinary.com");

@@ -114,6 +114,7 @@ model AnnouncementComment {
   replies      AnnouncementComment[] @relation("AnnouncementCommentReplies")
 
   @@index([announcementId])
+  @@index([announcementId, parentId, createdAt])
   @@index([parentId])
 }
 
@@ -144,6 +145,7 @@ model HubDiscussionReply {
   author     User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([discussionId])
+  @@index([discussionId, createdAt])
 }
 
 // ==============================
@@ -198,6 +200,7 @@ model Submission {
 
   @@unique([assessmentId, studentId])
   @@index([assessmentId])
+  @@index([assessmentId, createdAt])
 }
 
 // ==============================
@@ -248,6 +251,7 @@ model CourseReview {
 
   @@unique([hubId, studentId]) // One review per student per hub
   @@index([hubId])
+  @@index([hubId, createdAt])
 }
 
 // ==============================

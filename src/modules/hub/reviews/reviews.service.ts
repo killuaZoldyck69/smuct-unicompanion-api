@@ -3,6 +3,7 @@ import { AppError } from "../../../utils/AppError";
 import { createHubNotifications } from "../../notification/notification.service";
 import {
   assertActiveHub,
+  dispatchHubNotification,
   invalidateHubCaches,
   verifyHubRole,
 } from "../hub.service";
@@ -43,17 +44,21 @@ export const updateReviewSettings = async (
 
   if (!existingHub.isReviewOpen && updatedHub.isReviewOpen) {
     const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
-    await createHubNotifications(
+    dispatchHubNotification(
+      createHubNotifications(
+        hubId,
+        userId,
+        {
+          type: "REVIEW_OPEN",
+          title: "Course review is open",
+          body: "The review period is open. Share your feedback for this course.",
+          route: `/hub/${hubId}?tab=review`,
+          dedupeKey: `review-open:${hubId}:${hourBucket}`,
+        },
+        ["STUDENT", "CR"],
+      ),
+      "hub.review_open_notification_failed",
       hubId,
-      userId,
-      {
-        type: "REVIEW_OPEN",
-        title: "Course review is open",
-        body: "The review period is open. Share your feedback for this course.",
-        route: `/hub/${hubId}?tab=review`,
-        dedupeKey: `review-open:${hubId}:${hourBucket}`,
-      },
-      ["STUDENT", "CR"],
     );
   }
   return updatedHub;

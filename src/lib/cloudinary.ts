@@ -253,28 +253,40 @@ export function extractPublicIdFromUrl(urlOrPublicId: string): string | null {
   }
 
   const trimmed = urlOrPublicId.trim();
-  if (!trimmed) return null;
+  if (
+    !trimmed ||
+    trimmed.includes("..") ||
+    trimmed.toLowerCase().includes("%2e%2e")
+  ) {
+    return null;
+  }
 
   // If not a URL, treat directly as public_id (strip extension if present)
   if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
     return trimmed.replace(/\.[a-zA-Z0-9]+$/, "");
   }
 
-  // If external URL (e.g. Google auth avatar, external link), ignore
-  if (
-    !trimmed.includes("cloudinary.com") &&
-    !trimmed.includes("/image/upload/")
-  ) {
-    return null;
-  }
-
   try {
-    const uploadIndex = trimmed.indexOf("/upload/");
-    if (uploadIndex === -1) return null;
+    const parsed = new URL(trimmed);
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname !== "cloudinary.com" && !hostname.endsWith(".cloudinary.com")) {
+      return null;
+    }
 
-    // Substring after "/upload/"
-    const pathAfterUpload = trimmed.substring(uploadIndex + "/upload/".length);
-    const parts = pathAfterUpload.split("/");
+    const pathSegments = parsed.pathname.split("/").filter(Boolean);
+    const configuredCloud = (
+      envConfig.CLOUDINARY_CLOUD_NAME ||
+      process.env.CLOUDINARY_CLOUD_NAME ||
+      ""
+    ).trim();
+    if (configuredCloud && pathSegments[0] !== configuredCloud) {
+      return null;
+    }
+
+    const uploadSegmentIdx = pathSegments.indexOf("upload");
+    if (uploadSegmentIdx === -1) return null;
+
+    const parts = pathSegments.slice(uploadSegmentIdx + 1);
 
     const isVersion = (part: string) => /^v\d+$/.test(part);
     const isTransformation = (part: string) => {
@@ -296,11 +308,13 @@ export function extractPublicIdFromUrl(urlOrPublicId: string): string | null {
       return null;
     }
 
-    let publicIdWithExt = parts.slice(startIndex).join("/");
-    publicIdWithExt = publicIdWithExt.split("?")[0].split("#")[0];
+    const publicIdWithExt = parts.slice(startIndex).join("/");
     const publicId = publicIdWithExt.replace(/\.[a-zA-Z0-9]+$/, "");
+    if (!publicId || publicId.includes("..") || publicId.toLowerCase().includes("%2e%2e")) {
+      return null;
+    }
 
-    return publicId || null;
+    return publicId;
   } catch {
     return null;
   }

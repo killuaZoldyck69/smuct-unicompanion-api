@@ -1,4 +1,5 @@
 import sanitizeHtml from "sanitize-html";
+import { isSafeHubHttpUrl } from "../hub-attachments";
 
 /**
  * Course Hub Stream Sanitizer & Domain Validation Constants
@@ -73,23 +74,7 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   nonTextTags: NON_TEXT_TAGS,
 };
 
-/**
- * Validates that a URL uses strictly http: or https: and parses cleanly.
- */
-export function isSafeHttpUrl(raw?: string | null): boolean {
-  if (!raw || typeof raw !== "string") return false;
-  const trimmed = raw.trim();
-  if (!trimmed || trimmed.length > 2048) return false;
-  try {
-    const parsed = new URL(trimmed);
-    return (
-      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
-      Boolean(parsed.hostname)
-    );
-  } catch {
-    return false;
-  }
-}
+export const isSafeHttpUrl = isSafeHubHttpUrl;
 
 /**
  * Extracts plain text from an HTML announcement snippet, safely stripping
