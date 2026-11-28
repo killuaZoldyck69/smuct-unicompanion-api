@@ -25,6 +25,7 @@ import { memeRoutes } from "./modules/meme/meme.routes";
 import { adminRoutes } from "./modules/admin/admin.routes";
 import { notificationRoutes } from "./modules/notification/notification.routes";
 import { googleDriveRoutes } from "./modules/google-drive/google-drive.routes";
+import { publicPagesRoutes } from "./modules/public-pages/public-pages.routes";
 
 import { envConfig } from "./config/env";
 import { prisma } from "./lib/prisma";
@@ -195,6 +196,8 @@ app.get("/health", (req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+app.use("/", publicPagesRoutes);
 
 app.get(
   "/health/ready",
