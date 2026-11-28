@@ -38,6 +38,10 @@ const envSchema = z.object({
   CLOUDINARY_API_KEY: z.string().optional().default(""),
   CLOUDINARY_API_SECRET: z.string().optional().default(""),
   CRON_SECRET: z.string().min(16).optional(),
+
+  GOOGLE_CLIENT_ID: z.string().optional().default(""),
+  GOOGLE_CLIENT_SECRET: z.string().optional().default(""),
+  GOOGLE_DRIVE_REDIRECT_URI: z.string().optional().default(""),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

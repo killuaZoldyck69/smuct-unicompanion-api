@@ -33,9 +33,12 @@ model User {
   phoneNumber   String      @default("")
   bloodGroup    BloodGroup?
   isRestricted         Boolean     @default(false)
-  ugcTermsAcceptedAt   DateTime?
-  googleDriveConnected Boolean     @default(false)
-  googleDriveEmail     String?
+  ugcTermsAcceptedAt         DateTime?
+  googleDriveConnected       Boolean     @default(false)
+  googleDriveEmail           String?
+  googleDriveName            String?
+  googleDriveAvatarUrl       String?
+  googleDriveRefreshTokenEnc String?
 
   // Better Auth Relations
   sessions Session[]

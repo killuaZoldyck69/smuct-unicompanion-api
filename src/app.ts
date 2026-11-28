@@ -24,6 +24,7 @@ import { marketplaceRoutes } from "./modules/marketplace/marketplace.routes";
 import { memeRoutes } from "./modules/meme/meme.routes";
 import { adminRoutes } from "./modules/admin/admin.routes";
 import { notificationRoutes } from "./modules/notification/notification.routes";
+import { googleDriveRoutes } from "./modules/google-drive/google-drive.routes";
 
 import { envConfig } from "./config/env";
 import { prisma } from "./lib/prisma";
@@ -226,6 +227,7 @@ app.use("/api/admin", adminRoutes);
 
 // 2. MOUNT THE HUB ROUTES
 app.use("/api/hubs", hubRoutes);
+app.use("/api/google-drive", googleDriveRoutes);
 
 // 3. MOUNT UPLOAD ROUTES
 app.use("/api/upload", uploadRoutes);

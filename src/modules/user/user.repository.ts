@@ -136,6 +136,13 @@ export const updateGoogleDriveConnectionStatus = async (
     data: {
       googleDriveConnected: isConnected,
       googleDriveEmail: isConnected ? (email ?? null) : null,
+      ...(!isConnected
+        ? {
+            googleDriveName: null,
+            googleDriveAvatarUrl: null,
+            googleDriveRefreshTokenEnc: null,
+          }
+        : {}),
     },
   });
   return result.count > 0;
