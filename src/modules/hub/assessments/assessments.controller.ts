@@ -61,6 +61,7 @@ export const unsubmitAssessment = catchAsync(
       req.user.id,
       req.params.id as string,
       req.params.assessmentId as string,
+      req.body,
     );
     res
       .status(200)

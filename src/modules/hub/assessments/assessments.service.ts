@@ -23,6 +23,7 @@ import {
   CreateAssessmentPayload,
   GradeSubmissionPayload,
   SubmitAssessmentPayload,
+  UnsubmitAssessmentPayload,
   UpdateAssessmentPayload,
 } from "./assessments.schema";
 
@@ -197,6 +198,7 @@ export const unsubmitAssessment = async (
   userId: string,
   hubId: string,
   assessmentId: string,
+  payload?: UnsubmitAssessmentPayload,
 ) => {
   const meta = await assessmentsRepository.findAssessmentMetaById(assessmentId);
   if (!meta || meta.hubId !== hubId) {
@@ -223,19 +225,29 @@ export const unsubmitAssessment = async (
     );
   }
 
+  const hasDraftUpdate =
+    payload !== undefined &&
+    (payload.attachments !== undefined ||
+      payload.links !== undefined ||
+      payload.submittedUrl !== undefined ||
+      payload.content !== undefined);
+  const hasClearOrDraftUpdate =
+    Boolean(payload?.clearWork) || hasDraftUpdate;
+  const allowedStatuses = hasClearOrDraftUpdate
+    ? [
+        "SUBMITTED",
+        "LATE",
+        "HAND_SUBMISSION",
+        "LATE_HAND_SUBMISSION",
+        "UNSUBMITTED",
+      ]
+    : ["SUBMITTED", "LATE", "HAND_SUBMISSION", "LATE_HAND_SUBMISSION"];
+
   const submission = await assessmentsRepository.findStudentSubmission(
     assessmentId,
     userId,
   );
-  if (
-    !submission ||
-    ![
-      "SUBMITTED",
-      "LATE",
-      "HAND_SUBMISSION",
-      "LATE_HAND_SUBMISSION",
-    ].includes(submission.status)
-  ) {
+  if (!submission || !allowedStatuses.includes(submission.status)) {
     throw new AppError(
       "No submitted coursework is available to unsubmit.",
       400,
@@ -249,6 +261,7 @@ export const unsubmitAssessment = async (
     hubId,
     assessmentId,
     userId,
+    payload,
   );
   invalidateHubCaches(hubId);
   return updated;

@@ -245,6 +245,47 @@ export const submitAssessmentSchema = z.object({
   }),
 });
 
+export const unsubmitAssessmentSchema = z.object({
+  params: z.object({
+    id: uuidSchema,
+    assessmentId: uuidSchema,
+  }),
+  body: z
+    .object({
+      clearWork: z.boolean().optional(),
+      attachments: z
+        .array(classworkAttachmentSchema)
+        .max(
+          MAX_SUBMISSION_ATTACHMENTS,
+          `Cannot attach more than ${MAX_SUBMISSION_ATTACHMENTS} files`,
+        )
+        .optional()
+        .nullable(),
+      links: z
+        .array(classworkLinkSchema)
+        .max(
+          MAX_SUBMISSION_LINKS,
+          `Cannot add more than ${MAX_SUBMISSION_LINKS} links`,
+        )
+        .optional()
+        .nullable(),
+      submittedUrl: z
+        .union([safeHttpUrlSchema, z.literal("")])
+        .optional()
+        .nullable(),
+      content: z
+        .string()
+        .trim()
+        .max(
+          MAX_SUBMISSION_CONTENT_LENGTH,
+          `Submission note must be ${MAX_SUBMISSION_CONTENT_LENGTH} characters or less`,
+        )
+        .optional()
+        .nullable(),
+    })
+    .optional(),
+});
+
 export const gradeSubmissionSchema = z.object({
   params: z.object({
     id: uuidSchema,
@@ -316,6 +357,9 @@ export type UpdateAssessmentPayload = z.infer<
 >["body"];
 export type SubmitAssessmentPayload = z.infer<
   typeof submitAssessmentSchema
+>["body"];
+export type UnsubmitAssessmentPayload = z.infer<
+  typeof unsubmitAssessmentSchema
 >["body"];
 export type GradeSubmissionPayload = z.infer<
   typeof gradeSubmissionSchema

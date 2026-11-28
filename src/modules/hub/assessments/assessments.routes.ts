@@ -12,6 +12,7 @@ import {
   gradeSubmissionSchema,
   hubAssessmentListSchema,
   submitAssessmentSchema,
+  unsubmitAssessmentSchema,
   updateAssessmentSchema,
 } from "./assessments.schema";
 import {
@@ -116,7 +117,7 @@ router.patch(
   "/:id/assessments/:assessmentId/unsubmit",
   requireAuth,
   submissionWriteLimiter,
-  validateRequest(assessmentParamSchema),
+  validateRequest(unsubmitAssessmentSchema),
   unsubmitAssessment,
 );
 router.patch(

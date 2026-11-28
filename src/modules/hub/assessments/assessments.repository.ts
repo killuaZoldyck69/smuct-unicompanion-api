@@ -15,6 +15,7 @@ import {
   CreateAssessmentPayload,
   GradeSubmissionPayload,
   SubmitAssessmentPayload,
+  UnsubmitAssessmentPayload,
   UpdateAssessmentPayload,
 } from "./assessments.schema";
 
@@ -94,17 +95,22 @@ export const findAssessmentsByHubId = async (
           include: submissionInclude,
         },
         _count: {
-          select: { submissions: true },
+          select: {
+            submissions: { where: { status: { not: "UNSUBMITTED" } } },
+          },
         },
       },
     });
 
     return items.map((item) => {
+      const activeOwnSubmissions = item.submissions.filter(
+        (s) => s.status !== "UNSUBMITTED",
+      );
       const totalSubmissions = item._count.submissions;
-      const gradedCount = item.submissions.filter(
+      const gradedCount = activeOwnSubmissions.filter(
         (s) => s.marks !== null && s.marks !== undefined,
       ).length;
-      const pendingCount = item.submissions.filter(
+      const pendingCount = activeOwnSubmissions.filter(
         (s) => s.marks === null || s.marks === undefined,
       ).length;
 
@@ -127,7 +133,9 @@ export const findAssessmentsByHubId = async (
     include: {
       creator: { select: { id: true, name: true, image: true, role: true } },
       _count: {
-        select: { submissions: true },
+        select: {
+          submissions: { where: { status: { not: "UNSUBMITTED" } } },
+        },
       },
     },
   });
@@ -139,6 +147,7 @@ export const findAssessmentsByHubId = async (
           by: ["assessmentId"],
           where: {
             assessmentId: { in: assessmentIds },
+            status: { not: "UNSUBMITTED" },
             marks: { not: null },
           },
           _count: { _all: true },
@@ -197,11 +206,14 @@ export const findAssessmentById = (
             include: submissionInclude,
           }
         : {
+            where: { status: { not: "UNSUBMITTED" } },
             include: submissionInclude,
             take: MAX_ASSESSMENT_SUBMISSIONS_LIST,
           },
       _count: {
-        select: { submissions: true },
+        select: {
+          submissions: { where: { status: { not: "UNSUBMITTED" } } },
+        },
       },
     },
   });
@@ -245,7 +257,7 @@ export const findActiveHubStudentIds = async (
 
 export const findAssessmentSubmissions = (assessmentId: string) =>
   prisma.submission.findMany({
-    where: { assessmentId },
+    where: { assessmentId, status: { not: "UNSUBMITTED" } },
     include: submissionInclude,
     orderBy: { createdAt: "desc" },
     take: MAX_ASSESSMENT_SUBMISSIONS_LIST,
@@ -417,6 +429,7 @@ export const unsubmitAssessmentAtomic = (
   hubId: string,
   assessmentId: string,
   studentId: string,
+  payload?: UnsubmitAssessmentPayload,
 ) =>
   prisma.$transaction(async (tx) => {
     const locked = await lockAssessmentWithHub(
@@ -440,18 +453,28 @@ export const unsubmitAssessmentAtomic = (
       );
     }
 
+    const hasDraftUpdate =
+      payload !== undefined &&
+      (payload.attachments !== undefined ||
+        payload.links !== undefined ||
+        payload.submittedUrl !== undefined ||
+        payload.content !== undefined);
+    const hasClearOrDraftUpdate =
+      Boolean(payload?.clearWork) || hasDraftUpdate;
+    const allowedStatuses = hasClearOrDraftUpdate
+      ? [
+          "SUBMITTED",
+          "LATE",
+          "HAND_SUBMISSION",
+          "LATE_HAND_SUBMISSION",
+          "UNSUBMITTED",
+        ]
+      : ["SUBMITTED", "LATE", "HAND_SUBMISSION", "LATE_HAND_SUBMISSION"];
+
     const submission = await tx.submission.findUnique({
       where: { assessmentId_studentId: { assessmentId, studentId } },
     });
-    if (
-      !submission ||
-      ![
-        "SUBMITTED",
-        "LATE",
-        "HAND_SUBMISSION",
-        "LATE_HAND_SUBMISSION",
-      ].includes(submission.status)
-    ) {
+    if (!submission || !allowedStatuses.includes(submission.status)) {
       throw new AppError(
         "No submitted coursework is available to unsubmit.",
         400,
@@ -461,16 +484,109 @@ export const unsubmitAssessmentAtomic = (
       throw new AppError("Graded coursework cannot be unsubmitted.", 400);
     }
 
+    if (payload?.attachments !== undefined) {
+      assertNoNewCloudinaryAttachments(
+        payload.attachments,
+        submission.attachments as { url?: string }[] | null,
+      );
+    }
+
+    const nextAttachments =
+      payload?.attachments !== undefined
+        ? payload.attachments
+        : (submission.attachments as Prisma.JsonValue | null);
+    const nextLinks =
+      payload?.links !== undefined
+        ? payload.links
+        : (submission.links as Prisma.JsonValue | null);
+    const nextSubmittedUrl =
+      payload?.submittedUrl !== undefined
+        ? payload.submittedUrl || null
+        : submission.submittedUrl;
+    const nextContent =
+      payload?.content !== undefined
+        ? payload.content || null
+        : submission.content;
+
+    const hasRemainingAttachments =
+      Array.isArray(nextAttachments) && nextAttachments.length > 0;
+    const hasRemainingLinks =
+      Array.isArray(nextLinks) && nextLinks.length > 0;
+    const hasRemainingUrl = Boolean(nextSubmittedUrl?.trim());
+    const hasRemainingContent = Boolean(nextContent?.trim());
+
+    const shouldClear =
+      Boolean(payload?.clearWork) ||
+      (hasDraftUpdate &&
+        !hasRemainingAttachments &&
+        !hasRemainingLinks &&
+        !hasRemainingUrl &&
+        !hasRemainingContent);
+
+    if (shouldClear) {
+      const deletedRows = await tx.submission.deleteMany({
+        where: {
+          assessmentId,
+          studentId,
+          marks: null,
+          status: { in: allowedStatuses },
+        },
+      });
+      if (deletedRows.count === 0) {
+        throw new AppError(
+          "Coursework cannot be unsubmitted after it has been graded.",
+          400,
+        );
+      }
+
+      return {
+        id: submission.id,
+        assessmentId,
+        studentId,
+        status: "UNSUBMITTED" as const,
+        isLate: false,
+        cleared: true,
+        attachments: [],
+        links: [],
+        submittedUrl: null,
+        content: null,
+      };
+    }
+
+    const updateData: Prisma.SubmissionUpdateManyMutationInput = {
+      status: "UNSUBMITTED",
+      isLate: false,
+    };
+
+    if (hasDraftUpdate) {
+      if (payload?.attachments !== undefined) {
+        updateData.attachments =
+          payload.attachments === null
+            ? Prisma.JsonNull
+            : (payload.attachments as Prisma.InputJsonValue);
+      }
+      if (payload?.links !== undefined) {
+        updateData.links =
+          payload.links === null
+            ? Prisma.JsonNull
+            : (payload.links as Prisma.InputJsonValue);
+      }
+      if (payload?.submittedUrl !== undefined) {
+        updateData.submittedUrl = payload.submittedUrl || null;
+      }
+      if (payload?.content !== undefined) {
+        updateData.content = payload.content || null;
+      }
+    }
+
     const updatedRows = await tx.submission.updateMany({
       where: {
         assessmentId,
         studentId,
         marks: null,
-        status: {
-          in: ["SUBMITTED", "LATE", "HAND_SUBMISSION", "LATE_HAND_SUBMISSION"],
-        },
+        status: { in: allowedStatuses },
       },
-      data: { status: "UNSUBMITTED", isLate: false },
+      data: updateData,
     });
 
     if (updatedRows.count === 0) {
